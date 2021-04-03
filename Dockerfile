@@ -6,6 +6,8 @@ WORKDIR .
 
 # copy the jar created by assembly to the docker image
 COPY target/wa-1-server.jar wa-1-server.jar
+# copy configs
+COPY resources/ resources/
 
 # copy the file of properties to the docker image
 #COPY messages.props messages.props
