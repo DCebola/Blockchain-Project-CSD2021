@@ -13,4 +13,5 @@ COPY resources/ resources/
 #COPY messages.props messages.props
 
 # run Discovery when starting the docker image
-CMD ["java", "-jar", "wa-1-server.jar"]
+CMD ["java", "-Djavax.net.ssl.keyStore=resources/server.ks", "-Djavax.net.ssl.keyStorePassword=password", "-Djavax.net.ssl.trustStore=resources/truststore.ks", "-Djavax.net.ssl.trustStorePassword=changeit", "-jar", "wa-1-server.jar"]
+

@@ -1,5 +1,6 @@
 package main.java;
 
+
 import main.java.controllers.WalletController;
 import org.glassfish.jersey.jdkhttp.JdkHttpServerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -27,14 +28,16 @@ public class Server {
         String address = InetAddress.getLocalHost().getHostAddress();
         String hostName = InetAddress.getLocalHost().getHostName();
         int port = Integer.parseInt(properties.getProperty("port"));
-        String serverURI = String.format("https://%s:%s/", address, port);
+        String serverURI = String.format("https://%s:%s/rest", address, port);
+        System.out.println(serverURI);
 
 
         //Todo: Create SSLSession & SSLContext
         HttpsURLConnection.setDefaultHostnameVerifier(new myHostnameVerifier());
         //Create wallet resource
         ResourceConfig config = new ResourceConfig();
-        config.register(new WalletController());
+        WalletController walletController = new WalletController();
+        config.register(walletController);
         JdkHttpServerFactory.createHttpServer(URI.create(serverURI), config, SSLContext.getDefault());
     }
 
