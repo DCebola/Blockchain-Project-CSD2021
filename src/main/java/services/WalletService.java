@@ -1,4 +1,4 @@
-package main.java.controllers;
+package main.java.services;
 
 import main.java.models.Transaction;
 import main.java.models.TransferMoneyArgs;
@@ -17,7 +17,6 @@ public interface WalletService {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     double obtainCoins(@PathParam("owner") String who, double amount);
-
 
     @POST
     @Path("/{owner}/transfer")

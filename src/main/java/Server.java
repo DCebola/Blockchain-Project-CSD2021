@@ -1,7 +1,8 @@
 package main.java;
 
 
-import main.java.controllers.WalletController;
+import main.java.services.WalletController;
+import main.java.services.WalletService;
 import org.glassfish.jersey.jdkhttp.JdkHttpServerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 
@@ -36,8 +37,8 @@ public class Server {
         HttpsURLConnection.setDefaultHostnameVerifier(new myHostnameVerifier());
         //Create wallet resource
         ResourceConfig config = new ResourceConfig();
-        WalletController walletController = new WalletController();
-        config.register(walletController);
+        WalletService wallet = new WalletController();
+        config.register(wallet);
         JdkHttpServerFactory.createHttpServer(URI.create(serverURI), config, SSLContext.getDefault());
     }
 

@@ -1,4 +1,4 @@
-package main.java.controllers;
+package main.java.services;
 
 import main.java.models.Transaction;
 import main.java.models.TransferMoneyArgs;
@@ -16,17 +16,16 @@ public class WalletController implements WalletService {
 
     private List<Transaction> ledger;
     private Map<String,List<Transaction>> userLedger;
-    private Map<String, Wallet> wallets;
+    private Map<String, main.java.models.Wallet> wallets;
 
     public WalletController() {
         ledger = new LinkedList<>();
         userLedger = new HashMap<>();
     }
 
-
     @Override
     public double obtainCoins(String who, double amount) {
-        Wallet wallet = wallets.get(who);
+        main.java.models.Wallet wallet = wallets.get(who);
         return wallet.getBalance();
     }
 

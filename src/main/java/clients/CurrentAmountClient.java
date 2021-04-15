@@ -1,6 +1,6 @@
-package main.java.Clients;
+package main.java.clients;
 
-import main.java.controllers.WalletService;
+import main.java.services.WalletService;
 import org.glassfish.jersey.client.ClientConfig;
 
 import javax.net.ssl.HostnameVerifier;
