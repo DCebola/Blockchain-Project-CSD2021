@@ -20,7 +20,12 @@ public class CurrentAmountClient {
         System.out.println("hi");
         String address = InetAddress.getLocalHost().getHostAddress();
         int port = 8080;
-        String serverURI = "https://172.19.0.2:8080/rest";
+        String serverURI = "https://127.0.1.1:8080/rest";
+        System.out.println(serverURI);
+
+
+
+
         ClientConfig config = new ClientConfig();
         Client client = ClientBuilder.newClient(config);
         HttpsURLConnection.setDefaultHostnameVerifier(new myHostnameVerifier());
