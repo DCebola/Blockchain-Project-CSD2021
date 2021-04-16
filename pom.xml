@@ -64,6 +64,7 @@
                             </resources>
                         </configuration>
                     </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
@@ -141,6 +142,7 @@
             <groupId>com.sun.xml.ws</groupId>
             <artifactId>jaxws-rt</artifactId>
         </dependency>
+
         <!--Begin of REST dependencies-->
     </dependencies>
     <dependencyManagement>
