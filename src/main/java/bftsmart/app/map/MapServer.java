@@ -7,6 +7,7 @@ import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
+import java.security.Security;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -17,6 +18,7 @@ import main.java.bftsmart.app.counter.Test;
 import main.java.bftsmart.tom.MessageContext;
 import main.java.bftsmart.tom.ServiceReplica;
 import main.java.bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class MapServer<K, V> extends DefaultSingleRecoverable {
 
@@ -34,6 +36,7 @@ public class MapServer<K, V> extends DefaultSingleRecoverable {
 			System.out.println("Usage: demo.map.MapServer <server id>");
 			System.exit(-1);
 		}
+		Security.addProvider(new BouncyCastleProvider()); //Added bouncy castle provider
 		new MapServer<String, String>(Integer.parseInt(args[0]));
 	}
 

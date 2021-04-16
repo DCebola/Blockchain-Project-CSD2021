@@ -7,6 +7,7 @@ import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
+import java.security.Security;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
@@ -14,6 +15,7 @@ import java.util.Set;
 
 import main.java.bftsmart.app.counter.Test;
 import main.java.bftsmart.tom.ServiceProxy;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class MapClient<K, V> implements Map<K, V>{
 

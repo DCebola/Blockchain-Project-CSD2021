@@ -16,8 +16,10 @@ limitations under the License.
 package main.java.bftsmart.app.counter;
 
 import java.io.IOException;
+import java.security.Security;
 
 import main.java.bftsmart.app.map.MapClient;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 /**
  * Example client that updates a BFT replicated service (a counter).
@@ -33,7 +35,7 @@ public class CounterClient {
             System.out.println("       default <number of operations> equals 1000");
             System.exit(-1);
         }
-
+        Security.addProvider(new BouncyCastleProvider()); //Added bouncy castle provider
         MapClient<String,Test> mapClient = new MapClient<String,Test>(Integer.parseInt(args[0]));
 
         int inc = Integer.parseInt(args[1]);
