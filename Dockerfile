@@ -13,5 +13,5 @@ COPY target/resources/ resources/
 #COPY messages.props messages.props
 
 # run Discovery when starting the docker image
-CMD ["java", "-Djavax.net.ssl.keyStore=resources/server.ks", "-Djavax.net.ssl.keyStorePassword=password", "-Djavax.net.ssl.trustStore=resources/truststore.ks", "-Djavax.net.ssl.trustStorePassword=changeit", "-cp", "wa-1-server.jar", "main.java.bftsmart.app.BFTSmartClient"]
+CMD ["java", "-Djavax.net.ssl.keyStore=resources/server.ks", "-Djavax.net.ssl.keyStorePassword=password", "-Djavax.net.ssl.trustStore=resources/truststore.ks", "-Djavax.net.ssl.trustStorePassword=changeit", "-cp", "wa-1-server.jar", "main.java.bftsmart.app.RESTServer"]
 
