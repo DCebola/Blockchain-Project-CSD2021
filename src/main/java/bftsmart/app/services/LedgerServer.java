@@ -10,6 +10,7 @@ import main.java.bftsmart.tom.ServiceReplica;
 import main.java.bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+import javax.ws.rs.Path;
 import java.io.*;
 import java.security.Security;
 import java.util.*;

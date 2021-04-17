@@ -9,6 +9,7 @@ import main.java.bftsmart.app.models.operations.bftsmart.LedgerRequestType;
 import main.java.bftsmart.tom.ServiceProxy;
 
 import javax.inject.Singleton;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.*;
@@ -16,16 +17,22 @@ import java.util.*;
 
 
 @Singleton
-public class LedgerClient implements LedgerService {
+@Path(LedgerClient.PATH)
+public class LedgerClient {
 
+    public static final String PATH = "/wallets";
     ServiceProxy serviceProxy;
+
 
     public LedgerClient(int clientId) {
         serviceProxy = new ServiceProxy(clientId);
     }
 
-    @Override
-    public Response obtainCoins(String who, double amount) {
+    @POST
+    @Path("/{owner}/obtainCoins")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response obtainCoins(@PathParam("owner") String who, double amount) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
 
@@ -55,23 +62,30 @@ public class LedgerClient implements LedgerService {
     }
 
 
-    @Override
-    public Response transferMoney(String from, TransferMoneyArgs transferMoneyArgs) {
+    @POST
+    @Path("/{owner}/transfer")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response transferMoney(@PathParam("owner") String from, TransferMoneyArgs transferMoneyArgs) {
         return Response
                 .status(Response.Status.OK)
                 .entity("")
                 .build();
     }
 
-    @Override
-    public Response currentAmount(String who) {
+    @GET
+    @Path("/{owner}/balance")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response currentAmount(@PathParam("owner") String who) {
         return Response
                 .status(Response.Status.OK)
                 .entity("")
                 .build();
     }
 
-    @Override
+    @GET
+    @Path("/ledger")
+    @Produces(MediaType.APPLICATION_JSON)
     public Response ledgerOfGlobalTransactions() {
         return Response
                 .status(Response.Status.OK)
@@ -79,8 +93,10 @@ public class LedgerClient implements LedgerService {
                 .build();
     }
 
-    @Override
-    public Response ledgerOfClientTransactions(String who) {
+    @GET
+    @Path("/ledger/{owner}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response ledgerOfClientTransactions(@PathParam("owner") String who) {
         return Response
                 .status(Response.Status.OK)
                 .entity("")
@@ -88,19 +104,19 @@ public class LedgerClient implements LedgerService {
     }
 
     /*
-    @Override
+
     public double currentAmount(String who) {
         System.out.println("current amount: " + who);
         return 100;
     }
 
-    @Override
+
     public List<Transaction> ledgerOfGlobalTransactions() {
         System.out.println("ledgers");
         return null;
     }
 
-    @Override
+
     public List<Transaction> ledgerOfClientTransactions(String who) {
         System.out.println("ledgers");
         return null;
