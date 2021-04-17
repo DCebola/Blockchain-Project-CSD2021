@@ -29,7 +29,7 @@ public class CurrentAmountClient {
         ClientConfig config = new ClientConfig();
         Client client = ClientBuilder.newClient(config);
         HttpsURLConnection.setDefaultHostnameVerifier(new myHostnameVerifier());
-        WebTarget target = client.target(serverURI).path(WalletService.PATH).path("/").path("owner").path("/balance");
+        WebTarget target = client.target(serverURI).path(LedgerService.PATH).path("/").path("owner").path("/balance");
         System.out.println(target.getUri());
         Response r = target.request().accept(MediaType.APPLICATION_JSON).get();
         if(r.getStatus() == Response.Status.OK.getStatusCode())

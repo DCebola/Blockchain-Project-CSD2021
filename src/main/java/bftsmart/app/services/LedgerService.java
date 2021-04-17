@@ -1,14 +1,15 @@
 package main.java.bftsmart.app.services;
 
 import main.java.bftsmart.app.models.Transaction;
-import main.java.bftsmart.app.models.TransferMoneyArgs;
+import main.java.bftsmart.app.models.operations.REST.TransferMoneyArgs;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.util.List;
 
-@Path(WalletService.PATH)
-public interface WalletService {
+@Path(LedgerService.PATH)
+public interface LedgerService {
 
     String PATH = "/wallets";
 
@@ -16,27 +17,28 @@ public interface WalletService {
     @Path("/{owner}/obtainCoins")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    double obtainCoins(@PathParam("owner") String who, double amount);
+    Response obtainCoins(@PathParam("owner") String who, double amount);
 
     @POST
     @Path("/{owner}/transfer")
     @Consumes(MediaType.APPLICATION_JSON)
-    void transferMoney(@PathParam("owner") String from, TransferMoneyArgs transferMoneyArgs);
+    @Produces(MediaType.APPLICATION_JSON)
+    Response transferMoney(@PathParam("owner") String from, TransferMoneyArgs transferMoneyArgs);
 
     @GET
     @Path("/{owner}/balance")
     @Produces(MediaType.APPLICATION_JSON)
-    double currentAmount(@PathParam("owner") String who);
+    Response currentAmount(@PathParam("owner") String who);
 
     @GET
     @Path("/ledger")
     @Produces(MediaType.APPLICATION_JSON)
-    List<Transaction> ledgerOfGlobalTransactions();
+    Response ledgerOfGlobalTransactions();
 
     @GET
     @Path("/ledger/{owner}")
     @Produces(MediaType.APPLICATION_JSON)
-    List<Transaction> ledgerOfClientTransactions(@PathParam("owner") String who);
+    Response ledgerOfClientTransactions(@PathParam("owner") String who);
 
 
 

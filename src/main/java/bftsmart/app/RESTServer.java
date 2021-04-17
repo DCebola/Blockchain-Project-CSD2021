@@ -2,8 +2,8 @@ package main.java.bftsmart.app;
 
 
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import main.java.bftsmart.app.services.WalletController;
-import main.java.bftsmart.app.services.WalletService;
+import main.java.bftsmart.app.services.LedgerClient;
+import main.java.bftsmart.app.services.LedgerService;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.glassfish.jersey.jdkhttp.JdkHttpServerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -24,16 +24,16 @@ public class RESTServer {
     public static void main(String[] args) throws Exception {
         if (args.length == 2) {
             Properties server_config = new Properties();
+            int id = Integer.parseInt(args[0]);
             server_config.load(new FileInputStream(args[1])); // "/resources/configs/server.properties"
             String address = InetAddress.getLocalHost().getHostAddress();
-            int port = Integer.parseInt(server_config.getProperty("port").split(",")[Integer.parseInt(args[0])]);
+            int port = Integer.parseInt(server_config.getProperty("port").split(",")[id]);
             String serverURI = String.format("https://%s:%s/rest", address, port);
             HttpsURLConnection.setDefaultHostnameVerifier(new myHostnameVerifier());
             ResourceConfig config = new ResourceConfig();
-            WalletService wallet = new WalletController();
+            LedgerService wallet = new LedgerClient(id);
             config.register(wallet.getClass());
             Security.addProvider(new BouncyCastleProvider());
-
             SSLContext sc = createSSLContext(server_config);
             SSLEngine engine = sc.createSSLEngine();
             engine.setEnabledCipherSuites(server_config.getProperty("ciphersuites").split(","));
@@ -45,6 +45,7 @@ public class RESTServer {
             System.out.println("Listening on: " + serverURI);
         } else {
             System.out.println("Usage: RestServer <server-id> <config-path>");
+            System.exit(-1);
         }
 
     }

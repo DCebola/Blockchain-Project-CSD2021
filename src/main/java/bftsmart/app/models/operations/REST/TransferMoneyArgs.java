@@ -1,9 +1,9 @@
-package main.java.bftsmart.app.models;
+package main.java.bftsmart.app.models.operations.REST;
 
 public class TransferMoneyArgs {
 
-    private String to;
-    private double amount;
+    private final String to;
+    private final double amount;
 
     public TransferMoneyArgs(String from, String to, double amount) {
         this.to = to;

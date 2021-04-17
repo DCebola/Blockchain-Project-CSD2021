@@ -1,1 +1,2 @@
 security.provider.10=org.bouncycastle.jce.provider.BouncyCastleProvider
+system.ssltls.enabled_ciphers = TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
