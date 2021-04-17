@@ -1,12 +1,10 @@
 package main.java.bftsmart.app.services;
 
-import main.java.bftsmart.app.models.Transaction;
 import main.java.bftsmart.app.models.operations.REST.TransferMoneyArgs;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.List;
 
 @Path(LedgerService.PATH)
 public interface LedgerService {
@@ -32,8 +30,9 @@ public interface LedgerService {
 
     @GET
     @Path("/ledger")
+    @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    Response ledgerOfGlobalTransactions();
+    Response ledgerOfGlobalTransactions(double amount);
 
     @GET
     @Path("/ledger/{owner}")

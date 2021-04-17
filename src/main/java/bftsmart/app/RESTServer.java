@@ -31,9 +31,9 @@ public class RESTServer {
             String serverURI = String.format("https://%s:%s/rest", address, port);
             HttpsURLConnection.setDefaultHostnameVerifier(new myHostnameVerifier());
             ResourceConfig config = new ResourceConfig();
+            Security.addProvider(new BouncyCastleProvider());
             LedgerClient bftsmart_ledgerclient = new LedgerClient(id);
             config.register(bftsmart_ledgerclient.getClass());
-            Security.addProvider(new BouncyCastleProvider());
             SSLContext sc = createSSLContext(server_config);
             SSLEngine engine = sc.createSSLEngine();
             engine.setEnabledCipherSuites(server_config.getProperty("ciphersuites").split(","));

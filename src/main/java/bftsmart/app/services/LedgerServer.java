@@ -27,10 +27,12 @@ public class LedgerServer extends DefaultSingleRecoverable {
     private final Logger logger;
 
     public LedgerServer(int id) {
+        System.out.println("hello");
         this.client_ledgers = new TreeMap<>();
         this.global_ledgers = new LinkedList<>();
         this.logger = Logger.getLogger(LedgerServer.class.getName());
         new ServiceReplica(id, this, this);
+        System.out.println("Byebye");
     }
 
 
@@ -40,12 +42,13 @@ public class LedgerServer extends DefaultSingleRecoverable {
             System.exit(-1);
         }
         Security.addProvider(new BouncyCastleProvider()); //Added bouncy castle provider
-        new MapServer<String, String>(Integer.parseInt(args[0]));
+        new LedgerServer(Integer.parseInt(args[0]));
     }
 
     @Override
     public byte[] appExecuteOrdered(byte[] command, MessageContext msgCtx) {
         try {
+            System.out.println("Hello");
             ByteArrayInputStream byteIn = new ByteArrayInputStream(command);
             ObjectInput objIn = new ObjectInputStream(byteIn);
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
@@ -55,6 +58,7 @@ public class LedgerServer extends DefaultSingleRecoverable {
                 case OBTAIN_COINS:
                     String who = (String) objIn.readObject();
                     double amount = (double) objIn.readObject();
+                    System.out.println("Who: " + who + "\nAmount: " + amount);
                     Transaction t = new Transaction(SYSTEM, who, amount);
                     global_ledgers.add(t);
                     List<Transaction> c_ledgers = client_ledgers.get(who);
