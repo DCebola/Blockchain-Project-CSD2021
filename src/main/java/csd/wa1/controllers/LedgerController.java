@@ -1,24 +1,18 @@
 package csd.wa1.controllers;
+
 import bftsmart.tom.ServiceProxy;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.web.bind.annotation.*;
+
 import java.io.*;
 
 @RestController
-public class LedgerController {
-
-    @Value("${bftclient_id}")
-    private int id;
+public class LedgerController implements CommandLineRunner {
 
     private ServiceProxy serviceProxy;
 
     @PostMapping("/{who}/obtainCoins")
     public double obtainAmount(@PathVariable String who, @RequestBody double amount) {
-        if(serviceProxy == null) {
-            System.out.println("hello");
-            serviceProxy = new ServiceProxy(id);
-        }
-
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -39,4 +33,16 @@ public class LedgerController {
         return -2;
     }
 
+    @Override
+    public void run(String... args) {
+        try {
+            if (args.length == 1) {
+                int id = Integer.parseInt(args[0]);
+                System.out.println("Launching client " + id);
+                this.serviceProxy = new ServiceProxy(id);
+            } else System.out.println("Missing param: client ID");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }
