@@ -1,10 +1,13 @@
 package csd.wa1.controllers;
 
-public class Transaction {
 
-    private String origin;
-    private String destination;
-    private double amount;
+import java.io.Serializable;
+
+public class Transaction implements Serializable {
+
+    private final String origin;
+    private final String destination;
+    private final double amount;
 
     public Transaction(String origin, String destination, double amount) {
         this.origin = origin;
