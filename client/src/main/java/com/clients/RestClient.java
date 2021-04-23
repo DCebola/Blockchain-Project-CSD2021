@@ -27,7 +27,6 @@ public class RestClient {
                 new String[]{"TLS_AES_256_GCM_SHA384"},
                 SSLConnectionSocketFactory.getDefaultHostnameVerifier());
 
-
         CloseableHttpClient httpClient
                 = HttpClients.custom()
                 .setSSLHostnameVerifier(new NoopHostnameVerifier())

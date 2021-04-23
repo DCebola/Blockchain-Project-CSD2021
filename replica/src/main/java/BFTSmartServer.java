@@ -5,17 +5,17 @@ import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 import com.proxy.controllers.LedgerRequestType;
 import com.proxy.controllers.Transaction;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.Jedis;
 
 
 import java.io.*;
 import java.security.Security;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
+
 public class BFTSmartServer extends DefaultSingleRecoverable {
 
     private static final String SYSTEM = "SYSTEM";
@@ -23,17 +23,23 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private final Logger logger;
     private final Map<String, List<Transaction>> client_ledgers;
     private final List<Transaction> global_ledgers;
+    private Jedis jedis;
+    private Properties jedis_properties;
+    private String redisPort;
 
 
-    public BFTSmartServer(int id) {
-
+    public BFTSmartServer(int id) throws IOException {
+        this.jedis_properties = new Properties();
+        this.jedis_properties.load(new FileInputStream("resources/jedis.config"));
+        this.redisPort = jedis_properties.getProperty("jedis_port").split(",")[id];
+        jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
         this.client_ledgers = new TreeMap<>();
         this.global_ledgers = new LinkedList<>();
         this.logger = LoggerFactory.getLogger("Replica " + id);
         new ServiceReplica(id, this, this);
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         if (args.length == 1) {
             Security.addProvider(new BouncyCastleProvider()); //Added bouncy castle provider
             new BFTSmartServer(Integer.parseInt(args[0]));
@@ -46,7 +52,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     @Override
     public byte[] appExecuteOrdered(byte[] command, MessageContext messageContext) {
         try {
-            System.out.println("Hi------------------------------------------------------------");
             ByteArrayInputStream byteIn = new ByteArrayInputStream(command);
             ObjectInput objIn = new ObjectInputStream(byteIn);
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
@@ -54,7 +59,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             LedgerRequestType reqType = (LedgerRequestType) objIn.readObject();
             switch (reqType) {
                 case OBTAIN_COINS: {
-                    System.out.println("Hi-------------------------------Again-----------------------------");
                     logger.debug("New OBTAIN_COINS operation.");
                     String user = (String) objIn.readObject();
                     double amount = objIn.readDouble();
