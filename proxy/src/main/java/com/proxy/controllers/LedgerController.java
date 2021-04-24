@@ -18,13 +18,14 @@ public class LedgerController implements CommandLineRunner {
     private Logger logger;
 
 
-    /*@RequestMapping(value = "/{who}/obtainCoins",
-            produces = "application/json",
-            method=RequestMethod.POST)*/
+    @PostMapping("/register/{who}")
+    public void register(@PathVariable String who, @RequestBody String userKey) {
+    }
+
+
     @PostMapping("/{who}/obtainCoins")
     public double obtainAmount(@PathVariable String who, @RequestBody double amount) {
         try {
-            System.out.println("Hello");
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.OBTAIN_COINS);
@@ -35,11 +36,14 @@ public class LedgerController implements CommandLineRunner {
             byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
             ByteArrayInputStream byteIn = new ByteArrayInputStream(reply);
             ObjectInput objIn = new ObjectInputStream(byteIn);
-            double coins = objIn.readDouble();
-            logger.info("OK. {} obtained {} coins.", who, coins);
-            return coins;
-
-
+            if (!objIn.readBoolean()) {
+                logger.info("BAD REQUEST. Non existent user {}", who);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
+            } else {
+                double coins = objIn.readDouble();
+                logger.info("OK. {} obtained {} coins.", who, coins);
+                return coins;
+            }
         } catch (IOException e) {
             logger.error("IO exception in obtainCoins. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -180,7 +184,7 @@ public class LedgerController implements CommandLineRunner {
                 int id = Integer.parseInt(args[0]);
                 logger.info("Launching client with uuid: {}", id);
                 this.serviceProxy = new ServiceProxy(id);
-            } else logger.error("Missing param: client ID");
+            } else logger.error("Usage: LedgerController <client ID>");
         } catch (Exception e) {
             e.printStackTrace();
         }

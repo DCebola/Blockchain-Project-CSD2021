@@ -2,6 +2,7 @@ import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 
+import com.google.gson.Gson;
 import com.proxy.controllers.LedgerRequestType;
 import com.proxy.controllers.Transaction;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -20,26 +21,22 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
     private static final String SYSTEM = "SYSTEM";
     private static final String ERROR_MSG = "ERROR";
+    private static final String GLOBAL_LEDGER = "GLOBAL-LEDGER";
+    private static final String USER_ACCOUNT = "-ACCOUNT";
+    private static final String USER_LEDGER = "-LEDGER";
     private final Logger logger;
-    private final Map<String, List<Transaction>> client_ledgers;
-    private final List<Transaction> global_ledgers;
-    private Jedis jedis;
-    private Properties jedis_properties;
-    private String redisPort;
+    private final Jedis jedis;
+    private final Gson gson;
 
 
     public BFTSmartServer(int id) throws IOException {
-        /*this.jedis_properties = new Properties();
-        this.jedis_properties.load(new FileInputStream("config/jedis.config"));
-        this.redisPort = jedis_properties.getProperty("jedis_port").split(",")[id];
-        jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
-        jedis.rpush("queue#tasks", "firstTask");
-        jedis.rpush("queue#tasks", "secondTaskola");
-        //System.out.println(jedis.rpop("queue#tasks"));*/
-        this.client_ledgers = new TreeMap<>();
-        this.global_ledgers = new LinkedList<>();
         this.logger = LoggerFactory.getLogger(this.getClass().getName());
-        logger.info("I AM ALIVE");
+        this.gson = new Gson();
+        Properties jedis_properties = new Properties();
+        jedis_properties.load(new FileInputStream("config/jedis.config"));
+        String redisPort = jedis_properties.getProperty("jedis_port").split(",")[id];
+        jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
+        jedis.set("test_user".concat(USER_ACCOUNT), "test_key");
         new ServiceReplica(id, this, this);
 
     }
@@ -49,11 +46,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             Security.addProvider(new BouncyCastleProvider()); //Added bouncy castle provider
             new BFTSmartServer(Integer.parseInt(args[0]));
         } else
-            System.out.println("Usage: demo.map.MapServer <server id>");
+            System.out.println("Usage: BFTSmartServer <server id>");
 
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public byte[] appExecuteOrdered(byte[] command, MessageContext messageContext) {
         try {
@@ -66,34 +62,44 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case OBTAIN_COINS: {
                     logger.debug("New OBTAIN_COINS operation.");
                     String user = (String) objIn.readObject();
-                    double amount = objIn.readDouble();
-                    Transaction new_transaction = new Transaction(SYSTEM, user, amount);
-                    logger.info("New transaction ({}, {}, {}).", SYSTEM, user, amount);
-                    global_ledgers.add(new_transaction);
-                    logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", SYSTEM, user, amount);
-                    registerUserTransaction(user, new_transaction);
-                    objOut.writeDouble(amount);
+                    if (!jedis.exists(user.concat(USER_ACCOUNT))) {
+                        logger.info("User {} does not exist", user);
+                        objOut.writeBoolean(false);
+                    } else {
+                        double amount = objIn.readDouble();
+                        Transaction transaction = new Transaction(SYSTEM, user, amount);
+                        logger.info("New transaction ({}, {}, {}).", SYSTEM, user, amount);
+                        jedis.rpush(GLOBAL_LEDGER, gson.toJson(transaction));
+                        logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", SYSTEM, user, amount);
+                        registerUserTransaction(user, transaction);
+                        objOut.writeDouble(amount);
+                    }
                     break;
                 }
                 case TRANSFER_MONEY: {
                     logger.debug("New TRANSFER_MONEY operation.");
                     Transaction transaction = (Transaction) objIn.readObject();
-                    logger.info("Proposed transaction ({}, {}, {}).", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
-                    registerUserTransaction(transaction.getOrigin(), transaction);
-                    registerUserTransaction(transaction.getDestination(), transaction);
-                    global_ledgers.add(transaction);
-                    logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
-                    objOut.writeBoolean(true);
+                    if (!jedis.exists(transaction.getOrigin().concat(USER_ACCOUNT)) || !jedis.exists(transaction.getDestination().concat(USER_ACCOUNT))) {
+                        logger.info("Bad transaction ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
+                        objOut.writeBoolean(false);
+                    } else {
+                        logger.info("Proposed transaction ({}, {}, {}).", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
+                        registerUserTransaction(transaction.getOrigin(), transaction);
+                        registerUserTransaction(transaction.getDestination(), transaction);
+                        jedis.rpush(GLOBAL_LEDGER, gson.toJson(transaction));
+                        logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
+                        objOut.writeBoolean(true);
+                    }
                     break;
                 }
                 case CURRENT_AMOUNT: {
                     logger.debug("New CURRENT_AMOUNT operation.");
                     String user = (String) objIn.readObject();
-                    double balance = getBalance(user);
-                    if (balance < 0) {
+                    if (!jedis.exists(user.concat(USER_ACCOUNT))) {
                         logger.info("User {} does not exist", user);
                         objOut.writeBoolean(false);
                     } else {
+                        double balance = getBalance(user);
                         logger.info("User {} has {} coins.", user, balance);
                         objOut.writeBoolean(true);
                         objOut.writeDouble(balance);
@@ -102,16 +108,16 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 }
                 case GLOBAL_LEDGER:
                     logger.debug("New GLOBAL_LEDGER operation.");
-                    objOut.writeObject(global_ledgers);
+                    objOut.writeObject(getLedger(GLOBAL_LEDGER));
                     break;
                 case CLIENT_LEDGER: {
                     logger.debug("New CLIENT_LEDGER operation.");
                     String user = (String) objIn.readObject();
-                    List<Transaction> user_ledger = client_ledgers.get(user);
-                    if (user_ledger == null) {
+                    if (!jedis.exists(user.concat(USER_ACCOUNT))) {
                         logger.info("User {} does not exist", user);
                         objOut.writeBoolean(false);
                     } else {
+                        List<Transaction> user_ledger = getLedger(user.concat(USER_LEDGER));
                         logger.info("User {} ledger found with length {}.", user, user_ledger);
                         objOut.writeBoolean(true);
                         objOut.writeObject(user_ledger);
@@ -123,18 +129,25 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             byteOut.flush();
             return byteOut.toByteArray();
         } catch (IOException | ClassNotFoundException e) {
-            System.out.println("hiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii1");
             e.printStackTrace();
             return ERROR_MSG.getBytes();
         }
     }
 
+    private List<Transaction> getLedger(String key) {
+        List<Transaction> deserialized_ledger = new LinkedList<>();
+        List<String> serialized_ledger = jedis.lrange(key, 0, -1);
+        serialized_ledger.forEach((transaction) -> deserialized_ledger.add(gson.fromJson(transaction, Transaction.class)));
+        return deserialized_ledger;
+    }
+
     private double getBalance(String user) {
         double balance = 0;
-        List<Transaction> ledger = client_ledgers.get(user);
-        if (ledger == null)
+        if (!jedis.exists(user.concat(USER_ACCOUNT)))
             return -1;
-        for (Transaction t : ledger) {
+        List<String> ledger = jedis.lrange("", 0, 1);
+        for (String json_t : ledger) {
+            Transaction t = gson.fromJson(json_t, Transaction.class);
             if (t.getOrigin().equals(user))
                 balance -= t.getAmount();
             else if (t.getDestination().equals(user))
@@ -143,32 +156,22 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return balance;
     }
 
-    //TODO: Exploitable for transactions from the system!!!
     private void registerUserTransaction(String user, Transaction transaction) {
-        List<Transaction> c_ledgers = client_ledgers.get(user);
-        if (c_ledgers == null) {
-            c_ledgers = new LinkedList<>();
-            client_ledgers.put(user, c_ledgers);
-            logger.debug("First transaction of user {} added to personal ledger.", user);
-        }
-        c_ledgers.add(transaction);
+        jedis.lpush(user.concat(USER_LEDGER), gson.toJson(transaction));
         logger.debug("Transaction of user {} added to personal ledger.", user);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public byte[] appExecuteUnordered(byte[] bytes, MessageContext messageContext) {
         return new byte[0];
     }
 
 
-    @SuppressWarnings("unchecked")
     @Override
     public void installSnapshot(byte[] bytes) {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public byte[] getSnapshot() {
         return new byte[0];
