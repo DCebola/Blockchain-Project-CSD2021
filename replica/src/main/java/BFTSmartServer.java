@@ -30,9 +30,12 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
     public BFTSmartServer(int id) throws IOException {
         this.jedis_properties = new Properties();
-        this.jedis_properties.load(new FileInputStream("resources/jedis.config"));
+        this.jedis_properties.load(new FileInputStream("config/jedis.config"));
         this.redisPort = jedis_properties.getProperty("jedis_port").split(",")[id];
         jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
+        jedis.rpush("queue#tasks", "firstTask");
+        jedis.rpush("queue#tasks", "secondTaskola");
+        //System.out.println(jedis.rpop("queue#tasks"));
         this.client_ledgers = new TreeMap<>();
         this.global_ledgers = new LinkedList<>();
         this.logger = LoggerFactory.getLogger("Replica " + id);
