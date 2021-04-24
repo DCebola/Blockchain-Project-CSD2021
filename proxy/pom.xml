@@ -27,7 +27,7 @@
         <dependency>
             <groupId>com.github.DCebola</groupId>
             <artifactId>bftsmart</artifactId>
-            <version>a5a8b03747658275e373575b162da96cb2a8b301</version>
+            <version>1809081b23f8f57bc4d9bb67efa6cb39a88adfc2</version>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
