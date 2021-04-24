@@ -1,4 +1,4 @@
-package com.proxy.controllers;
+package com.clients;
 
 
 import java.io.Serializable;
@@ -12,16 +12,16 @@ public class Transaction implements Serializable {
     private final String destination;
     private final double amount;
 
+    public Transaction() {
+        origin = "";
+        destination = "";
+        amount = -1;
+    }
+
     public Transaction(String origin, String destination, double amount) {
         this.origin = origin;
         this.destination = destination;
         this.amount = amount;
-    }
-
-    public Transaction() {
-        this.amount = -1;
-        this.origin = "";
-        this.destination = "";
     }
 
     public String getOrigin() {

@@ -104,7 +104,7 @@ public class LedgerController implements CommandLineRunner {
 
     @SuppressWarnings("unchecked")
     @GetMapping("/ledger")
-    public List<Transaction> ledgerOfGlobalTransactions() {
+    public Ledger ledgerOfGlobalTransactions() {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -116,7 +116,7 @@ public class LedgerController implements CommandLineRunner {
             ObjectInput objIn = new ObjectInputStream(byteIn);
             List<Transaction> global_ledger = (List<Transaction>) objIn.readObject();
             logger.info("OK. Global ledger with length {}.", global_ledger.size());
-            return global_ledger;
+            return new Ledger(global_ledger);
         } catch (IOException e) {
             logger.error("IO exception in ledgerOfGlobalTransactions. Cause: {}", e.getMessage());
             e.printStackTrace();
@@ -130,7 +130,7 @@ public class LedgerController implements CommandLineRunner {
 
     @SuppressWarnings("unchecked")
     @GetMapping("/{who}/ledger")
-    public List<Transaction> ledgerOfClientTransactions(@PathVariable String who) {
+    public Ledger ledgerOfClientTransactions(@PathVariable String who) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -147,7 +147,7 @@ public class LedgerController implements CommandLineRunner {
             } else {
                 List<Transaction> user_ledger = (List<Transaction>) objIn.readObject();
                 logger.info("OK. User {} ledger found with length {}.", who, user_ledger.size());
-                return user_ledger;
+                return new Ledger(user_ledger);
             }
         } catch (IOException e) {
             logger.error("IO exception in ledgerOfClientTransactions. Cause: {}", e.getMessage());

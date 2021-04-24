@@ -1,4 +1,5 @@
 package com.clients;
+
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -10,17 +11,25 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Objects;
+import java.util.Scanner;
+
 public class RestClient {
 
-    private static final String OBTAIN_COINS_API = "https://localhost:8443/who/obtainCoins";
+    private static final String OBTAIN_COINS_URL = "https://localhost:8443/%s/obtainCoins";
+    private static final String TRANSFER_MONEY_URL = "https://localhost:8443/transferMoney";
+    private static final String BALANCE_URL = "https://localhost:8443/%s/balance";
+    private static final String LEDGER_OF_GLOBAL_TRANSACTIONS = "https://localhost:8443/ledger";
+    private static final String LEDGER_OF_CLIENT_TRANSACTIONS = "https://localhost:8443/%s/ledger";
+
+    private static final int OBTAIN_COINS = 1;
+    private static final int TRANSFER_MONEY = 2;
+    private static final int CURRENT_AMOUNT = 3;
+    private static final int GLOBAL_LEDGER = 4;
+    private static final int CLIENT_LEDGER = 5;
+    private static final int QUIT = 6;
 
     public static void main(String[] args) {
-        callObtainCoinsAPI();
-    }
-
-
-    private static void callObtainCoinsAPI() {
-
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
                 SSLContexts.createDefault(),
                 new String[]{"TLSv1.3"},
@@ -35,13 +44,127 @@ public class RestClient {
         HttpComponentsClientHttpRequestFactory requestFactory
                 = new HttpComponentsClientHttpRequestFactory();
         requestFactory.setHttpClient(httpClient);
+        Scanner in = new Scanner(System.in);
+        int command = -1;
+        while (command != QUIT) {
+            printOps();
+            command = in.nextInt();
+            switch (command) {
+                case OBTAIN_COINS:
+                    callObtainCoins(requestFactory,in);
+                    break;
+                case TRANSFER_MONEY:
+                    transferMoney(requestFactory,in);
+                    break;
+                case CURRENT_AMOUNT:
+                    balance(requestFactory,in);
+                    break;
+                case GLOBAL_LEDGER:
+                    ledgerOfGlobalTransactions(requestFactory);
+                    break;
+                case CLIENT_LEDGER:
+                    ledgerOfClientTransactions(requestFactory,in);
+                    break;
+            }
+        }
+    }
 
-        HttpEntity<Double> request = new HttpEntity<>(50.0);
-        ResponseEntity<Double> response
-                = new RestTemplate(requestFactory).exchange(
-                OBTAIN_COINS_API, HttpMethod.POST, request, Double.class);
-        System.out.println(response.getBody());
-        //assertThat(response.getStatusCode().value(), equalTo(200));
+    private static void printOps() {
+        System.out.println("1- Obtain Coins");
+        System.out.println("2- Transfer Money");
+        System.out.println("3- Current Amount");
+        System.out.println("4- Global Ledger");
+        System.out.println("5- Client Ledger");
+        System.out.println("6- Quit");
+    }
+
+    private static void balance(HttpComponentsClientHttpRequestFactory requestFactory,Scanner in) {
+        try {
+            System.out.println("Insert user: ");
+            String user = in.next();
+            in.nextLine();
+            ResponseEntity<Double> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(BALANCE_URL,user), HttpMethod.GET, null, Double.class);
+            System.out.println(response.getStatusCodeValue() + "\n" + response.getBody());
+        } catch(Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory,Scanner in) {
+        try {
+            System.out.println("Insert origin: ");
+            String origin = in.next();
+            in.nextLine();
+            System.out.println("Insert destination: ");
+            String destination = in.next();
+            in.nextLine();
+            System.out.println("Insert amount: ");
+            double amount = in.nextDouble();
+            Transaction t = new Transaction(origin,destination,amount);
+
+            HttpEntity<Transaction> request = new HttpEntity<>(t);
+            ResponseEntity<Void> response
+                    = new RestTemplate(requestFactory).exchange(
+                    TRANSFER_MONEY_URL, HttpMethod.POST, request, Void.class);
+            System.out.println(response.getStatusCodeValue());
+        } catch(Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+        try {
+            System.out.println("Insert user: ");
+            String user = in.next();
+            in.nextLine();
+            System.out.println("Insert amount: ");
+            double amount = in.nextDouble();
+            HttpEntity<Double> request = new HttpEntity<>(amount);
+            ResponseEntity<Double> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(OBTAIN_COINS_URL,user), HttpMethod.POST, request, Double.class);
+            System.out.println(response.getStatusCode() + "\n" + response.getBody());
+        } catch(Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
+        try {
+            ResponseEntity<Ledger> response
+                    = new RestTemplate(requestFactory).exchange(
+                    LEDGER_OF_GLOBAL_TRANSACTIONS, HttpMethod.GET, null, Ledger.class);
+
+            for (Transaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
+                System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount());
+            }
+        } catch(Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+        System.out.println("Insert client: ");
+        String client = in.next();
+        in.nextLine();
+        try {
+            ResponseEntity<Ledger> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS,client), HttpMethod.GET, null, Ledger.class);
+
+            for (Transaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
+                System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount());
+            }
+        } catch(Exception e) {
+            System.out.println(e.getMessage());
+        }
+
     }
 
 }
+
+
+
+

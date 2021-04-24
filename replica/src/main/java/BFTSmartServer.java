@@ -36,7 +36,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis_properties.load(new FileInputStream("config/jedis.config"));
         String redisPort = jedis_properties.getProperty("jedis_port").split(",")[id];
         jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
-        jedis.set("test_user".concat(USER_ACCOUNT), "test_key");
+        jedis.set("test-user2".concat(USER_ACCOUNT), "test_key");
         new ServiceReplica(id, this, this);
 
     }
@@ -66,6 +66,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         logger.info("User {} does not exist", user);
                         objOut.writeBoolean(false);
                     } else {
+                        objOut.writeBoolean(true);
                         double amount = objIn.readDouble();
                         Transaction transaction = new Transaction(SYSTEM, user, amount);
                         logger.info("New transaction ({}, {}, {}).", SYSTEM, user, amount);
@@ -145,7 +146,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         double balance = 0;
         if (!jedis.exists(user.concat(USER_ACCOUNT)))
             return -1;
-        List<String> ledger = jedis.lrange("", 0, 1);
+        List<String> ledger = jedis.lrange(user.concat(USER_LEDGER), 0, -1);
         for (String json_t : ledger) {
             Transaction t = gson.fromJson(json_t, Transaction.class);
             if (t.getOrigin().equals(user))
@@ -157,7 +158,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     }
 
     private void registerUserTransaction(String user, Transaction transaction) {
-        jedis.lpush(user.concat(USER_LEDGER), gson.toJson(transaction));
+        jedis.rpush(user.concat(USER_LEDGER), gson.toJson(transaction));
         logger.debug("Transaction of user {} added to personal ledger.", user);
     }
 

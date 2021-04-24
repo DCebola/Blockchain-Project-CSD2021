@@ -5,6 +5,8 @@ import java.io.Serializable;
 
 public class Transaction implements Serializable {
 
+    private static final long serialVersionUID = 6529685098267757690L;
+
     private final String origin;
     private final String destination;
     private final double amount;
