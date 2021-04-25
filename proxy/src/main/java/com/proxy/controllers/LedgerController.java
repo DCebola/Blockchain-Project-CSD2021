@@ -28,8 +28,8 @@ public class LedgerController implements CommandLineRunner {
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.REGISTER_USER);
             objOut.writeObject(who);
-            objOut.writeObject(body.getPublicKey());
             objOut.writeObject(body.getAlgorithm());
+            objOut.writeObject(body.getPublicKey());
             objOut.flush();
             byteOut.flush();
             byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());

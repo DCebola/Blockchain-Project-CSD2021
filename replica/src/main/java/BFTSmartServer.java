@@ -5,6 +5,7 @@ import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 import com.google.gson.Gson;
 import com.proxy.controllers.LedgerRequestType;
 import com.proxy.controllers.Transaction;
+import com.proxy.controllers.Utils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import org.slf4j.Logger;
@@ -62,13 +63,16 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case REGISTER_USER: {
                     logger.debug("New REGISTER_USER operation.");
                     String user = (String) objIn.readObject();
+                    String algorithm = (String) objIn.readObject();
                     PublicKey publicKey = (PublicKey) objIn.readObject();
                     if (jedis.exists(user.concat(USER_ACCOUNT))) {
                         logger.info("User {} already exists", user);
                         objOut.writeBoolean(false);
                     } else {
                         objOut.writeBoolean(true);
-                        //jedis.rpush(user.concat(USER_ACCOUNT), );
+                        jedis.rpush(user.concat(USER_ACCOUNT), gson.toJson(publicKey));
+                        jedis.rpush(user.concat(USER_ACCOUNT), algorithm);
+                        logger.debug("User {}, with key of type {} and length {}", user, algorithm, publicKey.getEncoded().length * 8 * 4);
                         logger.info("Registered user {}", user);
 
                     }
