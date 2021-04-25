@@ -5,14 +5,22 @@ import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContexts;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.security.*;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.Scanner;
+
 
 public class RestClient {
 
@@ -29,7 +37,37 @@ public class RestClient {
     private static final int CLIENT_LEDGER = 5;
     private static final int QUIT = 6;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException, UnrecoverableKeyException, KeyStoreException, CertificateException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, InvalidKeyException {
+        Security.addProvider(new BouncyCastleProvider());
+        FileInputStream is = new FileInputStream("src/main/resources/hj.jks");
+        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keystore.load(is, "hjhjhjhj".toCharArray());
+        String alias = "hj1";
+        Key privateKey = keystore.getKey(alias, "hjhjhjhj".toCharArray());
+
+        if (privateKey instanceof PrivateKey) {
+            X509Certificate cert = (X509Certificate) keystore.getCertificate(alias);
+            PublicKey publicKey = cert.getPublicKey();
+            Signature signature = Signature.getInstance(cert.getSigAlgName());
+            signature.initSign((PrivateKey) privateKey);
+            System.out.println(Utils.toHex(privateKey.getEncoded()));
+
+            byte[] message = "Hello".getBytes();
+
+            signature.update(message);
+            byte[] sigBytes = signature.sign();
+            sigBytes[2] = (byte) 'a';
+
+            signature.initVerify(publicKey);
+            signature.update(message);
+
+            if (signature.verify(sigBytes)) {
+                System.out.println("\nAssinatura validada - reconhecida");
+            } else {
+                System.out.println("\nAssinatura nao reconhecida");
+            }
+        }
+
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
                 SSLContexts.createDefault(),
                 new String[]{"TLSv1.3"},
@@ -51,19 +89,19 @@ public class RestClient {
             command = in.nextInt();
             switch (command) {
                 case OBTAIN_COINS:
-                    callObtainCoins(requestFactory,in);
+                    callObtainCoins(requestFactory, in);
                     break;
                 case TRANSFER_MONEY:
-                    transferMoney(requestFactory,in);
+                    transferMoney(requestFactory, in);
                     break;
                 case CURRENT_AMOUNT:
-                    balance(requestFactory,in);
+                    balance(requestFactory, in);
                     break;
                 case GLOBAL_LEDGER:
                     ledgerOfGlobalTransactions(requestFactory);
                     break;
                 case CLIENT_LEDGER:
-                    ledgerOfClientTransactions(requestFactory,in);
+                    ledgerOfClientTransactions(requestFactory, in);
                     break;
             }
         }
@@ -78,21 +116,21 @@ public class RestClient {
         System.out.println("6- Quit");
     }
 
-    private static void balance(HttpComponentsClientHttpRequestFactory requestFactory,Scanner in) {
+    private static void balance(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             System.out.println("Insert user: ");
             String user = in.next();
             in.nextLine();
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL,user), HttpMethod.GET, null, Double.class);
+                    String.format(BALANCE_URL, user), HttpMethod.GET, null, Double.class);
             System.out.println(response.getStatusCodeValue() + "\n" + response.getBody());
-        } catch(Exception e) {
+        } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
-    private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory,Scanner in) {
+    private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             System.out.println("Insert origin: ");
             String origin = in.next();
@@ -102,14 +140,14 @@ public class RestClient {
             in.nextLine();
             System.out.println("Insert amount: ");
             double amount = in.nextDouble();
-            Transaction t = new Transaction(origin,destination,amount);
+            Transaction t = new Transaction(origin, destination, amount);
 
             HttpEntity<Transaction> request = new HttpEntity<>(t);
             ResponseEntity<Void> response
                     = new RestTemplate(requestFactory).exchange(
                     TRANSFER_MONEY_URL, HttpMethod.POST, request, Void.class);
             System.out.println(response.getStatusCodeValue());
-        } catch(Exception e) {
+        } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
@@ -124,9 +162,9 @@ public class RestClient {
             HttpEntity<Double> request = new HttpEntity<>(amount);
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_COINS_URL,user), HttpMethod.POST, request, Double.class);
+                    String.format(OBTAIN_COINS_URL, user), HttpMethod.POST, request, Double.class);
             System.out.println(response.getStatusCode() + "\n" + response.getBody());
-        } catch(Exception e) {
+        } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
@@ -140,24 +178,25 @@ public class RestClient {
             for (Transaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
                 System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount());
             }
-        } catch(Exception e) {
+        } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
-    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner
+            in) {
         System.out.println("Insert client: ");
         String client = in.next();
         in.nextLine();
         try {
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS,client), HttpMethod.GET, null, Ledger.class);
+                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS, client), HttpMethod.GET, null, Ledger.class);
 
             for (Transaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
                 System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount());
             }
-        } catch(Exception e) {
+        } catch (Exception e) {
             System.out.println(e.getMessage());
         }
 
