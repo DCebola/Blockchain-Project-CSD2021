@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.*;
+import java.security.PublicKey;
+import java.security.cert.X509Certificate;
 import java.util.List;
 
 @RestController
@@ -19,7 +21,30 @@ public class LedgerController implements CommandLineRunner {
 
 
     @PostMapping("/register/{who}")
-    public void register(@PathVariable String who, @RequestBody String userKey) {
+    @ResponseStatus(HttpStatus.OK)
+    public void registerUser(@PathVariable String who, @RequestBody RegisterUserMsgBody body) {
+        try {
+            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+            ObjectOutput objOut = new ObjectOutputStream(byteOut);
+            objOut.writeObject(LedgerRequestType.REGISTER_USER);
+            objOut.writeObject(who);
+            objOut.writeObject(body.getPublicKey());
+            objOut.writeObject(body.getAlgorithm());
+            objOut.flush();
+            byteOut.flush();
+            byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply);
+            ObjectInput objIn = new ObjectInputStream(byteIn);
+            if (!objIn.readBoolean()) {
+                logger.info("BAD REQUEST. User already exists {}", who);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists.");
+            } else {
+                logger.info("OK. User {} registered successfully.", who);
+            }
+        } catch (IOException e) {
+            logger.error("IO exception in registerUser. Cause: {}", e.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
 
     }
 

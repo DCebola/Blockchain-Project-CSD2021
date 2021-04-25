@@ -13,6 +13,7 @@ import redis.clients.jedis.Jedis;
 
 
 import java.io.*;
+import java.security.PublicKey;
 import java.security.Security;
 
 import java.util.*;
@@ -36,7 +37,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis_properties.load(new FileInputStream("config/jedis.config"));
         String redisPort = jedis_properties.getProperty("jedis_port").split(",")[id];
         jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
-        jedis.set("test-user2".concat(USER_ACCOUNT), "test_key");
         new ServiceReplica(id, this, this);
 
     }
@@ -59,11 +59,26 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             LedgerRequestType reqType = (LedgerRequestType) objIn.readObject();
             switch (reqType) {
+                case REGISTER_USER: {
+                    logger.debug("New REGISTER_USER operation.");
+                    String user = (String) objIn.readObject();
+                    PublicKey publicKey = (PublicKey) objIn.readObject();
+                    if (jedis.exists(user.concat(USER_ACCOUNT))) {
+                        logger.info("User {} already exists", user);
+                        objOut.writeBoolean(false);
+                    } else {
+                        objOut.writeBoolean(true);
+                        //jedis.rpush(user.concat(USER_ACCOUNT), );
+                        logger.info("Registered user {}", user);
+
+                    }
+                    break;
+                }
                 case OBTAIN_COINS: {
                     logger.debug("New OBTAIN_COINS operation.");
                     String user = (String) objIn.readObject();
                     if (!jedis.exists(user.concat(USER_ACCOUNT))) {
-                        logger.info("User {} does not exist", user);
+                        logger.info("User {} does not exist.", user);
                         objOut.writeBoolean(false);
                     } else {
                         objOut.writeBoolean(true);
