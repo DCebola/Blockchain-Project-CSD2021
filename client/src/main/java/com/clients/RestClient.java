@@ -39,33 +39,42 @@ public class RestClient {
 
     public static void main(String[] args) throws IOException, UnrecoverableKeyException, KeyStoreException, CertificateException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, InvalidKeyException {
         Security.addProvider(new BouncyCastleProvider());
-        FileInputStream is = new FileInputStream("src/main/resources/hj.jks");
+        FileInputStream is = new FileInputStream("src/main/resources/client4_keystore.jks");
         KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
-        keystore.load(is, "hjhjhjhj".toCharArray());
-        String alias = "hj1";
-        Key privateKey = keystore.getKey(alias, "hjhjhjhj".toCharArray());
+        keystore.load(is, "client4Pass".toCharArray());
+        String alias = "client4";
+        Key privateKey = keystore.getKey(alias, "client4Pass".toCharArray());
 
         if (privateKey instanceof PrivateKey) {
             X509Certificate cert = (X509Certificate) keystore.getCertificate(alias);
             PublicKey publicKey = cert.getPublicKey();
             Signature signature = Signature.getInstance(cert.getSigAlgName());
-            signature.initSign((PrivateKey) privateKey);
-            System.out.println(Utils.toHex(privateKey.getEncoded()));
+            System.out.println(cert.getSigAlgName());
+            signature.initSign((PrivateKey) privateKey, new SecureRandom());
+            //System.out.println(Utils.toHex(privateKey.getEncoded()));
 
             byte[] message = "Hello".getBytes();
 
             signature.update(message);
             byte[] sigBytes = signature.sign();
-            sigBytes[2] = (byte) 'a';
+            System.out.println(sigBytes.length);
+            message = "Hello1".getBytes();
+
+            //sigBytes[2] ^= '0' ^ '9';
+            System.out.println(sigBytes.length);
 
             signature.initVerify(publicKey);
             signature.update(message);
-
-            if (signature.verify(sigBytes)) {
-                System.out.println("\nAssinatura validada - reconhecida");
-            } else {
-                System.out.println("\nAssinatura nao reconhecida");
+            try {
+                if (signature.verify(sigBytes)) {
+                    System.out.println("\nAssinatura validada - reconhecida");
+                } else {
+                    System.out.println("\nAssinatura nao reconhecida");
+                }
+            } catch(SignatureException e) {
+                System.out.println("Signature not recognized");
             }
+
         }
 
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
