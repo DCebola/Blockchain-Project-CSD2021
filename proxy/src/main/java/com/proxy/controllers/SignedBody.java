@@ -8,7 +8,7 @@ public class SignedBody<T> implements Serializable {
     private final byte[] signature;
     private static final long serialVersionUID = 152968508267757690L;
 
-    public SignedBody(String op, T content, byte[] signature) {
+    public SignedBody(T content, byte[] signature) {
         this.content = content;
         this.signature = signature;
     }

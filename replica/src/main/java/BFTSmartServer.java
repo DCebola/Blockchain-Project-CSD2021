@@ -4,7 +4,9 @@ import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 
 import com.google.gson.Gson;
 import com.proxy.controllers.LedgerRequestType;
+import com.proxy.controllers.SignedTransaction;
 import com.proxy.controllers.Transaction;
+import com.proxy.controllers.Utils;
 import org.apache.commons.codec.binary.Base64;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
@@ -14,10 +16,7 @@ import redis.clients.jedis.Jedis;
 
 
 import java.io.*;
-import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
-import java.security.Security;
+import java.security.*;
 
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
@@ -84,23 +83,44 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     }
                     break;
                 }
-
-
                 case OBTAIN_COINS: {
                     logger.debug("New OBTAIN_COINS operation.");
                     String user = (String) objIn.readObject();
+
                     if (!jedis.exists(user.concat(USER_ACCOUNT))) {
                         logger.info("User {} does not exist", user);
                         objOut.writeBoolean(false);
                     } else {
                         objOut.writeBoolean(true);
                         double amount = objIn.readDouble();
-                        Transaction transaction = new Transaction(SYSTEM, user, amount);
-                        logger.info("New transaction ({}, {}, {}).", SYSTEM, user, amount);
-                        jedis.rpush(GLOBAL_LEDGER, gson.toJson(transaction));
-                        logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", SYSTEM, user, amount);
-                        registerUserTransaction(user, transaction);
-                        objOut.writeDouble(amount);
+                        byte[] sigBytes = (byte[]) objIn.readObject();
+
+                        List<String> signConfigs = jedis.lrange(user.concat(USER_ACCOUNT),0,-1);
+                        PublicKey publicKey = KeyFactory.getInstance("EC").
+                                generatePublic(new X509EncodedKeySpec(base64.decode(signConfigs.get(0))));
+
+                        System.out.println(Utils.toHex(publicKey.getEncoded()));
+
+                        String signAlgorithm = signConfigs.get(1);
+                        Signature signature = Signature.getInstance(signAlgorithm);
+
+                        String msg = gson.toJson("OBTAIN_COINS").concat(gson.toJson(amount));
+
+                        signature.initVerify(publicKey);
+                        signature.update(msg.getBytes());
+
+                        if(signature.verify(sigBytes)) {
+                            System.out.println("Signature verified");
+                            Transaction transaction = new Transaction(SYSTEM, user, amount);
+                            SignedTransaction signedTransaction = new SignedTransaction(msg,sigBytes,transaction,user);
+                            logger.info("New transaction ({}, {}, {}).", SYSTEM, user, amount);
+                            jedis.rpush(GLOBAL_LEDGER, gson.toJson(signedTransaction));
+                            logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", SYSTEM, user, amount);
+                            registerUserTransaction(user, signedTransaction);
+                            objOut.writeDouble(amount);
+                        } else {
+                            System.out.println("Signature not verified");
+                        }
                     }
                     break;
                 }
@@ -112,8 +132,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeBoolean(false);
                     } else {
                         logger.info("Proposed transaction ({}, {}, {}).", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
-                        registerUserTransaction(transaction.getOrigin(), transaction);
-                        registerUserTransaction(transaction.getDestination(), transaction);
+                        //registerUserTransaction(transaction.getOrigin(), transaction);
+                        //registerUserTransaction(transaction.getDestination(), transaction);
                         jedis.rpush(GLOBAL_LEDGER, gson.toJson(transaction));
                         logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
                         objOut.writeBoolean(true);
@@ -156,7 +176,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             objOut.flush();
             byteOut.flush();
             return byteOut.toByteArray();
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException | ClassNotFoundException | NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
             e.printStackTrace();
             return ERROR_MSG.getBytes();
         }
@@ -184,8 +204,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return balance;
     }
 
-    private void registerUserTransaction(String user, Transaction transaction) {
-        jedis.rpush(user.concat(USER_LEDGER), gson.toJson(transaction));
+    private void registerUserTransaction(String user, SignedTransaction signedTransaction) {
+        jedis.rpush(user.concat(USER_LEDGER), gson.toJson(signedTransaction));
         logger.debug("Transaction of user {} added to personal ledger.", user);
     }
 

@@ -45,8 +45,11 @@ public class RestClient {
     private static final int CLIENT_LEDGER = 5;
     private static final int QUIT = 6;
 
+    private static Gson gson;
+
     public static void main(String[] args) throws IOException, UnrecoverableKeyException, KeyStoreException, CertificateException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, InvalidKeyException, InvalidKeySpecException {
         Security.addProvider(new BouncyCastleProvider());
+        gson = new Gson();
         FileInputStream is = new FileInputStream("src/main/resources/client4_keystore.jks");
         KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
         keystore.load(is, "client4Pass".toCharArray());
@@ -227,12 +230,31 @@ public class RestClient {
 
     private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
-            System.out.println("Insert user: ");
+            String op = "OBTAIN_COINS";
+            System.out.println("Insert username: ");
             String user = in.next();
+            in.nextLine();
+            System.out.println("Insert password: ");
+            char[] password = in.next().toCharArray();
             in.nextLine();
             System.out.println("Insert amount: ");
             double amount = in.nextDouble();
-            HttpEntity<Double> request = new HttpEntity<>(amount);
+            KeyStore keystore = getKeyStore(user, password);
+            X509Certificate cert = (X509Certificate) keystore.getCertificate(user);
+            System.out.println(Utils.toHex(cert.getPublicKey().getEncoded()));
+            Signature signature = Signature.getInstance(cert.getSigAlgName());
+
+            PrivateKey privateKey = (PrivateKey) keystore.getKey(user,password);
+            String msgToBeSigned = gson.toJson(op).concat(gson.toJson(amount));
+
+            signature.initSign(privateKey, new SecureRandom());
+            signature.update(msgToBeSigned.getBytes());
+            byte[] sigBytes = signature.sign();
+
+            SignedBody signedBody = new SignedBody(amount,sigBytes);
+            System.out.println("hello1");
+            HttpEntity<SignedBody> request = new HttpEntity<>(signedBody);
+            System.out.println("hello1");
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(OBTAIN_COINS_URL, user), HttpMethod.POST, request, Double.class);

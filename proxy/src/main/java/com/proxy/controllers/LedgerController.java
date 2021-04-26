@@ -46,13 +46,14 @@ public class LedgerController implements CommandLineRunner {
 
 
     @PostMapping("/{who}/obtainCoins")
-    public double obtainAmount(@PathVariable String who, @RequestBody double amount) {
+    public double obtainAmount(@PathVariable String who, @RequestBody SignedBody signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.OBTAIN_COINS);
             objOut.writeObject(who);
-            objOut.writeDouble(amount);
+            objOut.writeDouble((Double) signedBody.getContent());
+            objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
             byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
