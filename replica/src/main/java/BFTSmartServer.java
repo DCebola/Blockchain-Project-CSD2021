@@ -5,7 +5,7 @@ import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 import com.google.gson.Gson;
 import com.proxy.controllers.LedgerRequestType;
 import com.proxy.controllers.Transaction;
-import com.proxy.controllers.Utils;
+import org.apache.commons.codec.binary.Base64;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import org.slf4j.Logger;
@@ -14,9 +14,13 @@ import redis.clients.jedis.Jedis;
 
 
 import java.io.*;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.Security;
 
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 
 public class BFTSmartServer extends DefaultSingleRecoverable {
@@ -29,15 +33,18 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private final Logger logger;
     private final Jedis jedis;
     private final Gson gson;
+    private final Base64 base64;
 
 
     public BFTSmartServer(int id) throws IOException {
         this.logger = LoggerFactory.getLogger(this.getClass().getName());
+        this.base64 = new Base64();
         this.gson = new Gson();
         Properties jedis_properties = new Properties();
         jedis_properties.load(new FileInputStream("config/jedis.config"));
         String redisPort = jedis_properties.getProperty("jedis_port").split(",")[id];
         jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
+        jedis.set("test-user2".concat(USER_ACCOUNT), "test_key");
         new ServiceReplica(id, this, this);
 
     }
@@ -64,25 +71,26 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     logger.debug("New REGISTER_USER operation.");
                     String user = (String) objIn.readObject();
                     String algorithm = (String) objIn.readObject();
-                    PublicKey publicKey = (PublicKey) objIn.readObject();
+                    byte[] publicKey = (byte[]) objIn.readObject();
                     if (jedis.exists(user.concat(USER_ACCOUNT))) {
                         logger.info("User {} already exists", user);
                         objOut.writeBoolean(false);
                     } else {
                         objOut.writeBoolean(true);
-                        jedis.rpush(user.concat(USER_ACCOUNT), gson.toJson(publicKey));
+                        jedis.rpush(user.concat(USER_ACCOUNT), new String(base64.encode(publicKey)));
                         jedis.rpush(user.concat(USER_ACCOUNT), algorithm);
-                        logger.debug("User {}, with key of type {} and length {}", user, algorithm, publicKey.getEncoded().length * 8 * 4);
+                        logger.debug("User {}, with key of type {} and length {}", user, algorithm, publicKey.length * 8 * 4);
                         logger.info("Registered user {}", user);
-
                     }
                     break;
                 }
+
+
                 case OBTAIN_COINS: {
                     logger.debug("New OBTAIN_COINS operation.");
                     String user = (String) objIn.readObject();
                     if (!jedis.exists(user.concat(USER_ACCOUNT))) {
-                        logger.info("User {} does not exist.", user);
+                        logger.info("User {} does not exist", user);
                         objOut.writeBoolean(false);
                     } else {
                         objOut.writeBoolean(true);

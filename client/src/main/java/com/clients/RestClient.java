@@ -1,5 +1,7 @@
 package com.clients;
 
+import com.google.gson.Gson;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -13,22 +15,29 @@ import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.Scanner;
 
 
 public class RestClient {
 
+    private static final String REGISTER_URL = "https://localhost:8443/register/%s";
     private static final String OBTAIN_COINS_URL = "https://localhost:8443/%s/obtainCoins";
     private static final String TRANSFER_MONEY_URL = "https://localhost:8443/transferMoney";
     private static final String BALANCE_URL = "https://localhost:8443/%s/balance";
     private static final String LEDGER_OF_GLOBAL_TRANSACTIONS = "https://localhost:8443/ledger";
     private static final String LEDGER_OF_CLIENT_TRANSACTIONS = "https://localhost:8443/%s/ledger";
 
+
+    private static final int REGISTER = 0;
     private static final int OBTAIN_COINS = 1;
     private static final int TRANSFER_MONEY = 2;
     private static final int CURRENT_AMOUNT = 3;
@@ -36,7 +45,7 @@ public class RestClient {
     private static final int CLIENT_LEDGER = 5;
     private static final int QUIT = 6;
 
-    public static void main(String[] args) throws IOException, UnrecoverableKeyException, KeyStoreException, CertificateException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, InvalidKeyException {
+    public static void main(String[] args) throws IOException, UnrecoverableKeyException, KeyStoreException, CertificateException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, InvalidKeyException, InvalidKeySpecException {
         Security.addProvider(new BouncyCastleProvider());
         FileInputStream is = new FileInputStream("src/main/resources/client4_keystore.jks");
         KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
@@ -47,6 +56,9 @@ public class RestClient {
         if (privateKey instanceof PrivateKey) {
             X509Certificate cert = (X509Certificate) keystore.getCertificate(alias);
             PublicKey publicKey = cert.getPublicKey();
+
+            byte[] publicKeyBytes = publicKey.getEncoded();
+
             Signature signature = Signature.getInstance(cert.getSigAlgName());
             System.out.println(cert.getSigAlgName());
             signature.initSign((PrivateKey) privateKey, new SecureRandom());
@@ -62,6 +74,25 @@ public class RestClient {
             //sigBytes[2] ^= '0' ^ '9';
             System.out.println(sigBytes.length);
 
+            publicKey = KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(publicKeyBytes));
+            Base64 base64 = new Base64();
+            String encodedString = new String(base64.encode(publicKeyBytes));
+
+
+
+            System.out.println(Utils.toHex(publicKeyBytes));
+            System.out.println("-------------------------------------");
+            System.out.println(Utils.toHex(base64.decode(encodedString)));
+
+
+
+            Gson gson = new Gson();
+            //KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(publicKey))
+            String publicKeyString = gson.toJson(publicKey.getEncoded());
+
+            publicKey = KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(gson.fromJson(publicKeyString,byte[].class)));
+
+
             signature.initVerify(publicKey);
             signature.update(message);
             try {
@@ -70,7 +101,7 @@ public class RestClient {
                 } else {
                     System.out.println("\nAssinatura nao reconhecida");
                 }
-            } catch(SignatureException e) {
+            } catch (SignatureException e) {
                 System.out.println("Signature not recognized");
             }
 
@@ -96,6 +127,9 @@ public class RestClient {
             printOps();
             command = in.nextInt();
             switch (command) {
+                case REGISTER:
+                    register(requestFactory, in);
+                    break;
                 case OBTAIN_COINS:
                     callObtainCoins(requestFactory, in);
                     break;
@@ -115,7 +149,38 @@ public class RestClient {
         }
     }
 
+    private static KeyStore getKeyStore(String user, char[] password) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, UnrecoverableKeyException {
+        FileInputStream is = new FileInputStream("src/main/resources/".concat(user).concat("_keystore.jks"));
+        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keystore.load(is, password);
+        return keystore;
+    }
+
+    private static void register(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+        try {
+            System.out.println("Insert username: ");
+            String user = in.next();
+            in.nextLine();
+            System.out.println("Insert password: ");
+            char[] password = in.next().toCharArray();
+            in.nextLine();
+            KeyStore keystore = getKeyStore(user, password);
+            X509Certificate cert = (X509Certificate) keystore.getCertificate(user);
+
+            System.out.println(Utils.toHex(cert.getPublicKey().getEncoded()));
+
+            HttpEntity<RegisterUserMsgBody> request = new HttpEntity<>(new RegisterUserMsgBody(cert.getPublicKey().getEncoded(), cert.getSigAlgName()));
+            ResponseEntity<Void> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(REGISTER_URL, user), HttpMethod.POST, request, Void.class);
+            System.out.println(response.getStatusCodeValue() + "\n" + response.getBody());
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
     private static void printOps() {
+        System.out.println("0- Register");
         System.out.println("1- Obtain Coins");
         System.out.println("2- Transfer Money");
         System.out.println("3- Current Amount");

@@ -3,14 +3,8 @@ package com.clients;
 public class Utils {
     private static final String digits = "0123456789abcdef";
 
-    /**
-     * Retorna string hexadecimal a partir de um byte array de certo tamanho
-     *
-     * @param data   : bytes a coverter
-     * @param length : numero de bytes no bloco de dados a serem convertidos.
-     * @return hex : representacaop em hexadecimal dos dados
-     */
     private static String toHex(byte[] data, int length) {
+
         StringBuffer buf = new StringBuffer();
 
         for (int i = 0; i != length; i++) {

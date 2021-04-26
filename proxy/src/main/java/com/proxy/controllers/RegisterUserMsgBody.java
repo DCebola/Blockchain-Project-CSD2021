@@ -1,25 +1,24 @@
 package com.proxy.controllers;
 
 import java.io.Serializable;
-import java.security.PublicKey;
 
 public class RegisterUserMsgBody implements Serializable {
 
-    private static final long serialVersionUID = 6529685098264829690L;
+    private byte[] publicKey;
+    private String signatureAlgorithm;
+    private static final long serialVersionUID = 7529685098267757690L;
 
-    private final PublicKey  publicKey;
-    private final String  algorithm;
-
-    public RegisterUserMsgBody(PublicKey publicKey, String algorithm) {
+    public RegisterUserMsgBody(byte[] publicKey, String signatureAlgorithm) {
         this.publicKey = publicKey;
-        this.algorithm = algorithm;
+        this.signatureAlgorithm = signatureAlgorithm;
     }
 
-    public String getAlgorithm() {
-        return algorithm;
-    }
 
-    public PublicKey getPublicKey() {
+    public byte[] getPublicKey() {
         return publicKey;
+    }
+
+    public String getSignatureAlgorithm() {
+        return signatureAlgorithm;
     }
 }

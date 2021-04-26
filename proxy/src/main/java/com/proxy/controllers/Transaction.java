@@ -2,6 +2,7 @@ package com.proxy.controllers;
 
 
 import java.io.Serializable;
+import java.security.PublicKey;
 
 public class Transaction implements Serializable {
 

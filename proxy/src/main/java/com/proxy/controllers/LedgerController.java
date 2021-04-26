@@ -9,8 +9,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.*;
-import java.security.PublicKey;
-import java.security.cert.X509Certificate;
 import java.util.List;
 
 @RestController
@@ -21,14 +19,13 @@ public class LedgerController implements CommandLineRunner {
 
 
     @PostMapping("/register/{who}")
-    @ResponseStatus(HttpStatus.OK)
-    public void registerUser(@PathVariable String who, @RequestBody RegisterUserMsgBody body) {
+    public void register(@PathVariable String who, @RequestBody RegisterUserMsgBody body) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.REGISTER_USER);
             objOut.writeObject(who);
-            objOut.writeObject(body.getAlgorithm());
+            objOut.writeObject(body.getSignatureAlgorithm());
             objOut.writeObject(body.getPublicKey());
             objOut.flush();
             byteOut.flush();
@@ -45,7 +42,6 @@ public class LedgerController implements CommandLineRunner {
             logger.error("IO exception in registerUser. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
-
     }
 
 
