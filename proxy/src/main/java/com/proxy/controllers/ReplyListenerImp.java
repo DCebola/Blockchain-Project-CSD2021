@@ -11,13 +11,14 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 
 public class ReplyListenerImp implements ReplyListener {
 
-    private final BlockingQueue<Integer> blockingQueue;
+    private final CompletableFuture<String> reply;
 
-    public ReplyListenerImp(BlockingQueue<Integer> blockingQueue) {
-        this.blockingQueue = blockingQueue;
+    public ReplyListenerImp(CompletableFuture<String> reply) {
+        this.reply = reply;
     }
 
     @Override
@@ -37,15 +38,10 @@ public class ReplyListenerImp implements ReplyListener {
                 //logger.info("BAD REQUEST. Proposed transaction: ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
             } else {
-                System.out.println("Hello");
                 //logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
-                blockingQueue.put(1);
+                reply.complete("I am done.");
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ResponseStatusException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
+        } catch (IOException | ResponseStatusException e) {
             e.printStackTrace();
         }
 

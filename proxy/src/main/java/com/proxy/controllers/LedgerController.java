@@ -90,14 +90,10 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(transaction);
             objOut.flush();
             byteOut.flush();
-            BlockingQueue<Integer> blockingQueue = new LinkedBlockingQueue<>();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp(blockingQueue),ORDERED_REQUEST);
-            System.out.println("Hello i am finished");
-            int result = blockingQueue.poll(3000, TimeUnit.MILLISECONDS);
+            CompletableFuture<String> reply = new CompletableFuture<>();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp(reply),ORDERED_REQUEST);
+            String result = reply.get();
             System.out.println(result);
-
-
-
 
 
             /*byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
@@ -108,7 +104,7 @@ public class LedgerController implements CommandLineRunner {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
             } else
                 logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());*/
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException | InterruptedException | ExecutionException e) {
             logger.error("IO exception in transferAmount. Cause: {}", e.getMessage());
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
