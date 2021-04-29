@@ -1,20 +1,27 @@
 package com.proxy.controllers;
 
+import bftsmart.communication.client.ReplyListener;
+import bftsmart.tom.AsynchServiceProxy;
+import bftsmart.tom.RequestContext;
 import bftsmart.tom.ServiceProxy;
+import bftsmart.tom.core.messages.TOMMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
 
 import java.io.*;
 import java.util.List;
+import java.util.concurrent.*;
 
 @RestController
 public class LedgerController implements CommandLineRunner {
 
     private ServiceProxy serviceProxy;
+    private AsynchServiceProxy asynchServiceProxy;
     private Logger logger;
 
 
@@ -83,15 +90,25 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(transaction);
             objOut.flush();
             byteOut.flush();
-            byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
+            BlockingQueue<Integer> blockingQueue = new LinkedBlockingQueue<>();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp(blockingQueue),ORDERED_REQUEST);
+            System.out.println("Hello i am finished");
+            int result = blockingQueue.poll(3000, TimeUnit.MILLISECONDS);
+            System.out.println(result);
+
+
+
+
+
+            /*byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
             ByteArrayInputStream byteIn = new ByteArrayInputStream(reply);
             ObjectInput objIn = new ObjectInputStream(byteIn);
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST. Proposed transaction: ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
             } else
-                logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
-        } catch (IOException e) {
+                logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());*/
+        } catch (IOException | InterruptedException e) {
             logger.error("IO exception in transferAmount. Cause: {}", e.getMessage());
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -206,10 +223,42 @@ public class LedgerController implements CommandLineRunner {
             if (args.length == 1) {
                 int id = Integer.parseInt(args[0]);
                 logger.info("Launching client with uuid: {}", id);
-                this.serviceProxy = new ServiceProxy(id);
+                //this.serviceProxy = new ServiceProxy(id);
+                this.asynchServiceProxy = new AsynchServiceProxy(id);
             } else logger.error("Usage: LedgerController <client ID>");
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
+    /*
+    private static class ReplyListenerImp implements ReplyListener {
+        @Override
+        public void reset() {
+
+        }
+
+        @Override
+        public void replyReceived(RequestContext requestContext, TOMMessage tomMessage) {
+
+            try {
+                ByteArrayInputStream byteIn = new ByteArrayInputStream(tomMessage.getContent());
+                ObjectInput objIn = new ObjectInputStream(byteIn);
+                if (!objIn.readBoolean()) {
+                    //logger.info("BAD REQUEST. Proposed transaction: ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+                } else {
+                    System.out.println("Hello");
+                    //logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (ResponseStatusException e) {
+                e.printStackTrace();
+            }
+            System.out.println(Utils.toHex(tomMessage.serializedMessage));
+
+        }
+    }*/
+
 }
