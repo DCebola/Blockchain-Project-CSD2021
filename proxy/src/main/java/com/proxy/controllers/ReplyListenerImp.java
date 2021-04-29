@@ -16,9 +16,11 @@ import java.util.concurrent.CompletableFuture;
 public class ReplyListenerImp implements ReplyListener {
 
     private final CompletableFuture<String> reply;
+    private int numReplies;
 
     public ReplyListenerImp(CompletableFuture<String> reply) {
         this.reply = reply;
+        this.numReplies = 0;
     }
 
     @Override
@@ -30,6 +32,7 @@ public class ReplyListenerImp implements ReplyListener {
 
     @Override
     public void replyReceived(RequestContext requestContext, TOMMessage tomMessage) {
+        numReplies++;
 
         try {
             ByteArrayInputStream byteIn = new ByteArrayInputStream(tomMessage.getContent());
@@ -39,7 +42,11 @@ public class ReplyListenerImp implements ReplyListener {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
             } else {
                 //logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
-                reply.complete("I am done.");
+                System.out.println("Reply received");
+                if(numReplies == 4) {
+                    reply.complete("I am done.");
+                }
+
             }
         } catch (IOException | ResponseStatusException e) {
             e.printStackTrace();
