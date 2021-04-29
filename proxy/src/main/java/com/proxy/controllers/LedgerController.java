@@ -1,10 +1,7 @@
 package com.proxy.controllers;
 
-import bftsmart.communication.client.ReplyListener;
 import bftsmart.tom.AsynchServiceProxy;
-import bftsmart.tom.RequestContext;
 import bftsmart.tom.ServiceProxy;
-import bftsmart.tom.core.messages.TOMMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -53,13 +50,13 @@ public class LedgerController implements CommandLineRunner {
 
 
     @PostMapping("/{who}/obtainCoins")
-    public double obtainAmount(@PathVariable String who, @RequestBody SignedBody signedBody) {
+    public double obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.OBTAIN_COINS);
             objOut.writeObject(who);
-            objOut.writeDouble((Double) signedBody.getContent());
+            objOut.writeDouble(signedBody.getContent());
             objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
@@ -90,20 +87,15 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(transaction);
             objOut.flush();
             byteOut.flush();
-            CompletableFuture<String> reply = new CompletableFuture<>();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp(reply),ORDERED_REQUEST);
-            String result = reply.get();
-            System.out.println(result);
-
-
-            /*byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply);
+            CompletableFuture<byte[]> reply = new CompletableFuture<>();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply),ORDERED_REQUEST);
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
             ObjectInput objIn = new ObjectInputStream(byteIn);
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST. Proposed transaction: ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
             } else
-                logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());*/
+                logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
         } catch (IOException | InterruptedException | ExecutionException e) {
             logger.error("IO exception in transferAmount. Cause: {}", e.getMessage());
             e.printStackTrace();
@@ -120,8 +112,9 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(who);
             objOut.flush();
             byteOut.flush();
-            byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply);
+            CompletableFuture<byte[]> reply = new CompletableFuture<>();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply),ORDERED_REQUEST);
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
             ObjectInput objIn = new ObjectInputStream(byteIn);
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST. Non existent user {}", who);
@@ -133,6 +126,9 @@ public class LedgerController implements CommandLineRunner {
             }
         } catch (IOException e) {
             logger.error("IO exception in currentAmount. Cause: {}", e.getMessage());
+            e.printStackTrace();
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -147,8 +143,9 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(LedgerRequestType.GLOBAL_LEDGER);
             objOut.flush();
             byteOut.flush();
-            byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply);
+            CompletableFuture<byte[]> reply = new CompletableFuture<>();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply),ORDERED_REQUEST);
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
             ObjectInput objIn = new ObjectInputStream(byteIn);
             List<Transaction> global_ledger = (List<Transaction>) objIn.readObject();
             logger.info("OK. Global ledger with length {}.", global_ledger.size());
@@ -159,6 +156,9 @@ public class LedgerController implements CommandLineRunner {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (ClassNotFoundException e) {
             logger.error("Class not found in ledgerOfGlobalTransactions. Cause: {}", e.getMessage());
+            e.printStackTrace();
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -174,8 +174,9 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(who);
             objOut.flush();
             byteOut.flush();
-            byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply);
+            CompletableFuture<byte[]> reply = new CompletableFuture<>();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply),ORDERED_REQUEST);
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
             ObjectInput objIn = new ObjectInputStream(byteIn);
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST. Non existent user {}", who);
@@ -191,6 +192,9 @@ public class LedgerController implements CommandLineRunner {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (ClassNotFoundException e) {
             logger.error("Class not found in ledgerOfClientTransactions. Cause: {}", e.getMessage());
+            e.printStackTrace();
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -219,42 +223,12 @@ public class LedgerController implements CommandLineRunner {
             if (args.length == 1) {
                 int id = Integer.parseInt(args[0]);
                 logger.info("Launching client with uuid: {}", id);
-                this.serviceProxy = new ServiceProxy(id);
-                //this.asynchServiceProxy = new AsynchServiceProxy(id);
+                //this.serviceProxy = new ServiceProxy(id);
+                this.asynchServiceProxy = new AsynchServiceProxy(id);
             } else logger.error("Usage: LedgerController <client ID>");
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-
-    /*
-    private static class ReplyListenerImp implements ReplyListener {
-        @Override
-        public void reset() {
-
-        }
-
-        @Override
-        public void replyReceived(RequestContext requestContext, TOMMessage tomMessage) {
-
-            try {
-                ByteArrayInputStream byteIn = new ByteArrayInputStream(tomMessage.getContent());
-                ObjectInput objIn = new ObjectInputStream(byteIn);
-                if (!objIn.readBoolean()) {
-                    //logger.info("BAD REQUEST. Proposed transaction: ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-                } else {
-                    System.out.println("Hello");
-                    //logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (ResponseStatusException e) {
-                e.printStackTrace();
-            }
-            System.out.println(Utils.toHex(tomMessage.serializedMessage));
-
-        }
-    }*/
 
 }

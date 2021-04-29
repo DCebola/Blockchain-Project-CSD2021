@@ -9,7 +9,7 @@ import java.security.Security;
 public class ProxyApplication {
 
     public static void main(String[] args) {
-        Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+        //Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
         SpringApplication.run(ProxyApplication.class, args);
     }
 
