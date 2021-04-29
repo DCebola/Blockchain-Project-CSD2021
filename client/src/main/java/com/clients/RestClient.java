@@ -4,8 +4,10 @@ import com.google.gson.Gson;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.http.HttpEntity;
@@ -14,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -47,71 +51,16 @@ public class RestClient {
 
     private static Gson gson;
 
-    public static void main(String[] args) throws IOException, UnrecoverableKeyException, KeyStoreException, CertificateException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, InvalidKeyException, InvalidKeySpecException {
+    public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException {
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
-        FileInputStream is = new FileInputStream("src/main/resources/client4_keystore.jks");
-        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
-        keystore.load(is, "client4Pass".toCharArray());
-        String alias = "client4";
-        Key privateKey = keystore.getKey(alias, "client4Pass".toCharArray());
-
-        if (privateKey instanceof PrivateKey) {
-            X509Certificate cert = (X509Certificate) keystore.getCertificate(alias);
-            PublicKey publicKey = cert.getPublicKey();
-
-            byte[] publicKeyBytes = publicKey.getEncoded();
-
-            Signature signature = Signature.getInstance(cert.getSigAlgName());
-            System.out.println(cert.getSigAlgName());
-            signature.initSign((PrivateKey) privateKey, new SecureRandom());
-            //System.out.println(Utils.toHex(privateKey.getEncoded()));
-
-            byte[] message = "Hello".getBytes();
-
-            signature.update(message);
-            byte[] sigBytes = signature.sign();
-            System.out.println(sigBytes.length);
-            message = "Hello1".getBytes();
-
-            //sigBytes[2] ^= '0' ^ '9';
-            System.out.println(sigBytes.length);
-
-            publicKey = KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(publicKeyBytes));
-            Base64 base64 = new Base64();
-            String encodedString = new String(base64.encode(publicKeyBytes));
-
-
-
-            System.out.println(Utils.toHex(publicKeyBytes));
-            System.out.println("-------------------------------------");
-            System.out.println(Utils.toHex(base64.decode(encodedString)));
-
-
-
-            Gson gson = new Gson();
-            //KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(publicKey))
-            String publicKeyString = gson.toJson(publicKey.getEncoded());
-
-            publicKey = KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(gson.fromJson(publicKeyString,byte[].class)));
-
-
-            signature.initVerify(publicKey);
-            signature.update(message);
-            try {
-                if (signature.verify(sigBytes)) {
-                    System.out.println("\nAssinatura validada - reconhecida");
-                } else {
-                    System.out.println("\nAssinatura nao reconhecida");
-                }
-            } catch (SignatureException e) {
-                System.out.println("Signature not recognized");
-            }
-
-        }
+        SSLContextBuilder builder = new SSLContextBuilder();
+        KeyStore ksTrust = KeyStore.getInstance(KeyStore.getDefaultType());
+        ksTrust.load(new FileInputStream("src/main/resources/truststore.jks"), "truststorePass".toCharArray());
+        builder.loadTrustMaterial(ksTrust, new TrustSelfSignedStrategy());
 
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
-                SSLContexts.createDefault(),
+                builder.build(),
                 new String[]{"TLSv1.3"},
                 new String[]{"TLS_AES_256_GCM_SHA384"},
                 SSLConnectionSocketFactory.getDefaultHostnameVerifier());
@@ -244,14 +193,14 @@ public class RestClient {
             System.out.println(Utils.toHex(cert.getPublicKey().getEncoded()));
             Signature signature = Signature.getInstance(cert.getSigAlgName());
 
-            PrivateKey privateKey = (PrivateKey) keystore.getKey(user,password);
+            PrivateKey privateKey = (PrivateKey) keystore.getKey(user, password);
             String msgToBeSigned = gson.toJson(op).concat(gson.toJson(amount));
 
             signature.initSign(privateKey, new SecureRandom());
             signature.update(msgToBeSigned.getBytes());
             byte[] sigBytes = signature.sign();
 
-            SignedBody signedBody = new SignedBody(amount,sigBytes);
+            SignedBody signedBody = new SignedBody(amount, sigBytes);
             System.out.println("hello1");
             HttpEntity<SignedBody> request = new HttpEntity<>(signedBody);
             System.out.println("hello1");

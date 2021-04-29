@@ -219,8 +219,8 @@ public class LedgerController implements CommandLineRunner {
             if (args.length == 1) {
                 int id = Integer.parseInt(args[0]);
                 logger.info("Launching client with uuid: {}", id);
-                //this.serviceProxy = new ServiceProxy(id);
-                this.asynchServiceProxy = new AsynchServiceProxy(id);
+                this.serviceProxy = new ServiceProxy(id);
+                //this.asynchServiceProxy = new AsynchServiceProxy(id);
             } else logger.error("Usage: LedgerController <client ID>");
         } catch (Exception e) {
             e.printStackTrace();
