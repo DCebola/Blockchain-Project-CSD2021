@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
+import static bftsmart.tom.core.messages.TOMMessageType.UNORDERED_HASHED_REQUEST;
 
 import java.io.*;
 import java.util.List;
@@ -114,8 +115,6 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             CompletableFuture<byte[]> reply = new CompletableFuture<>();
-            int n = asynchServiceProxy.getViewManager().getCurrentViewN();
-            int f = asynchServiceProxy.getViewManager().getCurrentViewF();
             int quorumSize = getQuorumSize();
             asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply,quorumSize),ORDERED_REQUEST);
             ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());

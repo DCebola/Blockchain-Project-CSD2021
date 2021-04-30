@@ -26,4 +26,18 @@ public class Utils {
     public static String toHex(byte[] data) {
         return toHex(data, data.length);
     }
+
+    public static byte[] toByteArray(
+            String string)
+    {
+        byte[]	bytes = new byte[string.length()];
+        char[]  chars = string.toCharArray();
+
+        for (int i = 0; i != chars.length; i++)
+        {
+            bytes[i] = (byte)chars[i];
+        }
+
+        return bytes;
+    }
 }

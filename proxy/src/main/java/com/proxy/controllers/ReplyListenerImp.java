@@ -1,13 +1,9 @@
 package com.proxy.controllers;
-
 import bftsmart.communication.client.ReplyListener;
-import bftsmart.reconfiguration.ViewManager;
 import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
 
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -34,16 +30,15 @@ public class ReplyListenerImp<T> implements ReplyListener {
 
     @Override
     public void replyReceived(RequestContext requestContext, TOMMessage tomMessage) {
-        String hash = Utils.toHex(tomMessage.getContent());
         numReplies++;
-
         if (numReplies >= quorumSize && !finished) {
             finished = true;
             reply.complete((T) tomMessage.getContent());
 
         }
+    }
 
-        /*
+    /*
         System.out.println(numReplies);
         synchronized (hashes) {
             Integer hashCount = hashes.get(hash);
@@ -65,6 +60,4 @@ public class ReplyListenerImp<T> implements ReplyListener {
                 }
             }
         }*/
-
-    }
 }

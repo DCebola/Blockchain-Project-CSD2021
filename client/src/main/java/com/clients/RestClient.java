@@ -51,7 +51,7 @@ public class RestClient {
 
     private static Gson gson;
 
-    public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException {
+    public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, NoSuchProviderException {
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         SSLContextBuilder builder = new SSLContextBuilder();
@@ -180,13 +180,13 @@ public class RestClient {
     private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             String op = "OBTAIN_COINS";
-            System.out.println("Insert username: ");
+            System.out.print("Insert username: ");
             String user = in.next();
             in.nextLine();
-            System.out.println("Insert password: ");
+            System.out.print("Insert password: ");
             char[] password = in.next().toCharArray();
             in.nextLine();
-            System.out.println("Insert amount: ");
+            System.out.print("Insert amount: ");
             double amount = in.nextDouble();
             KeyStore keystore = getKeyStore(user, password);
             X509Certificate cert = (X509Certificate) keystore.getCertificate(user);
@@ -201,9 +201,24 @@ public class RestClient {
             byte[] sigBytes = signature.sign();
 
             SignedBody signedBody = new SignedBody(amount, sigBytes);
-            System.out.println("hello1");
             HttpEntity<SignedBody> request = new HttpEntity<>(signedBody);
-            System.out.println("hello1");
+
+            MessageDigest hash = MessageDigest.getInstance("SHA-256");
+            MessageDigest hash2 = MessageDigest.getInstance("SHA-256");
+            String input = "Transfer 0000100 to AC 1234-5678";
+            hash.update(Utils.toByteArray(input));
+            byte[] result = hash.digest();
+
+            input = "Transfer 0000100 to AC 1234-568";
+            hash2.update(Utils.toByteArray(input));
+            byte[] result2 = hash2.digest();
+
+            if(MessageDigest.isEqual(result2, result)) {
+                System.out.println("equal");
+
+            }
+
+
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(OBTAIN_COINS_URL, user), HttpMethod.POST, request, Double.class);
