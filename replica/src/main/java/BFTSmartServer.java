@@ -69,16 +69,18 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case REGISTER_USER: {
                     logger.debug("New REGISTER_USER operation.");
                     String user = (String) objIn.readObject();
-                    String algorithm = (String) objIn.readObject();
+                    String signatureAlgorithm = (String) objIn.readObject();
                     byte[] publicKey = (byte[]) objIn.readObject();
+                    String publicKeyAlgorithm = (String) objIn.readObject();
                     if (jedis.exists(user.concat(USER_ACCOUNT))) {
                         logger.info("User {} already exists", user);
                         objOut.writeBoolean(false);
                     } else {
                         objOut.writeBoolean(true);
                         jedis.rpush(user.concat(USER_ACCOUNT), new String(base64.encode(publicKey)));
-                        jedis.rpush(user.concat(USER_ACCOUNT), algorithm);
-                        logger.debug("User {}, with key of type {} and length {}", user, algorithm, publicKey.length * 8 * 4);
+                        jedis.rpush(user.concat(USER_ACCOUNT), signatureAlgorithm);
+                        jedis.rpush(user.concat(USER_ACCOUNT), publicKeyAlgorithm);
+                        logger.debug("User {}, with {} key, {} signature and length {}", user, publicKeyAlgorithm, signatureAlgorithm, publicKey.length * 8 * 4);
                         logger.info("Registered user {}", user);
                     }
                     break;
@@ -91,11 +93,11 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         logger.info("User {} does not exist", user);
                         objOut.writeBoolean(false);
                     } else {
-                        objOut.writeBoolean(true);
                         double amount = objIn.readDouble();
+
                         byte[] sigBytes = (byte[]) objIn.readObject();
 
-                        List<String> signConfigs = jedis.lrange(user.concat(USER_ACCOUNT),0,-1);
+                        List<String> signConfigs = jedis.lrange(user.concat(USER_ACCOUNT), 0, -1);
                         PublicKey publicKey = KeyFactory.getInstance("EC").
                                 generatePublic(new X509EncodedKeySpec(base64.decode(signConfigs.get(0))));
 
@@ -109,16 +111,18 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         signature.initVerify(publicKey);
                         signature.update(msg.getBytes());
 
-                        if(signature.verify(sigBytes)) {
+                        if (signature.verify(sigBytes)) {
+                            objOut.writeBoolean(true);
                             System.out.println("Signature verified");
                             Transaction transaction = new Transaction(SYSTEM, user, amount);
-                            SignedTransaction signedTransaction = new SignedTransaction(msg,sigBytes,transaction,user);
+                            SignedTransaction signedTransaction = new SignedTransaction(msg, sigBytes, transaction, user);
                             logger.info("New transaction ({}, {}, {}).", SYSTEM, user, amount);
                             jedis.rpush(GLOBAL_LEDGER, gson.toJson(signedTransaction));
                             logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", SYSTEM, user, amount);
                             registerUserTransaction(user, signedTransaction);
                             objOut.writeDouble(amount);
                         } else {
+                            objOut.writeBoolean(false);
                             System.out.println("Signature not verified");
                         }
                     }
