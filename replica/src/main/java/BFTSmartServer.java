@@ -123,16 +123,30 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case TRANSFER_MONEY: {
                     logger.debug("New TRANSFER_MONEY operation.");
                     Transaction transaction = (Transaction) objIn.readObject();
-                    if (!jedis.exists(transaction.getOrigin().concat(USER_ACCOUNT)) || !jedis.exists(transaction.getDestination().concat(USER_ACCOUNT))) {
-                        logger.info("Bad transaction ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
+                    String origin = transaction.getOrigin();
+                    String destination = transaction.getDestination();
+                    double amount = transaction.getAmount();
+                    if (!jedis.exists(origin.concat(USER_ACCOUNT)) || !jedis.exists(destination.concat(USER_ACCOUNT))) {
+                        logger.info("Bad transaction ({}, {}, {})", origin, destination, amount);
                         objOut.writeBoolean(false);
                     } else {
-                        logger.info("Proposed transaction ({}, {}, {}).", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
-                        //registerUserTransaction(transaction.getOrigin(), transaction);
-                        //registerUserTransaction(transaction.getDestination(), transaction);
-                        jedis.rpush(GLOBAL_LEDGER, gson.toJson(transaction));
-                        logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
-                        objOut.writeBoolean(true);
+                        //TODO: Verify balance
+                        byte[] msgSignature = (byte[]) objIn.readObject();
+                        String msg = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(transaction));
+                        if (verifySignature(origin, msg, msgSignature)) {
+                            objOut.writeBoolean(true);
+                            logger.info("Signature verified successfully");
+                            logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
+                            SignedTransaction signedTransaction = new SignedTransaction(origin, destination, amount, new String(base64.encode(msgSignature)));
+                            registerUserTransaction(transaction.getOrigin(), signedTransaction);
+                            registerUserTransaction(transaction.getDestination(), signedTransaction);
+                            jedis.rpush(GLOBAL_LEDGER, gson.toJson(signedTransaction));
+                            logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", origin, destination, amount);
+                            objOut.writeBoolean(true);
+                        } else {
+                            objOut.writeBoolean(false);
+                            logger.info("Invalid Signature");
+                        }
                     }
                     break;
                 }
@@ -143,10 +157,17 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         logger.info("User {} does not exist", user);
                         objOut.writeBoolean(false);
                     } else {
-                        double balance = getBalance(user);
-                        logger.info("User {} has {} coins.", user, balance);
-                        objOut.writeBoolean(true);
-                        objOut.writeDouble(balance);
+                        byte[] msgSignature = (byte[]) objIn.readObject();
+                        String msg = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name());
+                        if (verifySignature(user, msg, msgSignature)) {
+                            double balance = getBalance(user);
+                            logger.info("User {} has {} coins.", user, balance);
+                            objOut.writeBoolean(true);
+                            objOut.writeDouble(balance);
+                        } else {
+                            objOut.writeBoolean(false);
+                            logger.info("Invalid Signature");
+                        }
                     }
                     break;
                 }
@@ -161,7 +182,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         logger.info("User {} does not exist", user);
                         objOut.writeBoolean(false);
                     } else {
-                        List<Transaction> user_ledger = getLedger(user.concat(USER_LEDGER));
+                        List<SignedTransaction> user_ledger = getLedger(user.concat(USER_LEDGER));
                         logger.info("User {} ledger found with length {}.", user, user_ledger);
                         objOut.writeBoolean(true);
                         objOut.writeObject(user_ledger);
@@ -194,10 +215,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return hash.digest();
     }
 
-    private List<Transaction> getLedger(String key) {
-        List<Transaction> deserialized_ledger = new LinkedList<>();
+    private List<SignedTransaction> getLedger(String key) {
+        List<SignedTransaction> deserialized_ledger = new LinkedList<>();
         List<String> serialized_ledger = jedis.lrange(key, 0, -1);
-        serialized_ledger.forEach((transaction) -> deserialized_ledger.add(gson.fromJson(transaction, Transaction.class)));
+        serialized_ledger.forEach((transaction) -> deserialized_ledger.add(gson.fromJson(transaction, SignedTransaction.class)));
         return deserialized_ledger;
     }
 
@@ -207,7 +228,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             return -1;
         List<String> ledger = jedis.lrange(user.concat(USER_LEDGER), 0, -1);
         for (String json_t : ledger) {
-            Transaction t = gson.fromJson(json_t, Transaction.class);
+            SignedTransaction t = gson.fromJson(json_t, SignedTransaction.class);
             if (t.getOrigin().equals(user))
                 balance -= t.getAmount();
             else if (t.getDestination().equals(user))

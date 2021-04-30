@@ -74,12 +74,14 @@ public class LedgerController implements CommandLineRunner {
 
     @PostMapping("/transferMoney")
     @ResponseStatus(HttpStatus.OK)
-    public void transferAmount(@RequestBody Transaction transaction) {
+    public void transferAmount(@RequestBody SignedBody<Transaction> signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.TRANSFER_MONEY);
+            Transaction transaction = signedBody.getContent();
             objOut.writeObject(transaction);
+            objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
             ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
@@ -95,13 +97,14 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
-    @GetMapping("/{who}/balance")
-    public double currentAmount(@PathVariable String who) {
+    @PostMapping("/{who}/balance")
+    public double currentAmount(@PathVariable String who, @RequestBody SignedBody<String> signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.CURRENT_AMOUNT);
             objOut.writeObject(who);
+            objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
             ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());

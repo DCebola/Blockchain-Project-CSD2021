@@ -1,6 +1,5 @@
 package com.clients;
 
-import com.fasterxml.jackson.core.Base64Variant;
 import com.google.gson.Gson;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
@@ -14,14 +13,12 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
-import org.apache.commons.codec.binary.Base64;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.Scanner;
 
@@ -161,9 +158,14 @@ public class RestClient {
 
     private static void balance(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
+            String msgToBeHashed = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name());
+            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+
+            SignedBody<String> signedBody = new SignedBody<>("" , sigBytes);
+            HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL, currentSession.getUsername()), HttpMethod.GET, null, Double.class);
+                    String.format(BALANCE_URL, currentSession.getUsername()), HttpMethod.POST, request, Double.class);
             System.out.println(response.getStatusCodeValue() + "\n" + response.getBody());
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -177,8 +179,15 @@ public class RestClient {
             in.nextLine();
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
+
             Transaction t = new Transaction(currentSession.username, destination, amount);
-            HttpEntity<Transaction> request = new HttpEntity<>(t);
+            String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t));
+            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+
+            SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes);
+            HttpEntity<SignedBody<Transaction>> request = new HttpEntity<>(signedBody);
+
+
             ResponseEntity<Void> response
                     = new RestTemplate(requestFactory).exchange(
                     TRANSFER_MONEY_URL, HttpMethod.POST, request, Void.class);
