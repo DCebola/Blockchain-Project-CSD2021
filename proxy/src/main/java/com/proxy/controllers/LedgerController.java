@@ -88,7 +88,8 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             CompletableFuture<byte[]> reply = new CompletableFuture<>();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply),ORDERED_REQUEST);
+            int quorumSize = getQuorumSize();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply,quorumSize),ORDERED_REQUEST);
             ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
             ObjectInput objIn = new ObjectInputStream(byteIn);
             if (!objIn.readBoolean()) {
@@ -113,7 +114,10 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             CompletableFuture<byte[]> reply = new CompletableFuture<>();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply),ORDERED_REQUEST);
+            int n = asynchServiceProxy.getViewManager().getCurrentViewN();
+            int f = asynchServiceProxy.getViewManager().getCurrentViewF();
+            int quorumSize = getQuorumSize();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply,quorumSize),ORDERED_REQUEST);
             ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
             ObjectInput objIn = new ObjectInputStream(byteIn);
             if (!objIn.readBoolean()) {
@@ -144,7 +148,8 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             CompletableFuture<byte[]> reply = new CompletableFuture<>();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply),ORDERED_REQUEST);
+            int quorumSize = getQuorumSize();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply,quorumSize),ORDERED_REQUEST);
             ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
             ObjectInput objIn = new ObjectInputStream(byteIn);
             List<Transaction> global_ledger = (List<Transaction>) objIn.readObject();
@@ -175,7 +180,8 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             CompletableFuture<byte[]> reply = new CompletableFuture<>();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply),ORDERED_REQUEST);
+            int quorumSize = getQuorumSize();
+            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply,quorumSize),ORDERED_REQUEST);
             ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
             ObjectInput objIn = new ObjectInputStream(byteIn);
             if (!objIn.readBoolean()) {
@@ -229,6 +235,10 @@ public class LedgerController implements CommandLineRunner {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private int getQuorumSize() {
+        return asynchServiceProxy.getViewManager().getCurrentViewN()-asynchServiceProxy.getViewManager().getCurrentViewF();
     }
 
 }
