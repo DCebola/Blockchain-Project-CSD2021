@@ -47,7 +47,7 @@ public class RestClient {
     private static Gson gson;
     private static Session currentSession;
 
-    public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, NoSuchProviderException {
+    public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException {
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         SSLContextBuilder builder = new SSLContextBuilder();

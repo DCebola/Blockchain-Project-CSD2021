@@ -14,21 +14,20 @@
         </encoder>
     </appender>
 
-    <root level="DEBUG">
-        <appender-ref ref="STDOUT"/>
+    <root level="OFF">
     </root>
 
-    <!--<logger name="io.netty" level="OFF">
+    <logger name="io.netty" level="OFF">
         <appender-ref ref="STDOUT"/>
-    </logger>-->
+    </logger>
 
-    <!--<logger name="bftsmart" level="INFO">
+    <logger name="bftsmart" level="INFO">
         <appender-ref ref="STDOUT"/>
-    </logger>-->
+    </logger>
 
-    <!--<logger name="BFTSmartServer" level="INFO">
+    <logger name="BFTSmartServer" level="INFO">
         <appender-ref ref="STDOUT"/>
-    </logger>-->
+    </logger>
 
 
 </configuration>

@@ -1,15 +1,14 @@
 package com.proxy.controllers;
 
 import bftsmart.tom.AsynchServiceProxy;
-import bftsmart.tom.ServiceProxy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+
 import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
-import static bftsmart.tom.core.messages.TOMMessageType.UNORDERED_HASHED_REQUEST;
 
 import java.io.*;
 import java.util.List;
@@ -18,7 +17,6 @@ import java.util.concurrent.*;
 @RestController
 public class LedgerController implements CommandLineRunner {
 
-    private ServiceProxy serviceProxy;
     private AsynchServiceProxy asynchServiceProxy;
     private Logger logger;
 
@@ -35,19 +33,24 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(body.getPublicKeyAlgorithm());
             objOut.flush();
             byteOut.flush();
-            byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply);
-            ObjectInput objIn = new ObjectInputStream(byteIn);
+            ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST. User already exists {}", who);
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists.");
             } else {
                 logger.info("OK. User {} registered successfully.", who);
             }
-        } catch (IOException e) {
-            logger.error("IO exception in registerUser. Cause: {}", e.getMessage());
+        } catch (IOException | InterruptedException | ExecutionException e) {
+            logger.error("Exception in registerUser. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private ObjectInput dispatchAsyncRequest(byte[] op) throws IOException, ExecutionException, InterruptedException {
+        CompletableFuture<byte[]> reply = new CompletableFuture<>();
+        int quorumSize = getQuorumSize();
+        asynchServiceProxy.invokeAsynchRequest(op, new ReplyListenerImp<>(reply, quorumSize), ORDERED_REQUEST);
+        return new ObjectInputStream(new ByteArrayInputStream(reply.get()));
     }
 
 
@@ -62,9 +65,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
-            byte[] reply = serviceProxy.invokeOrdered(byteOut.toByteArray());
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply);
-            ObjectInput objIn = new ObjectInputStream(byteIn);
+            ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST. Non existent user {}", who);
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
@@ -73,8 +74,8 @@ public class LedgerController implements CommandLineRunner {
                 logger.info("OK. {} obtained {} coins.", who, coins);
                 return coins;
             }
-        } catch (IOException e) {
-            logger.error("IO exception in obtainCoins. Cause: {}", e.getMessage());
+        } catch (IOException | ExecutionException | InterruptedException e) {
+            logger.error("Exception in obtainCoins. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -89,18 +90,14 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(transaction);
             objOut.flush();
             byteOut.flush();
-            CompletableFuture<byte[]> reply = new CompletableFuture<>();
-            int quorumSize = getQuorumSize();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply,quorumSize),ORDERED_REQUEST);
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
-            ObjectInput objIn = new ObjectInputStream(byteIn);
+            ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST. Proposed transaction: ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
             } else
                 logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
         } catch (IOException | InterruptedException | ExecutionException e) {
-            logger.error("IO exception in transferAmount. Cause: {}", e.getMessage());
+            logger.error("Exception in transferAmount. Cause: {}", e.getMessage());
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -115,11 +112,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(who);
             objOut.flush();
             byteOut.flush();
-            CompletableFuture<byte[]> reply = new CompletableFuture<>();
-            int quorumSize = getQuorumSize();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply,quorumSize),ORDERED_REQUEST);
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
-            ObjectInput objIn = new ObjectInputStream(byteIn);
+            ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST. Non existent user {}", who);
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
@@ -128,11 +121,8 @@ public class LedgerController implements CommandLineRunner {
                 logger.info("OK. User {} has the {} coins.", who, balance);
                 return balance;
             }
-        } catch (IOException e) {
-            logger.error("IO exception in currentAmount. Cause: {}", e.getMessage());
-            e.printStackTrace();
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (IOException | InterruptedException | ExecutionException e) {
+            logger.error("Exception in currentAmount. Cause: {}", e.getMessage());
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -147,23 +137,12 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(LedgerRequestType.GLOBAL_LEDGER);
             objOut.flush();
             byteOut.flush();
-            CompletableFuture<byte[]> reply = new CompletableFuture<>();
-            int quorumSize = getQuorumSize();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply,quorumSize),ORDERED_REQUEST);
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
-            ObjectInput objIn = new ObjectInputStream(byteIn);
+            ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
             List<Transaction> global_ledger = (List<Transaction>) objIn.readObject();
             logger.info("OK. Global ledger with length {}.", global_ledger.size());
             return new Ledger(global_ledger);
-        } catch (IOException e) {
-            logger.error("IO exception in ledgerOfGlobalTransactions. Cause: {}", e.getMessage());
-            e.printStackTrace();
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
-        } catch (ClassNotFoundException e) {
-            logger.error("Class not found in ledgerOfGlobalTransactions. Cause: {}", e.getMessage());
-            e.printStackTrace();
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (IOException | ClassNotFoundException | InterruptedException | ExecutionException e) {
+            logger.error("Exception in ledgerOfGlobalTransactions. Cause: {}", e.getMessage());
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -179,11 +158,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(who);
             objOut.flush();
             byteOut.flush();
-            CompletableFuture<byte[]> reply = new CompletableFuture<>();
-            int quorumSize = getQuorumSize();
-            asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), new ReplyListenerImp<>(reply,quorumSize),ORDERED_REQUEST);
-            ByteArrayInputStream byteIn = new ByteArrayInputStream(reply.get());
-            ObjectInput objIn = new ObjectInputStream(byteIn);
+            ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST. Non existent user {}", who);
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
@@ -192,15 +167,8 @@ public class LedgerController implements CommandLineRunner {
                 logger.info("OK. User {} ledger found with length {}.", who, user_ledger.size());
                 return new Ledger(user_ledger);
             }
-        } catch (IOException e) {
+        } catch (IOException | ClassNotFoundException | InterruptedException | ExecutionException e) {
             logger.error("IO exception in ledgerOfClientTransactions. Cause: {}", e.getMessage());
-            e.printStackTrace();
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
-        } catch (ClassNotFoundException e) {
-            logger.error("Class not found in ledgerOfClientTransactions. Cause: {}", e.getMessage());
-            e.printStackTrace();
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
-        } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -229,7 +197,6 @@ public class LedgerController implements CommandLineRunner {
             if (args.length == 1) {
                 int id = Integer.parseInt(args[0]);
                 logger.info("Launching client with uuid: {}", id);
-                //this.serviceProxy = new ServiceProxy(id);
                 this.asynchServiceProxy = new AsynchServiceProxy(id);
             } else logger.error("Usage: LedgerController <client ID>");
         } catch (Exception e) {
@@ -238,7 +205,7 @@ public class LedgerController implements CommandLineRunner {
     }
 
     private int getQuorumSize() {
-        return asynchServiceProxy.getViewManager().getCurrentViewN()-asynchServiceProxy.getViewManager().getCurrentViewF();
+        return asynchServiceProxy.getViewManager().getCurrentViewN() - asynchServiceProxy.getViewManager().getCurrentViewF();
     }
 
 }

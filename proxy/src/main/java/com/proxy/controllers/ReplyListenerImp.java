@@ -11,7 +11,7 @@ public class ReplyListenerImp<T> implements ReplyListener {
 
     private final CompletableFuture<T> reply;
     private int numReplies;
-    private int quorumSize;
+    private final int quorumSize;
     private final Map<String, Integer> hashes;
     private boolean finished;
 
@@ -34,7 +34,6 @@ public class ReplyListenerImp<T> implements ReplyListener {
         if (numReplies >= quorumSize && !finished) {
             finished = true;
             reply.complete((T) tomMessage.getContent());
-
         }
     }
 
