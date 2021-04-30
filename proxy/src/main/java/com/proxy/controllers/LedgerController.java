@@ -20,7 +20,6 @@ public class LedgerController implements CommandLineRunner {
     private AsynchServiceProxy asynchServiceProxy;
     private Logger logger;
 
-
     @PostMapping("/register/{who}")
     public void register(@PathVariable String who, @RequestBody RegisterUserMsgBody body) {
         try {
@@ -31,6 +30,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(body.getSignatureAlgorithm());
             objOut.writeObject(body.getPublicKey());
             objOut.writeObject(body.getPublicKeyAlgorithm());
+            objOut.writeObject(body.getHashAlgorithm());
             objOut.flush();
             byteOut.flush();
             ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
@@ -45,14 +45,6 @@ public class LedgerController implements CommandLineRunner {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-
-    private ObjectInput dispatchAsyncRequest(byte[] op) throws IOException, ExecutionException, InterruptedException {
-        CompletableFuture<byte[]> reply = new CompletableFuture<>();
-        int quorumSize = getQuorumSize();
-        asynchServiceProxy.invokeAsynchRequest(op, new ReplyListenerImp<>(reply, quorumSize), ORDERED_REQUEST);
-        return new ObjectInputStream(new ByteArrayInputStream(reply.get()));
-    }
-
 
     @PostMapping("/{who}/obtainCoins")
     public double obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
@@ -188,6 +180,13 @@ public class LedgerController implements CommandLineRunner {
     @ResponseStatus(HttpStatus.OK)
     public void transferMoneyWithSmartContract(@RequestBody SmartTransferArgs args) {
 
+    }
+
+    private ObjectInput dispatchAsyncRequest(byte[] op) throws IOException, ExecutionException, InterruptedException {
+        CompletableFuture<byte[]> reply = new CompletableFuture<>();
+        int quorumSize = getQuorumSize();
+        asynchServiceProxy.invokeAsynchRequest(op, new ReplyListenerImp<>(reply, quorumSize), ORDERED_REQUEST);
+        return new ObjectInputStream(new ByteArrayInputStream(reply.get()));
     }
 
     @Override

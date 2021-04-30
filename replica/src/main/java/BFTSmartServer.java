@@ -29,6 +29,12 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final String GLOBAL_LEDGER = "GLOBAL-LEDGER";
     private static final String USER_ACCOUNT = "-ACCOUNT";
     private static final String USER_LEDGER = "-LEDGER";
+
+    private static final int USER_KEY = 0;
+    private static final int USER_SIGNATURE_ALGORITHM = 1;
+    private static final int USER_KEY_ALGORITHM = 2;
+    private static final int USER_HASH_ALGORITHM = 3;
+
     private final Logger logger;
     private final Jedis jedis;
     private final Gson gson;
@@ -43,7 +49,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis_properties.load(new FileInputStream("config/jedis.config"));
         String redisPort = jedis_properties.getProperty("jedis_port").split(",")[id];
         jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
-        jedis.set("test-user2".concat(USER_ACCOUNT), "test_key");
         new ServiceReplica(id, this, this);
 
     }
@@ -72,6 +77,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     String signatureAlgorithm = (String) objIn.readObject();
                     byte[] publicKey = (byte[]) objIn.readObject();
                     String publicKeyAlgorithm = (String) objIn.readObject();
+                    String hashAlgorithm = (String) objIn.readObject();
                     if (jedis.exists(user.concat(USER_ACCOUNT))) {
                         logger.info("User {} already exists", user);
                         objOut.writeBoolean(false);
@@ -80,6 +86,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         jedis.rpush(user.concat(USER_ACCOUNT), new String(base64.encode(publicKey)));
                         jedis.rpush(user.concat(USER_ACCOUNT), signatureAlgorithm);
                         jedis.rpush(user.concat(USER_ACCOUNT), publicKeyAlgorithm);
+                        jedis.rpush(user.concat(USER_ACCOUNT), hashAlgorithm);
                         logger.debug("User {}, with {} key, {} signature and length {}", user, publicKeyAlgorithm, signatureAlgorithm, publicKey.length * 8 * 4);
                         logger.info("Registered user {}", user);
                     }
@@ -94,28 +101,13 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeBoolean(false);
                     } else {
                         double amount = objIn.readDouble();
+                        byte[] msgSignature = (byte[]) objIn.readObject();
+                        String msg = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount));
 
-                        byte[] sigBytes = (byte[]) objIn.readObject();
-
-                        List<String> signConfigs = jedis.lrange(user.concat(USER_ACCOUNT), 0, -1);
-                        PublicKey publicKey = KeyFactory.getInstance("EC").
-                                generatePublic(new X509EncodedKeySpec(base64.decode(signConfigs.get(0))));
-
-                        System.out.println(Utils.toHex(publicKey.getEncoded()));
-
-                        String signAlgorithm = signConfigs.get(1);
-                        Signature signature = Signature.getInstance(signAlgorithm);
-
-                        String msg = gson.toJson("OBTAIN_COINS").concat(gson.toJson(amount));
-
-                        signature.initVerify(publicKey);
-                        signature.update(msg.getBytes());
-
-                        if (signature.verify(sigBytes)) {
+                        if (verifySignature(user, msg, msgSignature)) {
                             objOut.writeBoolean(true);
-                            System.out.println("Signature verified");
-                            Transaction transaction = new Transaction(SYSTEM, user, amount);
-                            SignedTransaction signedTransaction = new SignedTransaction(msg, sigBytes, transaction, user);
+                            logger.info("Signature verified successfully");
+                            SignedTransaction signedTransaction = new SignedTransaction(SYSTEM, user, amount, new String(base64.encode(msgSignature)));
                             logger.info("New transaction ({}, {}, {}).", SYSTEM, user, amount);
                             jedis.rpush(GLOBAL_LEDGER, gson.toJson(signedTransaction));
                             logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", SYSTEM, user, amount);
@@ -123,7 +115,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             objOut.writeDouble(amount);
                         } else {
                             objOut.writeBoolean(false);
-                            System.out.println("Signature not verified");
+                            logger.info("Invalid Signature");
                         }
                     }
                     break;
@@ -184,6 +176,22 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             e.printStackTrace();
             return ERROR_MSG.getBytes();
         }
+    }
+
+    private boolean verifySignature(String user, String msg, byte[] signature) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
+        List<String> userData = jedis.lrange(user.concat(USER_ACCOUNT), 0, -1);
+        PublicKey publicKey = KeyFactory.getInstance(userData.get(USER_KEY_ALGORITHM)).
+                generatePublic(new X509EncodedKeySpec(base64.decode(userData.get(USER_KEY))));
+        Signature sign = Signature.getInstance(userData.get(USER_SIGNATURE_ALGORITHM));
+        sign.initVerify(publicKey);
+        sign.update(generateHash(msg.getBytes(), userData.get(USER_HASH_ALGORITHM)));
+        return sign.verify(signature);
+    }
+
+    private byte[] generateHash(byte[] msg, String algorithm) throws NoSuchAlgorithmException {
+        MessageDigest hash = MessageDigest.getInstance(algorithm);
+        hash.update(msg);
+        return hash.digest();
     }
 
     private List<Transaction> getLedger(String key) {

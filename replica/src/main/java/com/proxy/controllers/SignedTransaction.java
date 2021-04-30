@@ -1,42 +1,15 @@
 package com.proxy.controllers;
 
-import java.io.Serializable;
+public class SignedTransaction extends Transaction {
 
-public class SignedTransaction implements Serializable {
+    private final String signature;
 
-    private String msgToBeSigned;
-    private byte[] signedMessage;
-    private Transaction transaction;
-    private String whoSigned;
-
-    public SignedTransaction(String msgToBeSigned, byte[] signedMessage, Transaction transaction, String whoSigned) {
-        this.msgToBeSigned = msgToBeSigned;
-        this.signedMessage = signedMessage;
-        this.transaction = transaction;
-        this.whoSigned = whoSigned;
+    public SignedTransaction(String origin, String destination, double amount, String signature){
+        super(origin, destination, amount);
+        this.signature = signature;
     }
 
-    public SignedTransaction() {
-        signedMessage = null;
-        msgToBeSigned = null;
-        transaction = null;
-        whoSigned = null;
+    public String getSignature() {
+        return signature;
     }
-
-    public String getMsgToBeSigned() {
-        return msgToBeSigned;
-    }
-
-    public byte[] getSignedMessage() {
-        return signedMessage;
-    }
-
-    public Transaction getTransaction() {
-        return transaction;
-    }
-
-    public String getWhoSigned() {
-        return whoSigned;
-    }
-
 }

@@ -1,5 +1,6 @@
 package com.clients;
 
+import com.fasterxml.jackson.core.Base64Variant;
 import com.google.gson.Gson;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
@@ -13,18 +14,19 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
+import org.apache.commons.codec.binary.Base64;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.Scanner;
 
 
 public class RestClient {
-
 
     private static final String REGISTER_URL = "https://localhost:8443/register/%s";
     private static final String OBTAIN_COINS_URL = "https://localhost:8443/%s/obtainCoins";
@@ -42,6 +44,8 @@ public class RestClient {
     private static final int GLOBAL_LEDGER = 5;
     private static final int CLIENT_LEDGER = 6;
     private static final int QUIT = 7;
+
+    private static final String HASH_ALGORITHM = "SHA-256";
 
 
     private static Gson gson;
@@ -130,7 +134,7 @@ public class RestClient {
         System.out.println("5 - Global Ledger");
         System.out.println("6 - Client Ledger");
         System.out.println("7 - Quit");
-        System.out.print(">");
+        System.out.print("> ");
     }
 
     private static KeyStore getKeyStore(String user, char[] password) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, UnrecoverableKeyException {
@@ -144,7 +148,7 @@ public class RestClient {
         try {
             setSession(in);
             HttpEntity<RegisterUserMsgBody> request = new HttpEntity<>(new RegisterUserMsgBody(currentSession.getPublicKey().getEncoded(),
-                    currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm()));
+                    currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
             ResponseEntity<Void> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(REGISTER_URL, currentSession.getUsername()), HttpMethod.POST, request, Void.class);
@@ -174,7 +178,6 @@ public class RestClient {
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
             Transaction t = new Transaction(currentSession.username, destination, amount);
-
             HttpEntity<Transaction> request = new HttpEntity<>(t);
             ResponseEntity<Void> response
                     = new RestTemplate(requestFactory).exchange(
@@ -212,7 +215,7 @@ public class RestClient {
     }
 
     private static byte[] generateHash(byte[] msg) throws NoSuchAlgorithmException {
-        MessageDigest hash = MessageDigest.getInstance("SHA-256");
+        MessageDigest hash = MessageDigest.getInstance(currentSession.getHashAlgorithm());
         hash.update(msg);
         return hash.digest();
     }
@@ -254,6 +257,7 @@ public class RestClient {
         private final PrivateKey privateKey;
         private final PublicKey publicKey;
         private final String sigAlg;
+        private final String hashAlgorithm;
         private final String username;
         private final char[] password;
 
@@ -265,6 +269,7 @@ public class RestClient {
             this.publicKey = cert.getPublicKey();
             this.privateKey = (PrivateKey) keystore.getKey(username, password);
             this.sigAlg = cert.getSigAlgName();
+            this.hashAlgorithm = HASH_ALGORITHM;
         }
 
         public PrivateKey getPrivateKey() {
@@ -285,6 +290,10 @@ public class RestClient {
 
         public char[] getPassword() {
             return password;
+        }
+
+        public String getHashAlgorithm() {
+            return hashAlgorithm;
         }
     }
 }
