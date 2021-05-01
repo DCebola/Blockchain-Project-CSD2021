@@ -133,7 +133,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
-            List<Transaction> global_ledger = (List<Transaction>) objIn.readObject();
+            List<SignedTransaction> global_ledger = (List<SignedTransaction>) objIn.readObject();
             logger.info("OK. Global ledger with length {}.", global_ledger.size());
             return new Ledger(global_ledger);
         } catch (IOException | ClassNotFoundException | InterruptedException | ExecutionException e) {
@@ -144,13 +144,14 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @SuppressWarnings("unchecked")
-    @GetMapping("/{who}/ledger")
-    public Ledger ledgerOfClientTransactions(@PathVariable String who) {
+    @PostMapping("/{who}/ledger")
+    public Ledger ledgerOfClientTransactions(@PathVariable String who, @RequestBody SignedBody<String> signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.CLIENT_LEDGER);
             objOut.writeObject(who);
+            objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
             ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
@@ -158,7 +159,7 @@ public class LedgerController implements CommandLineRunner {
                 logger.info("BAD REQUEST. Non existent user {}", who);
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
             } else {
-                List<Transaction> user_ledger = (List<Transaction>) objIn.readObject();
+                List<SignedTransaction> user_ledger = (List<SignedTransaction>) objIn.readObject();
                 logger.info("OK. User {} ledger found with length {}.", who, user_ledger.size());
                 return new Ledger(user_ledger);
             }

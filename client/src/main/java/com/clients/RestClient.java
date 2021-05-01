@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.Console;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.*;
@@ -161,7 +162,7 @@ public class RestClient {
             String msgToBeHashed = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name());
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-            SignedBody<String> signedBody = new SignedBody<>("" , sigBytes);
+            SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
             HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
@@ -216,6 +217,43 @@ public class RestClient {
         }
     }
 
+
+    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
+        try {
+            ResponseEntity<Ledger> response
+                    = new RestTemplate(requestFactory).exchange(
+                    LEDGER_OF_GLOBAL_TRANSACTIONS, HttpMethod.GET, null, Ledger.class);
+
+            for (SignedTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
+                System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
+            }
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+        try {
+            String msgToBeHashed = gson.toJson(LedgerRequestType.CLIENT_LEDGER.name());
+            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+
+            SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
+            HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
+            ResponseEntity<Ledger> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS, currentSession.getUsername()), HttpMethod.POST, request, Ledger.class);
+
+            for (SignedTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
+                System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
+            }
+
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+
+
+    }
+
     private static byte[] generateSignature(byte[] msg) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
         Signature signature = Signature.getInstance(currentSession.getSigAlg());
         signature.initSign(currentSession.getPrivateKey(), new SecureRandom());
@@ -227,39 +265,6 @@ public class RestClient {
         MessageDigest hash = MessageDigest.getInstance(currentSession.getHashAlgorithm());
         hash.update(msg);
         return hash.digest();
-    }
-
-    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
-        try {
-            ResponseEntity<Ledger> response
-                    = new RestTemplate(requestFactory).exchange(
-                    LEDGER_OF_GLOBAL_TRANSACTIONS, HttpMethod.GET, null, Ledger.class);
-
-            for (Transaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
-                System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount());
-            }
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
-    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner
-            in) {
-        System.out.println("Insert client: ");
-        String client = in.next();
-        in.nextLine();
-        try {
-            ResponseEntity<Ledger> response
-                    = new RestTemplate(requestFactory).exchange(
-                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS, client), HttpMethod.GET, null, Ledger.class);
-
-            for (Transaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
-                System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount());
-            }
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-        }
-
     }
 
     private static class Session {

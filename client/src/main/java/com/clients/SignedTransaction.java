@@ -1,4 +1,4 @@
-package com.proxy.controllers;
+package com.clients;
 
 public class SignedTransaction extends Transaction {
 

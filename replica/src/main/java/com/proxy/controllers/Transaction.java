@@ -17,6 +17,12 @@ public class Transaction implements Serializable {
         this.amount = amount;
     }
 
+    public Transaction() {
+        this.amount = -1;
+        this.origin = "";
+        this.destination = "";
+    }
+
     public String getOrigin() {
         return origin;
     }

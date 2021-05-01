@@ -182,10 +182,17 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         logger.info("User {} does not exist", user);
                         objOut.writeBoolean(false);
                     } else {
-                        List<SignedTransaction> user_ledger = getLedger(user.concat(USER_LEDGER));
-                        logger.info("User {} ledger found with length {}.", user, user_ledger);
-                        objOut.writeBoolean(true);
-                        objOut.writeObject(user_ledger);
+                        byte[] msgSignature = (byte[]) objIn.readObject();
+                        String msg = gson.toJson(LedgerRequestType.CLIENT_LEDGER.name());
+                        if (verifySignature(user, msg, msgSignature)) {
+                            List<SignedTransaction> user_ledger = getLedger(user.concat(USER_LEDGER));
+                            logger.info("User {} ledger found with length {}.", user, user_ledger);
+                            objOut.writeBoolean(true);
+                            objOut.writeObject(user_ledger);
+                        } else {
+                            objOut.writeBoolean(false);
+                            logger.info("Invalid Signature");
+                        }
                     }
                     break;
                 }

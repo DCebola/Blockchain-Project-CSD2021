@@ -14,9 +14,9 @@ public class Transaction implements Serializable {
     private final double amount;
 
     public Transaction() {
-        origin = "";
-        destination = "";
-        amount = -1;
+        this.amount = -1;
+        this.origin = "";
+        this.destination = "";
     }
 
     public Transaction(String origin, String destination, double amount) {
