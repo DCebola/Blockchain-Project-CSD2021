@@ -2,8 +2,8 @@
 
 java -Djava.security.properties="./config/java.security" -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 0
 java -Djava.security.properties="./config/java.security" -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 1
-java -Djava.security.properties="./config/java.security" -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 2
-java -Djava.security.properties="./config/java.security" -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 3
+java -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 2
+java -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 3
 
 
 
@@ -25,4 +25,4 @@ docker run --name rdb2 -d -p 8082:6379 redis
 
 [bft]
 
-java -Djava.security.properties="./config/java.security" -Dlogback.configurationFile="./config/logback.xml" -cp target/replica-jar-with-dependencies.jar bftsmart.tom.util.ECDSAKeyPairGenerator 4 secp256r1
+java -Dlogback.configurationFile="./config/logback.xml" -cp target/replica-jar-with-dependencies.jar bftsmart.tom.util.ECDSAKeyPairGenerator 4 secp256r1

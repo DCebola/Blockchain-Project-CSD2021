@@ -1,5 +1,5 @@
 #!/bin/sh
-if [ "$#" -e 0 ]; then
+if [ $# -eq 0 ]; then
     echo "Usage: create_configs.sh <n_faults> [-tls <key_type>]"
     exit 1
 fi
@@ -9,45 +9,51 @@ N=$((3*$F+1))
 KEY_TYPE=$3
 
 cd ./bft
-cp host.template host.config
+mkdir -p ../../replica/config
+mkdir -p ../../proxy/config
+cp hosts.template hosts.config
 cp system.template system.config
-mkdir ecdsakeys
 
-for i in `seq $N`; do
-    echo "${i} 172.28.20.${i} 11000 11001" >> host.config
-    java -Djava.security.properties "../../replica/config/java.security" -Dlogback.configurationFile="../../replica/config/logback.xml" -cp ../../replica/target/replica-jar-with-dependencies.jar bftsmart.tom.util.ECDSAKeyPairGenerator $i secp384r1
-done
-
-echo "redis_port=8080" > redis.config
-echo "system.initial.view = $(seq -s ' ' 1 $N)" >> system.config
+echo "jedis_port=6379" > jedis.config
+echo "system.initial.view = $(seq -s ', ' 1 $N)" >> system.config
 echo "system.servers.num = ${N}" >> system.config
 echo "system.servers.f = ${F}" >> system.config
 
+for i in `seq $N`; do
+    echo "${i} 172.28.20.${i} 11000 11001" >> hosts.config
+done
 
-if ["$#" -e 3 ]; then
+cp hosts.config ../../replica/config
+mv hosts.config ../../proxy/config
+
+if [ $# -eq 3 ]; then
     echo "system.ssltls = true" >> system.config
     echo "system.ssltls.protocol_version = TLSv1.2" >> system.config
+    mkdir -p ../../replica/config/keysSSL_TLS
+    mkdir -p ../../proxy/config/keysSSL_TLS
     if [ "$KEY_TYPE" = "RSA" ]; then
-        keytool -genkey -keyalg RSA -keysize 2048 -alias bftsmartRSA -keypass MySeCreT_2hMOygBwY  -keystore ./RSA_KeyPair_2048.pkcs12 -dname "CN=BFT-SMaRT"
-        keytool -importkeystore -srckeystore ./RSA_KeyPair_2048.pkcs12 -destkeystore ./RSA_KeyPair_2048.pkcs12 -deststoretype pkcs12
+        cp keysSSL_TLS/RSA* ../../replica/config/keysSSL_TLS
+        cp keysSSL_TLS/RSA* ../../proxy/config/keysSSL_TLS
         echo "system.ssltls.key_store_file=RSA_KeyPair_2048.pkcs12" >> system.config
         echo "system.ssltls.enabled_ciphers = TLS_RSA_WITH_AES_128_GCM_SHA256," >> system.config
     elif [ "$KEY_TYPE" = "ECDSA" ]; then
-        keytool -genkey -keyalg EC -keysize 384 -alias bftsmartEC -keypass MySeCreT_2hMOygBwY  -keystore ./ecKeyPair_384.pkcs12 -dname "CN=BFT-SMaRT"
-        keytool -importkeystore -srckeystore ./ecKeyPair_384.pkcs12 -destkeystore ./ecKeyPair_384.pkcs12 -deststoretype pkcs12  
+        cp keysSSL_TLS/EC* ../../replica/config/keysSSL_TLS
+        cp keysSSL_TLS/EC* ../../proxy/config/keysSSL_TLS
         echo "system.ssltls.key_store_file=EC_KeyPair_384.pkcs12" >> system.config
         echo "system.ssltls.enabled_ciphers = TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256," >> system.config
     fi
 fi
 
-cp host.config ../../proxy/config
-cp system.config ../../proxy/config
-mv *.config ../../replica/config
+cp system.config ../../replica/config
+mv jedis.config ../../replica/config
+cp logback_replica.xml logback.xml
+mv logback.xml ../../replica/config
+
+mv system.config ../../proxy/config
+cp logback_proxy.xml logback.xml
+mv logback.xml ../../proxy/config
 
 cd ..
-
-
-
 
 
 
