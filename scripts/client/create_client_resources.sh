@@ -1,12 +1,13 @@
 #!/bin/sh
-NUM_CLIENTS=$1
-KEY_TYPE=$2
-HASH_ALG=$3
-
 if [ "$#" -ne 3 ]; then
     echo "Usage: create_client_resources <num_clients> <key_type> <hash_algorithm>"
     exit 1
 fi
+
+NUM_CLIENTS=$1
+KEY_TYPE=$2
+HASH_ALG=$3
+
 
 cd ./client
 
