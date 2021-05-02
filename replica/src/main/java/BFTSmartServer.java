@@ -216,14 +216,23 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeBoolean(false);
                     } else {
                         byte[] msgSignature = (byte[]) objIn.readObject();
-                        String msg = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name());
+                        String nonce = jedis.lrange(user.concat(USER_ACCOUNT), 4, -1).get(0);
+                        String msg = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name()).concat(nonce);
+                        byte[] hash;
                         if (verifySignature(user, msg, msgSignature)) {
+                            nonce = Integer.toString(Integer.parseInt(nonce)+1);
+                            jedis.lset(user.concat(USER_ACCOUNT),4,nonce);
                             double balance = getBalance(user);
                             logger.info("User {} has {} coins.", user, balance);
+                            hash = TOMUtil.computeHash(Boolean.toString(true).concat(Double.toString(balance)).getBytes());
+                            objOut.writeObject(hash);
                             objOut.writeBoolean(true);
                             objOut.writeDouble(balance);
                         } else {
+                            hash = TOMUtil.computeHash(Boolean.toString(false).concat(Double.toString(-1)).getBytes());
+                            objOut.writeObject(hash);
                             objOut.writeBoolean(false);
+                            objOut.writeDouble(-1);
                             logger.info("Invalid Signature");
                         }
                     }

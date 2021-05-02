@@ -185,14 +185,21 @@ public class RestClient {
     private static void balance(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
             String msgToBeHashed = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name());
-            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.concat(currentSession.getNonce()).getBytes()));
 
             SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
             HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
-            ResponseEntity<Double> response
+            ResponseEntity<HashWithResponse> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL, currentSession.getUsername()), HttpMethod.POST, request, Double.class);
-            System.out.println(response.getStatusCodeValue() + "\n" + response.getBody());
+                    String.format(BALANCE_URL, currentSession.getUsername()), HttpMethod.POST, request, HashWithResponse.class);
+
+            if(response.getStatusCode().is2xxSuccessful()) {
+                byte[] hash = response.getBody().getHash();
+                System.out.println("Hash: " + Utils.toHex(hash));
+                System.out.println("Balance: " + response.getBody().getResponse());
+                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
+                System.out.println("Nonce: " + currentSession.getNonce());
+            }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }

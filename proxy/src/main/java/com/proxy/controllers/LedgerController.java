@@ -157,7 +157,7 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @PostMapping("/{who}/balance")
-    public double currentAmount(@PathVariable String who, @RequestBody SignedBody<String> signedBody) {
+    public HashWithResponse<Double> currentAmount(@PathVariable String who, @RequestBody SignedBody<String> signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -167,15 +167,23 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
-            if (!objIn.readBoolean()) {
-                logger.info("BAD REQUEST. Non existent user {}", who);
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
-            } else {
-                double balance = objIn.readDouble();
-                logger.info("OK. User {} has the {} coins.", who, balance);
-                return balance;
-            }
-        } catch (IOException | InterruptedException | ExecutionException e) {
+            byte[] hash= (byte[]) objIn.readObject();
+            boolean result = objIn.readBoolean();
+            double balance = objIn.readDouble();
+            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(Double.toString(balance)).getBytes());
+
+            if(MessageDigest.isEqual(hash,msgToBeVerified)) {
+                if (!result) {
+                    logger.info("BAD REQUEST. Non existent user {}", who);
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
+                } else {
+                    logger.info("OK. User {} has the {} coins.", who, balance);
+                    return new HashWithResponse<>(hash,balance);
+                }
+            } else
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message tampered");
+
+        } catch (IOException | InterruptedException | ExecutionException | ClassNotFoundException e) {
             logger.error("Exception in currentAmount. Cause: {}", e.getMessage());
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
