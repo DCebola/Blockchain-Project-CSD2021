@@ -15,7 +15,7 @@ services:
         bftsmart-net:
                 ipv4_address: 172.28.100.${REPLICA_ID}
         ports:
-            - "8080:6379"
+            - "6379:6379"
 
 networks:
     bftsmart-net:

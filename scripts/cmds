@@ -6,6 +6,7 @@ java -Djava.security.properties="./config/java.security" -Dlogback.configuration
 java -Djava.security.properties="./config/java.security" -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 3
 
 
+
 [Client]
 
 java -cp target/demo-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.RestClient org.springframework.boot.loader.PropertiesLauncher
@@ -20,8 +21,8 @@ java -jar ./target/proxy-0.0.1-SNAPSHOT.jar 1
 
 docker start rdb0 rdb1 rdb2 rdb3
 docker exec -it rdb0 redis-cli
+docker run --name rdb2 -d -p 8082:6379 redis
 
 [bft]
 
-./smartrun.sh bftsmart.tom.util.RSAKeyPairGenerator <id of the replica/client>
-./smartrun.sh bftsmart.tom.util.ECDSAKeyPairGenerator <id of the replica/client>
+java -Djava.security.properties="./config/java.security" -Dlogback.configurationFile="./config/logback.xml" -cp target/replica-jar-with-dependencies.jar bftsmart.tom.util.ECDSAKeyPairGenerator 4 secp256r1
