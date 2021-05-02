@@ -90,10 +90,10 @@ public class RestClient {
                     transferMoney(requestFactory, in);
                     break;
                 case CURRENT_AMOUNT:
-                    balance(requestFactory);
+                    balance(requestFactory, in);
                     break;
                 case GLOBAL_LEDGER:
-                    ledgerOfGlobalTransactions(requestFactory);
+                    ledgerOfGlobalTransactions(requestFactory, in);
                     break;
                 case CLIENT_LEDGER:
                     ledgerOfClientTransactions(requestFactory, in);
@@ -144,7 +144,8 @@ public class RestClient {
 
     private static void register(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
-            setSession(in);
+            if (currentSession == null)
+                setSession(in);
             HttpEntity<RegisterUserMsgBody> request = new HttpEntity<>(new RegisterUserMsgBody(currentSession.getPublicKey().getEncoded(),
                     currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
             ResponseEntity<Void> response
@@ -157,8 +158,10 @@ public class RestClient {
     }
 
 
-    private static void balance(HttpComponentsClientHttpRequestFactory requestFactory) {
+    private static void balance(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            if (currentSession == null)
+                setSession(in);
             String msgToBeHashed = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name());
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
@@ -175,6 +178,8 @@ public class RestClient {
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            if (currentSession == null)
+                setSession(in);
             System.out.print("Insert destination: ");
             String destination = in.next();
             in.nextLine();
@@ -200,6 +205,8 @@ public class RestClient {
 
     private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            if (currentSession == null)
+                setSession(in);
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
             String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount));
@@ -218,8 +225,10 @@ public class RestClient {
     }
 
 
-    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
+    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            if (currentSession == null)
+                setSession(in);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
                     LEDGER_OF_GLOBAL_TRANSACTIONS, HttpMethod.GET, null, Ledger.class);
@@ -234,6 +243,8 @@ public class RestClient {
 
     private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            if (currentSession == null)
+                setSession(in);
             String msgToBeHashed = gson.toJson(LedgerRequestType.CLIENT_LEDGER.name());
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 

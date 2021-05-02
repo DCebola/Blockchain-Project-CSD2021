@@ -20,3 +20,8 @@ java -jar ./target/proxy-0.0.1-SNAPSHOT.jar 1
 
 docker start rdb0 rdb1 rdb2 rdb3
 docker exec -it rdb0 redis-cli
+
+[bft]
+
+./smartrun.sh bftsmart.tom.util.RSAKeyPairGenerator <id of the replica/client>
+./smartrun.sh bftsmart.tom.util.ECDSAKeyPairGenerator <id of the replica/client>
