@@ -50,16 +50,6 @@ public class LedgerController implements CommandLineRunner {
                 }
             } else
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message was Tampered");
-            /*
-            ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
-            if (!objIn.readBoolean()) {
-                logger.info("BAD REQUEST. Non existent user {}", who);
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
-            } else {
-                double coins = objIn.readDouble();
-                logger.info("OK. {} obtained {} coins.", who, coins);
-                return coins;
-            }*/
         } catch (IOException | ExecutionException | InterruptedException | ClassNotFoundException e) {
             logger.error("Exception in obtainCoins. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -102,7 +92,7 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @PostMapping("/{who}/obtainCoins")
-    public double obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
+    public HashWithResponse<Double> obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -113,15 +103,22 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
-            if (!objIn.readBoolean()) {
-                logger.info("BAD REQUEST. Non existent user {}", who);
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
-            } else {
-                double coins = objIn.readDouble();
-                logger.info("OK. {} obtained {} coins.", who, coins);
-                return coins;
-            }
-        } catch (IOException | ExecutionException | InterruptedException e) {
+            byte[] hash = (byte[])objIn.readObject();
+            boolean result = objIn.readBoolean();
+            double coins = objIn.readDouble();
+            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(Double.toString(coins)).getBytes());
+            if(MessageDigest.isEqual(hash,msgToBeVerified)) {
+                if (!result) {
+                    logger.info("BAD REQUEST. Non existent user {}", who);
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
+                } else {
+                    logger.info("OK. {} obtained {} coins.", who, coins);
+                    return new HashWithResponse<>(hash,coins);
+                }
+            } else
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message tampered");
+
+        } catch (IOException | ExecutionException | InterruptedException | ClassNotFoundException e) {
             logger.error("Exception in obtainCoins. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }

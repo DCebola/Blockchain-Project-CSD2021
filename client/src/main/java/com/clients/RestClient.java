@@ -202,16 +202,22 @@ public class RestClient {
         try {
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
-            String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount));
+            String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(currentSession.getNonce()));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes);
             HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
 
-            ResponseEntity<Double> response
+            ResponseEntity<HashWithResponse> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_COINS_URL, currentSession.getUsername()), HttpMethod.POST, request, Double.class);
+                    String.format(OBTAIN_COINS_URL, currentSession.getUsername()), HttpMethod.POST, request, HashWithResponse.class);
             System.out.println(response.getStatusCode() + "\n" + response.getBody());
+            if(response.getStatusCode().is2xxSuccessful()) {
+                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
+                System.out.println("New Nonce: " + currentSession.getNonce());
+                System.out.println("Hash: " + Utils.toHex(response.getBody().getHash()));
+                System.out.println("Amount: " + (double) response.getBody().getResponse());
+            }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
