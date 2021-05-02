@@ -1,0 +1,30 @@
+version: '3'
+
+services:
+    proxy:
+        container_name: proxy-${PROXY-ID}
+        build:
+            context: ../proxy
+            dockerfile: Dockerfile
+        networks:
+            bftsmart-net:
+                ipv4_address: 172.28.10.${PROXY-ID}
+        ports:
+            - "8443:8443"
+                
+#    client:
+#        container_name: client
+#        build:
+#            context: ../../client
+#            dockerfile: Dockerfile
+#        networks:
+#            bftsmart-net:
+#                ipv4_address: 172.28.0.${CLIENT-ID}
+#        ports:
+#            - "8443:8443"
+networks:
+    bftsmart-net:
+        ipam:
+            driver: default
+            config:
+                - subnet: 172.28.0.0/16

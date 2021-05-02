@@ -4,7 +4,7 @@ services:
     replica:
         container_name: replica-${REPLICA_ID}
         build:
-            context: ../../proxy
+            context: ../replica
             dockerfile: Dockerfile
         networks:
             bftsmart-net:

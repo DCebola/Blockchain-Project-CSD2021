@@ -5,6 +5,6 @@ FROM openjdk:11
 WORKDIR .
 
 # copy the jar created by assembly to the docker image
-COPY target/wa-1-server.jar wa-1-server.jar
+COPY target/proxy-0.0.1-SNAPSHOT.jar proxy.jar
 
-CMD ["java", "-jar", "wa-1-server.jar"]
+CMD ["java", "-jar", "proxy.jar"]
