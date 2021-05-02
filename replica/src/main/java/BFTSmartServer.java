@@ -182,9 +182,14 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     } else {
                         //TODO: Verify balance
                         byte[] msgSignature = (byte[]) objIn.readObject();
-                        String msg = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(transaction));
+                        String nonce = jedis.lrange(origin.concat(USER_ACCOUNT), 4, -1).get(0);
+                        String msg = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(transaction).concat(nonce));
+                        byte[] hash;
+
                         if (verifySignature(origin, msg, msgSignature)) {
-                            objOut.writeBoolean(true);
+                            nonce = Integer.toString(Integer.parseInt(nonce)+1);
+                            jedis.lset(origin.concat(USER_ACCOUNT),4,nonce);
+                            hash = TOMUtil.computeHash(Boolean.toString(true).getBytes());
                             logger.info("Signature verified successfully");
                             logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
                             SignedTransaction signedTransaction = new SignedTransaction(origin, destination, amount, new String(base64.encode(msgSignature)));
@@ -192,8 +197,11 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             registerUserTransaction(transaction.getDestination(), signedTransaction);
                             jedis.rpush(GLOBAL_LEDGER, gson.toJson(signedTransaction));
                             logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", origin, destination, amount);
+                            objOut.writeObject(hash);
                             objOut.writeBoolean(true);
                         } else {
+                            hash = TOMUtil.computeHash(Boolean.toString(true).getBytes());
+                            objOut.writeObject(hash);
                             objOut.writeBoolean(false);
                             logger.info("Invalid Signature");
                         }

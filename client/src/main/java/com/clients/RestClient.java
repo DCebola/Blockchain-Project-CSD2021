@@ -232,17 +232,22 @@ public class RestClient {
             double amount = in.nextDouble();
 
             Transaction t = new Transaction(currentSession.username, destination, amount);
-            String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t));
+            String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t).concat(currentSession.getNonce()));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes);
             HttpEntity<SignedBody<Transaction>> request = new HttpEntity<>(signedBody);
 
 
-            ResponseEntity<Void> response
+            ResponseEntity<HashWithResponse> response
                     = new RestTemplate(requestFactory).exchange(
-                    TRANSFER_MONEY_URL, HttpMethod.POST, request, Void.class);
+                    TRANSFER_MONEY_URL, HttpMethod.POST, request, HashWithResponse.class);
             System.out.println(response.getStatusCodeValue());
+            if(response.getStatusCode().is2xxSuccessful()) {
+                System.out.println(Utils.toHex(response.getBody().getHash()));
+                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
+                System.out.println(currentSession.getNonce());
+            }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }

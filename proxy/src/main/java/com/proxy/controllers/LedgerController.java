@@ -126,7 +126,7 @@ public class LedgerController implements CommandLineRunner {
 
     @PostMapping("/transferMoney")
     @ResponseStatus(HttpStatus.OK)
-    public void transferAmount(@RequestBody SignedBody<Transaction> signedBody) {
+    public HashWithResponse<byte[]> transferAmount(@RequestBody SignedBody<Transaction> signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -137,12 +137,19 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
-            if (!objIn.readBoolean()) {
-                logger.info("BAD REQUEST. Proposed transaction: ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+            byte[] hash = (byte[]) objIn.readObject();
+            boolean result = objIn.readBoolean();
+            byte[] msgToBeVerified= TOMUtil.computeHash(Boolean.toString(result).getBytes());
+            if(MessageDigest.isEqual(msgToBeVerified,hash)) {
+                if (!result) {
+                    logger.info("BAD REQUEST. Proposed transaction: ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+                } else
+                    logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
+                return new HashWithResponse<>(hash,null);
             } else
-                logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
-        } catch (IOException | InterruptedException | ExecutionException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message tampered");
+        } catch (IOException | InterruptedException | ExecutionException | ClassNotFoundException e) {
             logger.error("Exception in transferAmount. Cause: {}", e.getMessage());
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
