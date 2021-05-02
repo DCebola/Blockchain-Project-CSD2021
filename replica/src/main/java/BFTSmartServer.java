@@ -1,7 +1,11 @@
+import bftsmart.reconfiguration.util.TOMConfiguration;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
+import bftsmart.tom.core.TOMLayer;
+import bftsmart.tom.core.TOMSender;
+import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
-
+import bftsmart.tom.util.TOMUtil;
 import com.google.gson.Gson;
 import com.proxy.controllers.LedgerRequestType;
 import com.proxy.controllers.SignedTransaction;
@@ -23,6 +27,9 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 
 public class BFTSmartServer extends DefaultSingleRecoverable {
+
+    private static final String INITIAL_NONCE = "0";
+    private static final String NO_NOUNCE = "-1";
 
     private static final String SYSTEM = "SYSTEM";
     private static final String ERROR_MSG = "ERROR";
@@ -51,6 +58,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
         new ServiceReplica(id, this, this);
 
+
     }
 
     public static void main(String[] args) throws IOException {
@@ -59,7 +67,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             new BFTSmartServer(Integer.parseInt(args[0]));
         } else
             System.out.println("Usage: BFTSmartServer <server id>");
-
     }
 
     @Override
@@ -71,6 +78,31 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             LedgerRequestType reqType = (LedgerRequestType) objIn.readObject();
             switch (reqType) {
+                case LOGIN: {
+                    logger.debug("New LOGIN operation");
+                    String message = gson.toJson(LedgerRequestType.LOGIN.name());
+                    String user = (String) objIn.readObject();
+                    byte[] msgSignature = (byte[]) objIn.readObject();
+                    if (!jedis.exists(user.concat(USER_ACCOUNT))) {
+                        logger.info("User {} does not exist", user);
+                        objOut.writeBoolean(false);
+                    } else {
+                        if(verifySignature(user,message,msgSignature)) {
+                            logger.info("Signature verified");
+                            String nonce = jedis.lrange(user.concat(USER_ACCOUNT), 4, -1).get(0);
+                            byte[] hashResult = TOMUtil.computeHash(Boolean.toString(true).concat(nonce).getBytes());
+                            objOut.writeObject(hashResult);
+                            objOut.writeBoolean(true);
+                            objOut.writeObject(nonce);
+                        } else {
+                            logger.info("Signature not verified");
+                            byte[] hashResult = TOMUtil.computeHash(Boolean.toString(false).concat(NO_NOUNCE).getBytes());
+                            objOut.writeObject(hashResult);
+                            objOut.writeBoolean(false);
+                        }
+                    }
+                }
+                break;
                 case REGISTER_USER: {
                     logger.debug("New REGISTER_USER operation.");
                     String user = (String) objIn.readObject();
@@ -78,16 +110,25 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     byte[] publicKey = (byte[]) objIn.readObject();
                     String publicKeyAlgorithm = (String) objIn.readObject();
                     String hashAlgorithm = (String) objIn.readObject();
+                    byte[] hashResult;
                     if (jedis.exists(user.concat(USER_ACCOUNT))) {
                         logger.info("User {} already exists", user);
+                        hashResult = TOMUtil.computeHash(Boolean.toString(false).concat(NO_NOUNCE).getBytes());
+                        objOut.writeObject(hashResult);
                         objOut.writeBoolean(false);
+                        objOut.writeObject(NO_NOUNCE);
                     } else {
+                        hashResult = TOMUtil.computeHash(Boolean.toString(true).concat(INITIAL_NONCE).getBytes());
+                        objOut.writeObject(hashResult);
                         objOut.writeBoolean(true);
+                        objOut.writeObject(INITIAL_NONCE);
                         jedis.rpush(user.concat(USER_ACCOUNT), new String(base64.encode(publicKey)));
                         jedis.rpush(user.concat(USER_ACCOUNT), signatureAlgorithm);
                         jedis.rpush(user.concat(USER_ACCOUNT), publicKeyAlgorithm);
                         jedis.rpush(user.concat(USER_ACCOUNT), hashAlgorithm);
-                        logger.debug("User {}, with {} key, {} signature and length {}", user, publicKeyAlgorithm, signatureAlgorithm, publicKey.length * 8 * 4);
+                        jedis.rpush(user.concat(USER_ACCOUNT), INITIAL_NONCE);
+
+                        logger.debug("User {}, with {} key, {} signature and length {} and nonce {}", user, publicKeyAlgorithm, signatureAlgorithm, publicKey.length * 8 * 4, INITIAL_NONCE);
                         logger.info("Registered user {}", user);
                     }
                     break;

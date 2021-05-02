@@ -27,6 +27,7 @@ import java.util.Scanner;
 public class RestClient {
 
     private static final String REGISTER_URL = "https://localhost:8443/register/%s";
+    private static final String LOGIN_URL = "https://localhost:8443/login/%s";
     private static final String OBTAIN_COINS_URL = "https://localhost:8443/%s/obtainCoins";
     private static final String TRANSFER_MONEY_URL = "https://localhost:8443/transferMoney";
     private static final String BALANCE_URL = "https://localhost:8443/%s/balance";
@@ -35,7 +36,7 @@ public class RestClient {
 
 
     private static final int REGISTER = 0;
-    private static final int INIT_SESSION = 1;
+    private static final int LOGIN = 1;
     private static final int OBTAIN_COINS = 2;
     private static final int TRANSFER_MONEY = 3;
     private static final int CURRENT_AMOUNT = 4;
@@ -49,7 +50,7 @@ public class RestClient {
     private static Gson gson;
     private static Session currentSession;
 
-    public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException {
+    public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, SignatureException, InvalidKeyException {
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         SSLContextBuilder builder = new SSLContextBuilder();
@@ -80,8 +81,8 @@ public class RestClient {
                 case REGISTER:
                     register(requestFactory, in);
                     break;
-                case INIT_SESSION:
-                    setSession(in);
+                case LOGIN:
+                    login(requestFactory, in);
                     break;
                 case OBTAIN_COINS:
                     callObtainCoins(requestFactory, in);
@@ -109,6 +110,7 @@ public class RestClient {
         System.out.print("Insert password: ");
         char[] password = in.next().toCharArray();
         in.nextLine();
+
         try {
             currentSession = new Session(user, password);
         } catch (UnrecoverableKeyException | CertificateException | IOException | KeyStoreException | NoSuchAlgorithmException e) {
@@ -125,7 +127,7 @@ public class RestClient {
 
     private static void printOps() {
         System.out.println("0 - Register");
-        System.out.println("1 - Change Session");
+        System.out.println("1 - Login");
         System.out.println("2 - Obtain Coins");
         System.out.println("3 - Transfer Money");
         System.out.println("4 - Current Amount");
@@ -147,13 +149,36 @@ public class RestClient {
             setSession(in);
             HttpEntity<RegisterUserMsgBody> request = new HttpEntity<>(new RegisterUserMsgBody(currentSession.getPublicKey().getEncoded(),
                     currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
-            ResponseEntity<Void> response
+            ResponseEntity<HashWithResponse> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(REGISTER_URL, currentSession.getUsername()), HttpMethod.POST, request, Void.class);
-            System.out.println(response.getStatusCodeValue() + "\n" + response.getBody());
+                    String.format(REGISTER_URL, currentSession.getUsername()), HttpMethod.POST, request, HashWithResponse.class);
+            System.out.println(response.getStatusCodeValue() + "\n");
+            HashWithResponse<String> hashWithResponse = response.getBody();
+            String nonce = hashWithResponse.getResponse();
+            System.out.println("Hash: " + Utils.toHex(Objects.requireNonNull(hashWithResponse).getHash()));
+            System.out.println("Nonce: " + nonce);
+            currentSession.setNonce(nonce);
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
+    }
+
+    private static void login(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
+        setSession(in);
+        String msgToBeHashed = gson.toJson(LedgerRequestType.LOGIN.name());
+        byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+
+        SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
+        HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
+        ResponseEntity<HashWithResponse> response
+                = new RestTemplate(requestFactory).exchange(
+                String.format(LOGIN_URL,currentSession.getUsername()), HttpMethod.POST, request, HashWithResponse.class);
+        String nonce = (String) response.getBody().getResponse();
+        String hash = Utils.toHex(response.getBody().getHash());
+        currentSession.setNonce(nonce);
+
+        System.out.println("Hash: " + hash);
+        System.out.println("Nonce: " + nonce);
     }
 
 
@@ -168,6 +193,25 @@ public class RestClient {
                     = new RestTemplate(requestFactory).exchange(
                     String.format(BALANCE_URL, currentSession.getUsername()), HttpMethod.POST, request, Double.class);
             System.out.println(response.getStatusCodeValue() + "\n" + response.getBody());
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+        try {
+            System.out.print("Insert amount: ");
+            double amount = in.nextDouble();
+            String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount));
+            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+
+            SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes);
+            HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
+
+            ResponseEntity<Double> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(OBTAIN_COINS_URL, currentSession.getUsername()), HttpMethod.POST, request, Double.class);
+            System.out.println(response.getStatusCode() + "\n" + response.getBody());
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
@@ -197,26 +241,6 @@ public class RestClient {
             System.out.println(e.getMessage());
         }
     }
-
-    private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
-        try {
-            System.out.print("Insert amount: ");
-            double amount = in.nextDouble();
-            String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount));
-            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
-
-            SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes);
-            HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
-
-            ResponseEntity<Double> response
-                    = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_COINS_URL, currentSession.getUsername()), HttpMethod.POST, request, Double.class);
-            System.out.println(response.getStatusCode() + "\n" + response.getBody());
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
 
     private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
@@ -274,8 +298,10 @@ public class RestClient {
         private final String hashAlgorithm;
         private final String username;
         private final char[] password;
+        private String nonce;
 
         public Session(String username, char[] password) throws UnrecoverableKeyException, CertificateException, IOException, KeyStoreException, NoSuchAlgorithmException {
+            this.nonce = "";
             this.username = username;
             this.password = password;
             KeyStore keystore = getKeyStore(username, password);
@@ -309,6 +335,11 @@ public class RestClient {
         public String getHashAlgorithm() {
             return hashAlgorithm;
         }
+
+        public String getNonce() { return nonce; }
+
+        public void setNonce(String nonce) { this.nonce = nonce; }
+
     }
 }
 

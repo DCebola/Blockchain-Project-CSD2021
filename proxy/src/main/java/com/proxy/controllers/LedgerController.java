@@ -1,6 +1,8 @@
 package com.proxy.controllers;
 
 import bftsmart.tom.AsynchServiceProxy;
+import bftsmart.tom.core.TOMLayer;
+import bftsmart.tom.util.TOMUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -11,6 +13,8 @@ import org.springframework.web.server.ResponseStatusException;
 import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
 
 import java.io.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -20,8 +24,51 @@ public class LedgerController implements CommandLineRunner {
     private AsynchServiceProxy asynchServiceProxy;
     private Logger logger;
 
+
+    @PostMapping("/login/{who}")
+    public HashWithResponse<String> login(@PathVariable String who, @RequestBody SignedBody<String> signedBody) {
+        try {
+            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+            ObjectOutput objOut = new ObjectOutputStream(byteOut);
+            objOut.writeObject(LedgerRequestType.LOGIN);
+            objOut.writeObject(who);
+            objOut.writeObject(signedBody.getSignature());
+            objOut.flush();
+            byteOut.flush();
+            ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
+            byte[] hash = (byte[]) objIn.readObject();
+            boolean res = objIn.readBoolean();
+            String nonce = (String) objIn.readObject();
+            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(res).concat(nonce).getBytes());
+            if(MessageDigest.isEqual(msgToBeVerified,hash)) {
+                if (!res) {
+                    logger.info("BAD REQUEST. User already exists {}", who);
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists.");
+                } else {
+                    logger.info("User {} logged in. Current nonce: {}", who, nonce);
+                    return new HashWithResponse<>(hash,nonce);
+                }
+            } else
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message was Tampered");
+            /*
+            ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
+            if (!objIn.readBoolean()) {
+                logger.info("BAD REQUEST. Non existent user {}", who);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
+            } else {
+                double coins = objIn.readDouble();
+                logger.info("OK. {} obtained {} coins.", who, coins);
+                return coins;
+            }*/
+        } catch (IOException | ExecutionException | InterruptedException | ClassNotFoundException e) {
+            logger.error("Exception in obtainCoins. Cause: {}", e.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+    }
+
     @PostMapping("/register/{who}")
-    public void register(@PathVariable String who, @RequestBody RegisterUserMsgBody body) {
+    public HashWithResponse<String> register(@PathVariable String who, @RequestBody RegisterUserMsgBody body) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -34,13 +81,21 @@ public class LedgerController implements CommandLineRunner {
             objOut.flush();
             byteOut.flush();
             ObjectInput objIn = dispatchAsyncRequest(byteOut.toByteArray());
-            if (!objIn.readBoolean()) {
-                logger.info("BAD REQUEST. User already exists {}", who);
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists.");
-            } else {
-                logger.info("OK. User {} registered successfully.", who);
-            }
-        } catch (IOException | InterruptedException | ExecutionException e) {
+            byte[] hash = (byte[]) objIn.readObject();
+            boolean res = objIn.readBoolean();
+            String nonce = (String) objIn.readObject();
+            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(res).concat(nonce).getBytes());
+            if(MessageDigest.isEqual(msgToBeVerified,hash)) {
+                if (!res) {
+                    logger.info("BAD REQUEST. User already exists {}", who);
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists.");
+                } else {
+                    logger.info("OK. User {} registered successfully. Initial nonce {}", who, nonce);
+                    return new HashWithResponse<>(hash,nonce);
+                }
+            } else
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message was Tampered");
+        } catch (IOException | InterruptedException | ExecutionException | ClassNotFoundException e) {
             logger.error("Exception in registerUser. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -209,6 +264,10 @@ public class LedgerController implements CommandLineRunner {
 
     private int getQuorumSize() {
         return asynchServiceProxy.getViewManager().getCurrentViewN() - asynchServiceProxy.getViewManager().getCurrentViewF();
+    }
+
+    private byte[] generateHash(byte[] msg) throws NoSuchAlgorithmException {
+        return TOMUtil.computeHash(msg);
     }
 
 }

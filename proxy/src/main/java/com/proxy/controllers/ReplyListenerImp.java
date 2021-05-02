@@ -1,8 +1,13 @@
 package com.proxy.controllers;
+
 import bftsmart.communication.client.ReplyListener;
 import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -10,17 +15,17 @@ import java.util.concurrent.CompletableFuture;
 public class ReplyListenerImp<T> implements ReplyListener {
 
     private final CompletableFuture<T> reply;
+    private ObjectInput objectInput;
     private int numReplies;
     private final int quorumSize;
     private final Map<String, Integer> hashes;
-    private boolean finished;
 
     public ReplyListenerImp(CompletableFuture<T> reply, int quorumSize) {
+        this.objectInput = null;
         this.reply = reply;
         this.numReplies = 0;
         this.quorumSize = quorumSize;
         this.hashes = new HashMap<>(quorumSize);
-        this.finished = false;
     }
 
     @Override
@@ -31,9 +36,21 @@ public class ReplyListenerImp<T> implements ReplyListener {
     @Override
     public void replyReceived(RequestContext requestContext, TOMMessage tomMessage) {
         numReplies++;
-        if (numReplies >= quorumSize && !finished) {
-            finished = true;
-            reply.complete((T) tomMessage.getContent());
+        try {
+            objectInput = new ObjectInputStream(new ByteArrayInputStream(tomMessage.getContent()));
+            String hashOperation = Utils.toHex((byte[]) objectInput.readObject());
+            System.out.println(hashOperation);
+            Integer hashCount = hashes.get(hashOperation);
+            if (hashCount == null)
+                hashes.put(hashOperation, 1);
+            else
+                hashes.put(hashOperation, ++hashCount);
+
+            if (hashes.get(hashOperation) == quorumSize)
+                reply.complete((T) tomMessage.getContent());
+
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
         }
     }
 
