@@ -26,7 +26,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
     private static final String SYSTEM = "SYSTEM";
     private static final String ERROR_MSG = "ERROR";
-    private static final String UNCOMMITTED_GLOBAL_LEDGER = "UNCOMMITTED-GLOBAL-LEDGER";
     private static final String GLOBAL_LEDGER = "GLOBAL-LEDGER";
     private static final String USER_ACCOUNT = "-ACCOUNT";
     private static final String USER_LEDGER = "-LEDGER";
@@ -75,30 +74,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             LedgerRequestType reqType = (LedgerRequestType) objIn.readObject();
             switch (reqType) {
-                case GET_NONCE: {
-                    logger.debug("New REQUEST_NONCE operation");
-                    String message = gson.toJson(LedgerRequestType.GET_NONCE.name());
-                    String user = (String) objIn.readObject();
-                    byte[] msgSignature = (byte[]) objIn.readObject();
-                    if (verifySignature(user, message, msgSignature)) {
-                        logger.info("Signature verified");
-                        String nonce = jedis.lrange(user.concat(USER_ACCOUNT), 4, -1).get(0);
-                        byte[] hashResult = TOMUtil.computeHash(Boolean.toString(true).concat(nonce).getBytes());
-                        objOut.writeInt(id);
-                        objOut.writeObject(hashResult);
-                        objOut.writeBoolean(true);
-                        objOut.writeObject(nonce);
-                    } else {
-                        logger.info("Signature not verified");
-                        byte[] hashResult = TOMUtil.computeHash(Boolean.toString(false).concat(NO_NONCE).getBytes());
-                        objOut.writeInt(id);
-                        objOut.writeObject(hashResult);
-                        objOut.writeBoolean(false);
-                        objOut.writeObject(NO_NONCE);
-                    }
-
-                }
-                break;
                 case REGISTER_USER: {
                     logger.debug("New REGISTER_USER operation.");
                     String user = (String) objIn.readObject();
@@ -154,11 +129,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             objOut.writeObject(hash);
                             objOut.writeObject(signedTransaction);
                             objOut.writeBoolean(true);
-
-                            //logger.info("New transaction ({}, {}, {}).", SYSTEM, user, amount);
-                            //jedis.rpush(UNCOMMITTED_GLOBAL_LEDGER, gson.toJson(signedTransaction));
-                            //logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", SYSTEM, user, amount);
-                            //registerUserTransaction(user, signedTransaction);
                             objOut.writeDouble(amount);
                         } else {
                             hash = TOMUtil.computeHash(Boolean.toString(false).concat(Double.toString(-1)).getBytes());
@@ -178,7 +148,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     String destination = transaction.getDestination();
                     double amount = transaction.getAmount();
                     byte[] hash;
-                    if (!jedis.exists(origin.concat(USER_ACCOUNT)) || !jedis.exists(destination.concat(USER_ACCOUNT))) {
+                    if (!jedis.exists(origin.concat(USER_ACCOUNT)) || !jedis.exists(destination.concat(USER_ACCOUNT))
+                            || origin.equals(destination)) {
                         logger.info("Bad transaction ({}, {}, {})", origin, destination, amount);
                         hash = TOMUtil.computeHash(Boolean.toString(false).getBytes());
                         objOut.writeInt(id);
@@ -191,7 +162,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         String nonce = jedis.lrange(origin.concat(USER_ACCOUNT), 4, -1).get(0);
                         String msg = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(transaction).concat(nonce));
                         if (verifySignature(origin, msg, msgSignature) && amount > 0) {
-                            if (getBalance(origin) > amount){
+                            if (getBalance(origin) > amount) {
                                 nonce = Integer.toString(Integer.parseInt(nonce) + 1);
                                 jedis.lset(origin.concat(USER_ACCOUNT), 4, nonce);
                                 hash = TOMUtil.computeHash(Boolean.toString(true).getBytes());
@@ -203,7 +174,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                 objOut.writeObject(hash);
                                 objOut.writeObject(signedTransaction);
                                 objOut.writeBoolean(true);
-                            } else{
+                            } else {
                                 hash = TOMUtil.computeHash(Boolean.toString(false).getBytes());
                                 objOut.writeInt(id);
                                 objOut.writeObject(hash);
@@ -222,6 +193,59 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     }
                     break;
                 }
+                case COMMIT: {
+                    DecidedOP op = (DecidedOP) objIn.readObject();
+                    jedis.rpush(GLOBAL_LEDGER, gson.toJson(op));
+                    String origin = op.getSignedTransaction().getOrigin();
+                    String destination = op.getSignedTransaction().getDestination();
+                    if (!origin.equals(SYSTEM))
+                        registerUserTransaction(origin, op);
+                    registerUserTransaction(destination, op);
+                }
+                break;
+            }
+            objOut.flush();
+            byteOut.flush();
+            return byteOut.toByteArray();
+        } catch (IOException | ClassNotFoundException | NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
+            e.printStackTrace();
+            return ERROR_MSG.getBytes();
+        }
+    }
+
+    @Override
+    public byte[] appExecuteUnordered(byte[] command, MessageContext messageContext) {
+        try {
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(command);
+            ObjectInput objIn = new ObjectInputStream(byteIn);
+            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+            ObjectOutput objOut = new ObjectOutputStream(byteOut);
+            LedgerRequestType reqType = (LedgerRequestType) objIn.readObject();
+            switch (reqType) {
+                case GET_NONCE: {
+                    logger.debug("New REQUEST_NONCE operation");
+                    String message = gson.toJson(LedgerRequestType.GET_NONCE.name());
+                    String user = (String) objIn.readObject();
+                    byte[] msgSignature = (byte[]) objIn.readObject();
+                    if (verifySignature(user, message, msgSignature)) {
+                        logger.info("Signature verified");
+                        String nonce = jedis.lrange(user.concat(USER_ACCOUNT), 4, -1).get(0);
+                        byte[] hashResult = TOMUtil.computeHash(Boolean.toString(true).concat(nonce).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hashResult);
+                        objOut.writeBoolean(true);
+                        objOut.writeObject(nonce);
+                    } else {
+                        logger.info("Signature not verified");
+                        byte[] hashResult = TOMUtil.computeHash(Boolean.toString(false).concat(NO_NONCE).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hashResult);
+                        objOut.writeBoolean(false);
+                        objOut.writeObject(NO_NONCE);
+                    }
+
+                }
+                break;
                 case CURRENT_AMOUNT: {
                     logger.debug("New CURRENT_AMOUNT operation.");
                     String user = (String) objIn.readObject();
@@ -263,7 +287,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeBoolean(false);
                         objOut.writeObject(null);
                     } else {
-                        String msg = gson.toJson(LedgerRequestType.CLIENT_LEDGER.name());
                         List<DecidedOP> user_ledger = getLedger(user.concat(USER_LEDGER));
                         logger.info("User {} ledger found with length {}.", user_ledger.size(), user_ledger);
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(user_ledger)).getBytes());
@@ -274,23 +297,13 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     }
                     break;
                 }
-                case COMMIT: {
-                    DecidedOP op = (DecidedOP) objIn.readObject();
-                    jedis.rpush(GLOBAL_LEDGER, gson.toJson(op));
-                    String origin = op.getSignedTransaction().getOrigin();
-                    String destination = op.getSignedTransaction().getDestination();
-                    if(!origin.equals(SYSTEM))
-                        registerUserTransaction(origin, op);
-                    registerUserTransaction(destination, op);
-                }
-                break;
                 case VERIFY_OP: {
                     logger.debug("New VERIFY_OP operation.");
                     String op = (String) objIn.readObject();
-                    List<String> ops = jedis.lrange(GLOBAL_LEDGER,0,-1);
+                    List<String> ops = jedis.lrange(GLOBAL_LEDGER, 0, -1);
                     SignedTransaction signedTransaction = null;
-                    for(String opS: ops) {
-                        if(op.equals(opS)) {
+                    for (String opS : ops) {
+                        if (op.equals(opS)) {
                             logger.info("Transaction found");
                             signedTransaction = gson.fromJson(opS, DecidedOP.class).getSignedTransaction();
                             objOut.writeInt(id);
@@ -300,27 +313,27 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             objOut.writeObject(signedTransaction);
                             break;
                         }
-                    } if(signedTransaction == null) {
+                    }
+                    if (signedTransaction == null) {
                         logger.info("Transaction not found!!!");
                         objOut.writeInt(id);
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
                         objOut.writeObject(hash);
                         objOut.writeBoolean(false);
                         objOut.writeObject(null);
-
                     }
                 }
                 break;
-
             }
             objOut.flush();
             byteOut.flush();
             return byteOut.toByteArray();
-        } catch (IOException | ClassNotFoundException | NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
+        } catch (IOException | ClassNotFoundException | NoSuchAlgorithmException | InvalidKeySpecException | SignatureException | InvalidKeyException e) {
             e.printStackTrace();
             return ERROR_MSG.getBytes();
         }
     }
+
 
     private boolean verifySignature(String user, String msg, byte[] signature) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
         List<String> userData = jedis.lrange(user.concat(USER_ACCOUNT), 0, -1);
@@ -364,12 +377,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis.rpush(user.concat(USER_LEDGER), gson.toJson(op));
         logger.debug("Transaction of user {} added to personal ledger.", user);
     }
-
-    @Override
-    public byte[] appExecuteUnordered(byte[] bytes, MessageContext messageContext) {
-        return new byte[0];
-    }
-
 
     @Override
     public void installSnapshot(byte[] bytes) {

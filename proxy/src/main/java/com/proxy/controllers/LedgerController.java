@@ -1,6 +1,7 @@
 package com.proxy.controllers;
 
 import bftsmart.tom.AsynchServiceProxy;
+import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.util.TOMUtil;
 import com.google.gson.Gson;
 import org.apache.commons.codec.binary.Base64;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
+import static bftsmart.tom.core.messages.TOMMessageType.UNORDERED_REQUEST;
 
 import java.io.*;
 import java.security.MessageDigest;
@@ -37,7 +39,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray());
+            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
@@ -74,7 +76,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(body.getHashAlgorithm());
             objOut.flush();
             byteOut.flush();
-            OpToVerify opToCommit = dispatchAsyncRequest(byteOut.toByteArray());
+            OpToVerify opToCommit = dispatchAsyncRequest(byteOut.toByteArray(), ORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToCommit.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
@@ -108,7 +110,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray());
+            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), ORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
             List<Integer> replicas = opToVerify.getReplicas();
             objIn.readInt();
@@ -154,7 +156,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray());
+            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), ORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
             List<Integer> replicas = opToVerify.getReplicas();
             objIn.readInt();
@@ -196,7 +198,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(who);
             objOut.flush();
             byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray());
+            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
@@ -231,7 +233,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(LedgerRequestType.GLOBAL_LEDGER);
             objOut.flush();
             byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray());
+            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
@@ -253,7 +255,7 @@ public class LedgerController implements CommandLineRunner {
 
     @SuppressWarnings("unchecked")
     @GetMapping("/{who}/ledger")
-    public Ledger ledgerOfClientTransactions(@PathVariable String who/*, @RequestBody SignedBody<String> signedBody*/) {
+    public Ledger ledgerOfClientTransactions(@PathVariable String who) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -261,7 +263,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(who);
             objOut.flush();
             byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray());
+            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
@@ -296,7 +298,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(operation);
             objOut.flush();
             byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray());
+            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
@@ -339,10 +341,10 @@ public class LedgerController implements CommandLineRunner {
 
     }
 
-    private OpToVerify dispatchAsyncRequest(byte[] op) throws IOException, ExecutionException, InterruptedException {
+    private OpToVerify dispatchAsyncRequest(byte[] op, TOMMessageType messageType) throws IOException, ExecutionException, InterruptedException {
         CompletableFuture<OpToVerify> reply = new CompletableFuture<>();
         int quorumSize = getQuorumSize();
-        asynchServiceProxy.invokeAsynchRequest(op, new ReplyListenerImp<>(reply, quorumSize), ORDERED_REQUEST);
+        asynchServiceProxy.invokeAsynchRequest(op, new ReplyListenerImp<>(reply, quorumSize), messageType);
         return reply.get();
     }
 
