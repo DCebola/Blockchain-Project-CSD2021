@@ -14,7 +14,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.Console;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.*;
@@ -33,7 +32,7 @@ public class RestClient {
     private static final String BALANCE_URL = "https://localhost:8443/%s/balance";
     private static final String LEDGER_OF_GLOBAL_TRANSACTIONS = "https://localhost:8443/ledger";
     private static final String LEDGER_OF_CLIENT_TRANSACTIONS = "https://localhost:8443/%s/ledger";
-
+    private static final String VERIFY_OPERATION = "https://localhost:8443/verifyOp";
 
     private static final int REGISTER = 0;
     private static final int LOGIN = 1;
@@ -42,7 +41,8 @@ public class RestClient {
     private static final int CURRENT_AMOUNT = 4;
     private static final int GLOBAL_LEDGER = 5;
     private static final int CLIENT_LEDGER = 6;
-    private static final int QUIT = 7;
+    private static final int VERIFY_OP = 7;
+    private static final int QUIT = 8;
 
     private static final String HASH_ALGORITHM = "SHA-256";
 
@@ -73,6 +73,7 @@ public class RestClient {
         requestFactory.setHttpClient(httpClient);
         Scanner in = new Scanner(System.in);
         int command = -1;
+
         while (command != QUIT) {
             printSession();
             printOps();
@@ -98,6 +99,16 @@ public class RestClient {
                     break;
                 case CLIENT_LEDGER:
                     ledgerOfClientTransactions(requestFactory, in);
+                    break;
+                case VERIFY_OP:
+                    verifyOp(requestFactory);
+                    break;
+                case QUIT:
+                    in.close();
+                    break;
+                default:
+                    command = QUIT;
+                    in.close();
                     break;
             }
         }
@@ -133,7 +144,8 @@ public class RestClient {
         System.out.println("4 - Current Amount");
         System.out.println("5 - Global Ledger");
         System.out.println("6 - Client Ledger");
-        System.out.println("7 - Quit");
+        System.out.println("7 - Verify op");
+        System.out.println("8 - Quit");
         System.out.print("> ");
     }
 
@@ -149,13 +161,11 @@ public class RestClient {
             setSession(in);
             HttpEntity<RegisterUserMsgBody> request = new HttpEntity<>(new RegisterUserMsgBody(currentSession.getPublicKey().getEncoded(),
                     currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
-            ResponseEntity<HashWithResponse> response
+            ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(REGISTER_URL, currentSession.getUsername()), HttpMethod.POST, request, HashWithResponse.class);
+                    String.format(REGISTER_URL, currentSession.getUsername()), HttpMethod.POST, request, String.class);
             System.out.println(response.getStatusCodeValue() + "\n");
-            HashWithResponse<String> hashWithResponse = response.getBody();
-            String nonce = hashWithResponse.getResponse();
-            System.out.println("Hash: " + Utils.toHex(Objects.requireNonNull(hashWithResponse).getHash()));
+            String nonce = response.getBody();
             System.out.println("Nonce: " + nonce);
             currentSession.setNonce(nonce);
         } catch (Exception e) {
@@ -170,36 +180,27 @@ public class RestClient {
 
         SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
         HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
-        ResponseEntity<HashWithResponse> response
+        ResponseEntity<String> response
                 = new RestTemplate(requestFactory).exchange(
-                String.format(LOGIN_URL,currentSession.getUsername()), HttpMethod.POST, request, HashWithResponse.class);
-        String nonce = (String) response.getBody().getResponse();
-        String hash = Utils.toHex(response.getBody().getHash());
-        currentSession.setNonce(nonce);
-
-        System.out.println("Hash: " + hash);
+                String.format(LOGIN_URL,currentSession.getUsername()), HttpMethod.POST, request, String.class);
+        String nonce = response.getBody();
         System.out.println("Nonce: " + nonce);
+        currentSession.setNonce(nonce);
     }
 
 
     private static void balance(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
             String msgToBeHashed = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name());
-            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.concat(currentSession.getNonce()).getBytes()));
+            //byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.concat(currentSession.getNonce()).getBytes()));
 
-            SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
-            HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
-            ResponseEntity<HashWithResponse> response
+            ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL, currentSession.getUsername()), HttpMethod.POST, request, HashWithResponse.class);
+                    String.format(BALANCE_URL, currentSession.getUsername()), HttpMethod.GET, null, Double.class);
 
-            if(response.getStatusCode().is2xxSuccessful()) {
-                byte[] hash = response.getBody().getHash();
-                System.out.println("Hash: " + Utils.toHex(hash));
-                System.out.println("Balance: " + response.getBody().getResponse());
-                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
-                System.out.println("Nonce: " + currentSession.getNonce());
-            }
+            if(response.getStatusCode().is2xxSuccessful())
+                System.out.println("Balance: " + response.getBody());
+
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
@@ -215,20 +216,22 @@ public class RestClient {
             SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes);
             HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
 
-            ResponseEntity<HashWithResponse> response
+            ResponseEntity<ResultToRespond> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_COINS_URL, currentSession.getUsername()), HttpMethod.POST, request, HashWithResponse.class);
+                    String.format(OBTAIN_COINS_URL, currentSession.getUsername()), HttpMethod.POST, request, ResultToRespond.class);
             System.out.println(response.getStatusCode() + "\n" + response.getBody());
             if(response.getStatusCode().is2xxSuccessful()) {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
                 System.out.println("New Nonce: " + currentSession.getNonce());
-                System.out.println("Hash: " + Utils.toHex(response.getBody().getHash()));
+                System.out.println(gson.toJson(response.getBody()));
                 System.out.println("Amount: " + (double) response.getBody().getResponse());
+                currentSession.setLastOp(gson.toJson(response.getBody()));
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
+
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
@@ -246,14 +249,15 @@ public class RestClient {
             HttpEntity<SignedBody<Transaction>> request = new HttpEntity<>(signedBody);
 
 
-            ResponseEntity<HashWithResponse> response
+            ResponseEntity<ResultToRespond> response
                     = new RestTemplate(requestFactory).exchange(
-                    TRANSFER_MONEY_URL, HttpMethod.POST, request, HashWithResponse.class);
+                    TRANSFER_MONEY_URL, HttpMethod.POST, request, ResultToRespond.class);
             System.out.println(response.getStatusCodeValue());
             if(response.getStatusCode().is2xxSuccessful()) {
-                System.out.println(Utils.toHex(response.getBody().getHash()));
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
                 System.out.println(currentSession.getNonce());
+                System.out.println(gson.toJson(response.getBody()));
+                currentSession.setLastOp(gson.toJson(response.getBody()));
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -277,13 +281,13 @@ public class RestClient {
     private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             String msgToBeHashed = gson.toJson(LedgerRequestType.CLIENT_LEDGER.name());
-            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+            //byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-            SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
-            HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
+            //SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
+            //HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS, currentSession.getUsername()), HttpMethod.POST, request, Ledger.class);
+                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS, currentSession.getUsername()), HttpMethod.GET, null, Ledger.class);
 
             for (SignedTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
                 System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
@@ -292,7 +296,28 @@ public class RestClient {
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
+    }
 
+    private static void verifyOp(HttpComponentsClientHttpRequestFactory requestFactory) {
+        try {
+            if(currentSession != null && !currentSession.getLastOp().equals("")) {
+                HttpEntity<String> request = new HttpEntity<>(currentSession.getLastOp());
+                ResponseEntity<SignedTransaction> response
+                        = new RestTemplate(requestFactory).exchange(
+                        VERIFY_OPERATION, HttpMethod.POST, request, SignedTransaction.class);
+
+                SignedTransaction t = response.getBody();
+                if(t != null)
+                    System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
+                else
+                    System.out.println("No operation returned");
+
+
+
+            }
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
 
     }
 
@@ -317,6 +342,7 @@ public class RestClient {
         private final String username;
         private final char[] password;
         private String nonce;
+        private String lastOp;
 
         public Session(String username, char[] password) throws UnrecoverableKeyException, CertificateException, IOException, KeyStoreException, NoSuchAlgorithmException {
             this.nonce = "";
@@ -328,6 +354,7 @@ public class RestClient {
             this.privateKey = (PrivateKey) keystore.getKey(username, password);
             this.sigAlg = cert.getSigAlgName();
             this.hashAlgorithm = HASH_ALGORITHM;
+            this.lastOp = "";
         }
 
         public PrivateKey getPrivateKey() {
@@ -357,6 +384,14 @@ public class RestClient {
         public String getNonce() { return nonce; }
 
         public void setNonce(String nonce) { this.nonce = nonce; }
+
+        public String getLastOp() {
+            return lastOp;
+        }
+
+        public void setLastOp(String lastOp) {
+            this.lastOp = lastOp;
+        }
 
     }
 }
