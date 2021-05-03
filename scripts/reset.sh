@@ -5,6 +5,8 @@ mvn clean -f ../replica
 mvn clean -f ../client
 
 rm -rf ../client/config
+rm ../client/src/main/resources/*.pks 
+rm ../client/src/main/resources/application.properties 
 rm -rf ../proxy/config
 rm -rf ../replica/config
 
