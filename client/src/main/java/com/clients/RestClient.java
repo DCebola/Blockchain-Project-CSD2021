@@ -25,17 +25,17 @@ import java.util.Scanner;
 
 public class RestClient {
 
-    private static final String REGISTER_URL = "https://127.0.0.1:9001/register/%s";
-    private static final String OBTAIN_COINS_URL = "https://127.0.0.1:9001/%s/obtainCoins";
-    private static final String TRANSFER_MONEY_URL = "https://127.0.0.1:9001/transferMoney";
-    private static final String BALANCE_URL = "https://127.0.0.1:9001/%s/balance";
-    private static final String LEDGER_OF_GLOBAL_TRANSACTIONS = "https://127.0.0.1:9001/ledger";
-    private static final String LEDGER_OF_CLIENT_TRANSACTIONS = "https://127.0.0.1:9001/%s/ledger";
-    private static final String LOGIN_URL = "https://127.0.0.1:9001/login/%s";
-    private static final String VERIFY_OPERATION = "https://127.0.0.1:9001/verifyOp";
+    private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
+    private static final String OBTAIN_COINS_URL = "https://127.0.0.1:%s/%s/obtainCoins";
+    private static final String TRANSFER_MONEY_URL = "https://127.0.0.1:%s/transferMoney";
+    private static final String BALANCE_URL = "https://127.0.0.1:%s/%s/balance";
+    private static final String LEDGER_OF_GLOBAL_TRANSACTIONS_URL = "https://127.0.0.1:%s/ledger";
+    private static final String LEDGER_OF_CLIENT_TRANSACTIONS_URL = "https://127.0.0.1:%s/%s/ledger";
+    private static final String REQUEST_NONCE_URL = "https://127.0.0.1:%s/nonce/%s";
+    private static final String VERIFY_OPERATION = "https://127.0.0.1:%S/verifyOp";
 
     private static final int REGISTER = 0;
-    private static final int LOGIN = 1;
+    private static final int REQUEST_NONCE = 1;
     private static final int OBTAIN_COINS = 2;
     private static final int TRANSFER_MONEY = 3;
     private static final int CURRENT_AMOUNT = 4;
@@ -49,8 +49,11 @@ public class RestClient {
 
     private static Gson gson;
     private static Session currentSession;
+    private static String port = "9001";
 
     public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, SignatureException, InvalidKeyException {
+        if (args.length > 0)
+            port = args[0];
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         SSLContextBuilder builder = new SSLContextBuilder();
@@ -82,8 +85,8 @@ public class RestClient {
                 case REGISTER:
                     register(requestFactory, in);
                     break;
-                case LOGIN:
-                    login(requestFactory, in);
+                case REQUEST_NONCE:
+                    requestNonce(requestFactory, in);
                     break;
                 case OBTAIN_COINS:
                     callObtainCoins(requestFactory, in);
@@ -138,7 +141,7 @@ public class RestClient {
 
     private static void printOps() {
         System.out.println("0 - Register");
-        System.out.println("1 - Login");
+        System.out.println("1 - Request Nonce");
         System.out.println("2 - Obtain Coins");
         System.out.println("3 - Transfer Money");
         System.out.println("4 - Current Amount");
@@ -164,7 +167,7 @@ public class RestClient {
                     currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
             ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(REGISTER_URL, currentSession.getUsername()), HttpMethod.POST, request, String.class);
+                    String.format(REGISTER_URL, port, currentSession.getUsername()), HttpMethod.POST, request, String.class);
             System.out.println(response.getStatusCodeValue() + "\n");
             String nonce = response.getBody();
             System.out.println("Nonce: " + nonce);
@@ -174,16 +177,16 @@ public class RestClient {
         }
     }
 
-    private static void login(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
+    private static void requestNonce(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
         setSession(in);
-        String msgToBeHashed = gson.toJson(LedgerRequestType.LOGIN.name());
+        String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name());
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
         SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
         HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
         ResponseEntity<String> response
                 = new RestTemplate(requestFactory).exchange(
-                String.format(LOGIN_URL,currentSession.getUsername()), HttpMethod.POST, request, String.class);
+                String.format(REQUEST_NONCE_URL, port, currentSession.getUsername()), HttpMethod.POST, request, String.class);
         String nonce = response.getBody();
         System.out.println("Nonce: " + nonce);
         currentSession.setNonce(nonce);
@@ -194,7 +197,7 @@ public class RestClient {
         try {
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL, currentSession.getUsername()), HttpMethod.GET, null, Double.class);
+                    String.format(BALANCE_URL,port, currentSession.getUsername()), HttpMethod.GET, null, Double.class);
 
             if(response.getStatusCode().is2xxSuccessful())
                 System.out.println("Balance: " + response.getBody());
@@ -216,7 +219,7 @@ public class RestClient {
 
             ResponseEntity<ResultToRespond> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_COINS_URL, currentSession.getUsername()), HttpMethod.POST, request, ResultToRespond.class);
+                    String.format(OBTAIN_COINS_URL,port, currentSession.getUsername()), HttpMethod.POST, request, ResultToRespond.class);
             System.out.println(response.getStatusCode() + "\n" + response.getBody());
             if(response.getStatusCode().is2xxSuccessful()) {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
@@ -249,7 +252,7 @@ public class RestClient {
 
             ResponseEntity<ResultToRespond> response
                     = new RestTemplate(requestFactory).exchange(
-                    TRANSFER_MONEY_URL, HttpMethod.POST, request, ResultToRespond.class);
+                    String.format(TRANSFER_MONEY_URL, port), HttpMethod.POST, request, ResultToRespond.class);
             System.out.println(response.getStatusCodeValue());
             if(response.getStatusCode().is2xxSuccessful()) {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
@@ -266,7 +269,7 @@ public class RestClient {
         try {
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
-                    LEDGER_OF_GLOBAL_TRANSACTIONS, HttpMethod.GET, null, Ledger.class);
+                    String.format(LEDGER_OF_GLOBAL_TRANSACTIONS_URL, port), HttpMethod.GET, null, Ledger.class);
 
             for (SignedTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
                 System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
@@ -280,14 +283,9 @@ public class RestClient {
         try {
             if (currentSession == null)
                 setSession(in);
-            String msgToBeHashed = gson.toJson(LedgerRequestType.CLIENT_LEDGER.name());
-            //byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
-
-            //SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
-            //HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS, currentSession.getUsername()), HttpMethod.GET, null, Ledger.class);
+                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS_URL, port, currentSession.getUsername()), HttpMethod.GET, null, Ledger.class);
 
             for (SignedTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
                 System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
@@ -304,7 +302,7 @@ public class RestClient {
                 HttpEntity<String> request = new HttpEntity<>(currentSession.getLastOp());
                 ResponseEntity<SignedTransaction> response
                         = new RestTemplate(requestFactory).exchange(
-                        VERIFY_OPERATION, HttpMethod.POST, request, SignedTransaction.class);
+                        String.format(VERIFY_OPERATION, port) , HttpMethod.POST, request, SignedTransaction.class);
 
                 SignedTransaction t = response.getBody();
                 if(t != null)

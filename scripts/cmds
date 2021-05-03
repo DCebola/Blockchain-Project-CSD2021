@@ -9,7 +9,7 @@ java -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-
 
 [Client]
 
-java -cp target/demo-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.RestClient org.springframework.boot.loader.PropertiesLauncher
+java -cp target/demo-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.RestClient org.springframework.boot.loader.PropertiesLauncher 9001
 
 
 [Proxy]

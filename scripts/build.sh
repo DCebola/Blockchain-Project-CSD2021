@@ -13,7 +13,7 @@ mvn clean package -f ../replica
 mvn clean package -f ../client
 
 sh bft/create_configs.sh $1 -tls $3
-sh client/create_client_resources $4 $3 SHA-256
+sh client/create_client_resources.sh $4 $3
 docker network create --driver=bridge --subnet=172.18.0.0/16 bftsmart-net
 cd ../proxy && docker build . -t proxy
 cd ../replica && docker build . -t replica

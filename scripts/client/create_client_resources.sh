@@ -1,12 +1,11 @@
 #!/bin/sh
-if [ "$#" -ne 3 ]; then
-    echo "Usage: create_client_resources <num_clients> <key_type> <hash_algorithm>"
+if [ "$#" -ne 2 ]; then
+    echo "Usage: create_client_resources <num_clients> <key_type>"
     exit 1
 fi
 
 NUM_CLIENTS=$1
 KEY_TYPE=$2
-HASH_ALG=$3
 
 
 cd ./client
@@ -28,8 +27,4 @@ done
 
 cp *.jks ../../client/src/main/resources
 rm client*
-echo "server.port=8080" > application.properties
-echo "hash_algorithm=${HASH_ALG}" >> application.properties
-mv application.properties ../../client/src/main/resources
-
 cd ..
