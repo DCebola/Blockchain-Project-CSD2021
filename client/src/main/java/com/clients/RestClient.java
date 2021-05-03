@@ -226,9 +226,6 @@ public class RestClient {
                 System.out.println(gson.toJson(response.getBody()));
                 System.out.println("Amount: " + (double) Objects.requireNonNull(response.getBody()).getResponse());
                 currentSession.setLastOp(gson.toJson(response.getBody()));
-                System.out.println("-----------------------------");
-                System.out.println(gson.toJson(response.getBody()));
-                System.out.println("-----------------------------");
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
