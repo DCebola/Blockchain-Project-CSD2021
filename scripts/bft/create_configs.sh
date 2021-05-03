@@ -15,7 +15,7 @@ cp hosts.template hosts.config
 cp system.template system.config
 
 echo "redis_port=6379" > redis.config
-echo "system.initial.view = $(seq -s ', ' 1 $N)" >> system.config
+echo "system.initial.view = $(seq -s ',' 1 $N)" >> system.config
 echo "system.servers.num = ${N}" >> system.config
 echo "system.servers.f = ${F}" >> system.config
 
@@ -39,7 +39,7 @@ if [ $# -eq 3 ]; then
     elif [ "$KEY_TYPE" = "ECDSA" ]; then
         cp keysSSL_TLS/EC* ../../replica/config/keysSSL_TLS
         cp keysSSL_TLS/EC* ../../proxy/config/keysSSL_TLS
-        echo "system.ssltls.key_store_file=EC_KeyPair_384.pkcs12" >> system.config
+        echo "system.ssltls.key_store_file = EC_KeyPair_384.pkcs12" >> system.config
         echo "system.ssltls.enabled_ciphers = TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256," >> system.config
     fi
 fi
