@@ -84,8 +84,8 @@ public class LedgerController implements CommandLineRunner {
             byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(res).concat(nonce).getBytes());
             if (MessageDigest.isEqual(msgToBeVerified, hash)) {
                 if (!res) {
-                    logger.info("BAD REQUEST. User already exists {}", who);
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists.");
+                    logger.info("BAD REQUEST");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bad request");
                 } else {
                     logger.info("OK. User {} registered successfully. Initial nonce {}", who, nonce);
                     return nonce;
@@ -120,8 +120,8 @@ public class LedgerController implements CommandLineRunner {
             byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(Double.toString(coins)).getBytes());
             if (MessageDigest.isEqual(hash, msgToBeVerified)) {
                 if (!result) {
-                    logger.info("BAD REQUEST. Non existent user {}", who);
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
+                    logger.info("BAD REQUEST");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD request");
                 } else {
                     ResultToRespond<Double> resultToRespond = new ResultToRespond<>(signedTransaction, new String(base64.encode(hash)), coins, replicas);
                     byteOut = new ByteArrayOutputStream();
@@ -165,7 +165,7 @@ public class LedgerController implements CommandLineRunner {
             byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).getBytes());
             if (MessageDigest.isEqual(msgToBeVerified, hash)) {
                 if (!result) {
-                    logger.info("BAD REQUEST. Proposed transaction: ({}, {}, {})", transaction.getOrigin(), transaction.getDestination(), transaction.getAmount());
+                    logger.info("BAD REQUEST");
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
                 } else {
                     ResultToRespond<Void> resultToRespond = new ResultToRespond<>(signedTransaction, new String(base64.encode(hash)), null, replicas);
@@ -207,8 +207,8 @@ public class LedgerController implements CommandLineRunner {
 
             if (MessageDigest.isEqual(hash, msgToBeVerified)) {
                 if (!result) {
-                    logger.info("BAD REQUEST. Non existent user {}", who);
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
+                    logger.info("BAD REQUEST");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
                 } else {
                     logger.info("OK. User {} has the {} coins.", who, balance);
                     return balance;
@@ -271,8 +271,8 @@ public class LedgerController implements CommandLineRunner {
             byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(gson.toJson(user_ledger)).getBytes());
             if (MessageDigest.isEqual(hash, msgToBeVerified)) {
                 if (!result) {
-                    logger.info("BAD REQUEST. Non existent user {}", who);
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User does not exist.");
+                    logger.info("BAD REQUEST");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bad request");
                 } else {
                     logger.info("OK. User {} ledger found with length {}.", who, user_ledger.size());
                     return new Ledger(user_ledger);
@@ -306,8 +306,8 @@ public class LedgerController implements CommandLineRunner {
             byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(gson.toJson(t)).getBytes());
             if (MessageDigest.isEqual(hash, msgToBeVerified)) {
                 if (!result) {
-                    logger.info("BAD REQUEST. Non existent operation");
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Non existent operation");
+                    logger.info("BAD REQUEST");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
                 } else {
                     logger.info("Found operation associated to {}: {}", operation, gson.toJson(t));
                     return t;

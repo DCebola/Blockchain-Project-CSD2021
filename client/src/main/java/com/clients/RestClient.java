@@ -161,8 +161,7 @@ public class RestClient {
 
     private static void register(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
-            if (currentSession == null)
-                setSession(in);
+            setSession(in);
             HttpEntity<RegisterUserMsgBody> request = new HttpEntity<>(new RegisterUserMsgBody(currentSession.getPublicKey().getEncoded(),
                     currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
             ResponseEntity<String> response
