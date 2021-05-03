@@ -37,7 +37,6 @@ public class ReplyListenerImp<T> implements ReplyListener {
 
     @Override
     public void replyReceived(RequestContext requestContext, TOMMessage tomMessage) {
-        System.out.println("Quorum size " + quorumSize);
         synchronized (this) {
             numReplies++;
             try {
@@ -48,11 +47,10 @@ public class ReplyListenerImp<T> implements ReplyListener {
                 List<Integer> replicas = hashes.get(hashOperation);
                 if (replicas == null) {
                     replicas = new LinkedList<>();
-                    replicas.add(id);
                     hashes.put(hashOperation, replicas);
-                } else
+                }
+                if (replicas.size() < quorumSize)
                     replicas.add(id);
-
                 if (replicas.size() == quorumSize) {
                     OpToVerify op = new OpToVerify(tomMessage.getContent(), replicas);
                     reply.complete((T) op);

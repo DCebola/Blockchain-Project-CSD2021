@@ -144,10 +144,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         String nonce = jedis.lrange(user.concat(USER_ACCOUNT), 4, -1).get(0);
                         String msg = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(nonce));
                         byte[] hash;
-                        if (verifySignature(user, msg, msgSignature)) {
+                        if (verifySignature(user, msg, msgSignature) && amount > 0) {
                             nonce = Integer.toString(Integer.parseInt(nonce) + 1);
                             jedis.lset(user.concat(USER_ACCOUNT), 4, nonce);
-
                             logger.info("Signature verified successfully");
                             hash = TOMUtil.computeHash(Boolean.toString(true).concat(Double.toString(amount)).getBytes());
                             SignedTransaction signedTransaction = new SignedTransaction(SYSTEM, user, amount, new String(base64.encode(msgSignature)));
@@ -191,7 +190,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         byte[] msgSignature = (byte[]) objIn.readObject();
                         String nonce = jedis.lrange(origin.concat(USER_ACCOUNT), 4, -1).get(0);
                         String msg = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(transaction).concat(nonce));
-                        if (verifySignature(origin, msg, msgSignature)) {
+                        if (verifySignature(origin, msg, msgSignature) && amount > 0) {
                             if (getBalance(origin) > amount){
                                 nonce = Integer.toString(Integer.parseInt(nonce) + 1);
                                 jedis.lset(origin.concat(USER_ACCOUNT), 4, nonce);
@@ -199,9 +198,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                 logger.info("Signature verified successfully");
                                 logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
                                 SignedTransaction signedTransaction = new SignedTransaction(origin, destination, amount, new String(base64.encode(msgSignature)));
-                                //registerUserTransaction(transaction.getOrigin(), signedTransaction);
-                                //registerUserTransaction(transaction.getDestination(), signedTransaction);
-                                //jedis.rpush(UNCOMMITTED_GLOBAL_LEDGER, gson.toJson(signedTransaction));
                                 logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", origin, destination, amount);
                                 objOut.writeInt(id);
                                 objOut.writeObject(hash);
@@ -294,9 +290,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     List<String> ops = jedis.lrange(GLOBAL_LEDGER,0,-1);
                     SignedTransaction signedTransaction = null;
                     for(String opS: ops) {
-                        System.out.println("----------");
-                        System.out.println(ops);
-                        System.out.println("----------");
                         if(op.equals(opS)) {
                             logger.info("Transaction found");
                             signedTransaction = gson.fromJson(opS, DecidedOP.class).getSignedTransaction();

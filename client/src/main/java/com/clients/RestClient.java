@@ -32,7 +32,7 @@ public class RestClient {
     private static final String LEDGER_OF_GLOBAL_TRANSACTIONS_URL = "https://127.0.0.1:%s/ledger";
     private static final String LEDGER_OF_CLIENT_TRANSACTIONS_URL = "https://127.0.0.1:%s/%s/ledger";
     private static final String REQUEST_NONCE_URL = "https://127.0.0.1:%s/nonce/%s";
-    private static final String VERIFY_OPERATION = "https://127.0.0.1:%S/verifyOp";
+    private static final String VERIFY_OPERATION = "https://127.0.0.1:%s/verifyOp";
 
     private static final int REGISTER = 0;
     private static final int REQUEST_NONCE = 1;
