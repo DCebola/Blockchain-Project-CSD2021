@@ -6,7 +6,7 @@ mvn clean -f ../client
 
 rm -rf ../client/config
 rm -rf ../proxy/config
-rm -rf ../replic/config
+rm -rf ../replica/config
 
 docker rm $(docker stop $(docker ps -a -q --filter ancestor=replica))
 docker rm $(docker stop $(docker ps -a -q --filter ancestor=proxy))
