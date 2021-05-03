@@ -6,5 +6,3 @@ WORKDIR .
 
 # copy the jar created by assembly to the docker image
 COPY target/replica-jar-with-dependencies.jar replica.jar
-
-CMD ["java", "-Dlogback.configurationFile='./config/logback.xml'", "-jar", "replica.jar"]

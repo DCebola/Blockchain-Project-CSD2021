@@ -2,13 +2,14 @@ version: '3'
 
 services:
     proxy:
-        container_name: proxy-${PROXY-ID}
+        image: proxy-${PROXY_ID}
+        container_name: proxy-${PROXY_ID}
         build:
-            context: ../proxy
+            context: ../../proxy
             dockerfile: Dockerfile
         networks:
             bftsmart-net:
-                ipv4_address: 172.28.10.${PROXY-ID}
+                ipv4_address: 172.28.10.${PROXY_ID}
         ports:
             - "8443:8443"
                 
@@ -19,7 +20,7 @@ services:
 #            dockerfile: Dockerfile
 #        networks:
 #            bftsmart-net:
-#                ipv4_address: 172.28.0.${CLIENT-ID}
+#                ipv4_address: 172.28.0.${CLIENT_ID}
 #        ports:
 #            - "8443:8443"
 networks:

@@ -2,9 +2,10 @@ version: '3'
 
 services:
     replica:
+        image: replica-${REPLICA_ID}
         container_name: replica-${REPLICA_ID}
         build:
-            context: ../replica
+            context: ../../replica
             dockerfile: Dockerfile
         networks:
             bftsmart-net:
@@ -12,7 +13,8 @@ services:
                 
     redis:
         image: redis
-        bftsmart-net:
+        networks:
+            bftsmart-net:
                 ipv4_address: 172.28.100.${REPLICA_ID}
         ports:
             - "6379:6379"
