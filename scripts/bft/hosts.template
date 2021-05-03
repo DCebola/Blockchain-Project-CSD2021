@@ -25,7 +25,3 @@
 # The same holds for replicas 1, 2, 3 ... N.
 
 #server id, address and port (the ids from 0 to n-1 are the service replicas) 
-1 172.18.20.1 11000 11001
-2 172.18.20.2 11000 11001
-3 172.18.20.3 11000 11001
-4 172.18.20.4 11000 11001

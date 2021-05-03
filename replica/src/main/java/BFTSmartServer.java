@@ -49,9 +49,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         this.base64 = new Base64();
         this.gson = new Gson();
         Properties jedis_properties = new Properties();
-        jedis_properties.load(new FileInputStream("config/jedis.config"));
-        String redisPort = jedis_properties.getProperty("jedis_port").split(",")[id];
-        jedis = new Jedis("redis://127.0.0.1:".concat(redisPort));
+        jedis_properties.load(new FileInputStream("config/redis.config"));
+        String redisPort = jedis_properties.getProperty("redis_port");
+        String redis_ip = "172.28.100.".concat(Integer.toString(id));
+        jedis = new Jedis("redis://".concat(redis_ip).concat(":").concat(redisPort));
         new ServiceReplica(id, this, this);
 
 

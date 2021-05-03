@@ -25,6 +25,12 @@ import java.util.Scanner;
 
 public class RestClient {
 
+    private static final String REGISTER_URL = "https://127.0.0.1:9001/register/%s";
+    private static final String OBTAIN_COINS_URL = "https://127.0.0.1:9001/%s/obtainCoins";
+    private static final String TRANSFER_MONEY_URL = "https://127.0.0.1:9001/transferMoney";
+    private static final String BALANCE_URL = "https://127.0.0.1:9001/%s/balance";
+    private static final String LEDGER_OF_GLOBAL_TRANSACTIONS = "https://127.0.0.1:9001/ledger";
+    private static final String LEDGER_OF_CLIENT_TRANSACTIONS = "https://127.0.0.1:9001/%s/ledger";
     private static final String REGISTER_URL = "https://localhost:8443/register/%s";
     private static final String LOGIN_URL = "https://localhost:8443/login/%s";
     private static final String OBTAIN_COINS_URL = "https://localhost:8443/%s/obtainCoins";
@@ -92,10 +98,10 @@ public class RestClient {
                     transferMoney(requestFactory, in);
                     break;
                 case CURRENT_AMOUNT:
-                    balance(requestFactory);
+                    balance(requestFactory, in);
                     break;
                 case GLOBAL_LEDGER:
-                    ledgerOfGlobalTransactions(requestFactory);
+                    ledgerOfGlobalTransactions(requestFactory, in);
                     break;
                 case CLIENT_LEDGER:
                     ledgerOfClientTransactions(requestFactory, in);
@@ -158,7 +164,8 @@ public class RestClient {
 
     private static void register(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
-            setSession(in);
+            if (currentSession == null)
+                setSession(in);
             HttpEntity<RegisterUserMsgBody> request = new HttpEntity<>(new RegisterUserMsgBody(currentSession.getPublicKey().getEncoded(),
                     currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
             ResponseEntity<String> response
@@ -191,6 +198,8 @@ public class RestClient {
 
     private static void balance(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
+            if (currentSession == null)
+                setSession(in);
             String msgToBeHashed = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name());
             //byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.concat(currentSession.getNonce()).getBytes()));
 
@@ -266,6 +275,8 @@ public class RestClient {
 
     private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
+            if (currentSession == null)
+                setSession(in);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
                     LEDGER_OF_GLOBAL_TRANSACTIONS, HttpMethod.GET, null, Ledger.class);
@@ -280,6 +291,8 @@ public class RestClient {
 
     private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            if (currentSession == null)
+                setSession(in);
             String msgToBeHashed = gson.toJson(LedgerRequestType.CLIENT_LEDGER.name());
             //byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 

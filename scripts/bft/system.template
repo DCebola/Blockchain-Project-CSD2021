@@ -139,27 +139,3 @@ system.ttp.id = 7002
 #This sets if the system will function in Byzantine or crash-only mode. Set to "true" to support Byzantine faults
 system.bft = true
 
-system.initial.view = 1,2,3,4
-system.servers.num = 4
-system.servers.f = 1
-system.ssltls = true
-system.ssltls.protocol_version = TLSv1.2
-system.ssltls.key_store_file = EC_KeyPair_384.pkcs12
-system.ssltls.enabled_ciphers = TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-
-## NOTE: it is mandatory to use the specific keyPair file regarding the algorithm, see below.  
-## TLS_ECDHE_ECDSA_WITH_*, // used with EC keyStore (EC_KeyPair_*.pkcs12).
-## TLS_RSA_WITH_*, OR TLS_ECDHE_RSA_WITH_*,  // used with RSA keyStore (RSA_KeyPair_*.pkcs12).
-
-## RSA
-#system.ssltls.key_store_file=RSA_KeyPair_1024.pkcs12
-#system.ssltls.key_store_file=RSA_KeyPair_2048.pkcs12
-#system.ssltls.enabled_ciphers = TLS_RSA_WITH_NULL_SHA256,
-# With cipher (recommended)
-##system.ssltls.enabled_ciphers = TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-#With cipher (secure)
-##system.ssltls.enabled_ciphers = TLS_RSA_WITH_AES_128_GCM_SHA256,
-
-
-
-

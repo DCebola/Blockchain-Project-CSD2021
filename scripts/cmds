@@ -1,0 +1,28 @@
+[Replicas]
+
+java -Djava.security.properties="./config/java.security" -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 0
+java -Djava.security.properties="./config/java.security" -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 1
+java -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 2
+java -Dlogback.configurationFile="./config/logback.xml" -jar target/replica-jar-with-dependencies.jar 3
+
+
+
+[Client]
+
+java -cp target/demo-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.RestClient org.springframework.boot.loader.PropertiesLauncher
+
+
+[Proxy]
+
+java -jar ./target/proxy-0.0.1-SNAPSHOT.jar 1
+
+
+[Redis]
+
+docker start rdb0 rdb1 rdb2 rdb3
+docker exec -it rdb0 redis-cli
+docker run --name rdb2 -d -p 8082:6379 redis
+
+[bft]
+
+java -Dlogback.configurationFile="./config/logback.xml" -cp target/replica-jar-with-dependencies.jar bftsmart.tom.util.ECDSAKeyPairGenerator 4 secp256r1
