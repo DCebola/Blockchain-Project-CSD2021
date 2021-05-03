@@ -31,14 +31,8 @@ public class RestClient {
     private static final String BALANCE_URL = "https://127.0.0.1:9001/%s/balance";
     private static final String LEDGER_OF_GLOBAL_TRANSACTIONS = "https://127.0.0.1:9001/ledger";
     private static final String LEDGER_OF_CLIENT_TRANSACTIONS = "https://127.0.0.1:9001/%s/ledger";
-    private static final String REGISTER_URL = "https://localhost:8443/register/%s";
-    private static final String LOGIN_URL = "https://localhost:8443/login/%s";
-    private static final String OBTAIN_COINS_URL = "https://localhost:8443/%s/obtainCoins";
-    private static final String TRANSFER_MONEY_URL = "https://localhost:8443/transferMoney";
-    private static final String BALANCE_URL = "https://localhost:8443/%s/balance";
-    private static final String LEDGER_OF_GLOBAL_TRANSACTIONS = "https://localhost:8443/ledger";
-    private static final String LEDGER_OF_CLIENT_TRANSACTIONS = "https://localhost:8443/%s/ledger";
-    private static final String VERIFY_OPERATION = "https://localhost:8443/verifyOp";
+    private static final String LOGIN_URL = "https://127.0.0.1:9001/login/%s";
+    private static final String VERIFY_OPERATION = "https://127.0.0.1:9001/verifyOp";
 
     private static final int REGISTER = 0;
     private static final int LOGIN = 1;
@@ -98,10 +92,10 @@ public class RestClient {
                     transferMoney(requestFactory, in);
                     break;
                 case CURRENT_AMOUNT:
-                    balance(requestFactory, in);
+                    balance(requestFactory);
                     break;
                 case GLOBAL_LEDGER:
-                    ledgerOfGlobalTransactions(requestFactory, in);
+                    ledgerOfGlobalTransactions(requestFactory);
                     break;
                 case CLIENT_LEDGER:
                     ledgerOfClientTransactions(requestFactory, in);
@@ -198,11 +192,6 @@ public class RestClient {
 
     private static void balance(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
-            if (currentSession == null)
-                setSession(in);
-            String msgToBeHashed = gson.toJson(LedgerRequestType.CURRENT_AMOUNT.name());
-            //byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.concat(currentSession.getNonce()).getBytes()));
-
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(BALANCE_URL, currentSession.getUsername()), HttpMethod.GET, null, Double.class);
@@ -233,7 +222,7 @@ public class RestClient {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
                 System.out.println("New Nonce: " + currentSession.getNonce());
                 System.out.println(gson.toJson(response.getBody()));
-                System.out.println("Amount: " + (double) response.getBody().getResponse());
+                System.out.println("Amount: " + (double) Objects.requireNonNull(response.getBody()).getResponse());
                 currentSession.setLastOp(gson.toJson(response.getBody()));
             }
         } catch (Exception e) {
@@ -275,8 +264,6 @@ public class RestClient {
 
     private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
-            if (currentSession == null)
-                setSession(in);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
                     LEDGER_OF_GLOBAL_TRANSACTIONS, HttpMethod.GET, null, Ledger.class);

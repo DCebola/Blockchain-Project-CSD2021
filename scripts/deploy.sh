@@ -12,8 +12,8 @@ for i in `seq $N`; do
     redis_ip="172.18.30.${i}"
     redis_name="redis-${i}"
     ip="172.18.20.${i}"
-    container_name="replica-${i}"
-    docker run --network bftsmart-net --ip $ip --name $container_name -d replica java -Dlogback.configurationFile="./config/logback.xml" -jar replica.jar $i 
+    container_name="replica-$(( $i - 1 ))"
+    docker run --network bftsmart-net --ip $ip --name $container_name -d replica java -Dlogback.configurationFile="./config/logback.xml" -jar replica.jar $(( $i - 1 )) 
     #docker network connect bftsmart-net --ip $ip $container_name
     #docker network connect bftsmart-net $container_name
     docker run --network bftsmart-net --ip $redis_ip --name $redis_name -d redis

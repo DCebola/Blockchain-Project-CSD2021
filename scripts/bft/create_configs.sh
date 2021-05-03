@@ -15,12 +15,12 @@ cp hosts.template hosts.config
 cp system.template system.config
 
 echo "redis_port=6379" > redis.config
-echo "system.initial.view = $(seq -s ',' 1 $N )" >> system.config
+echo "system.initial.view = $(seq -s ',' 0 $(( $N - 1 )) )" >> system.config
 echo "system.servers.num = ${N}" >> system.config
 echo "system.servers.f = ${F}" >> system.config
 
-for i in `seq $N`; do
-    echo "${i} 172.18.20.${i} 11000 11001" >> hosts.config
+for i in `seq 0 $(( $N - 1 ))`; do
+    echo "${i} 172.18.20.$(( $i + 1 )) 11000 11001" >> hosts.config
 done
 
 cp hosts.config ../../replica/config
