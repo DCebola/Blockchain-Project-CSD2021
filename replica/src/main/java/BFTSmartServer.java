@@ -162,7 +162,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         String nonce = jedis.lrange(origin.concat(USER_ACCOUNT), 4, -1).get(0);
                         String msg = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(transaction).concat(nonce));
                         if (verifySignature(origin, msg, msgSignature) && amount > 0) {
-                            if (getBalance(origin) > amount) {
+                            if (getBalance(origin) >= amount) {
                                 nonce = Integer.toString(Integer.parseInt(nonce) + 1);
                                 jedis.lset(origin.concat(USER_ACCOUNT), 4, nonce);
                                 hash = TOMUtil.computeHash(Boolean.toString(true).getBytes());
