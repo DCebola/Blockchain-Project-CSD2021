@@ -37,27 +37,30 @@ public class ReplyListenerImp<T> implements ReplyListener {
 
     @Override
     public void replyReceived(RequestContext requestContext, TOMMessage tomMessage) {
-        numReplies++;
-        try {
-            objectInput = new ObjectInputStream(new ByteArrayInputStream(tomMessage.getContent()));
-            int id = objectInput.readInt();
-            byte[] hash = (byte[]) objectInput.readObject();
-            String hashOperation = Utils.toHex(hash);
-            List<Integer> replicas = hashes.get(hashOperation);
-            if (replicas == null) {
-                replicas = new LinkedList<>();
-                replicas.add(id);
-                hashes.put(hashOperation, replicas);
-            } else
-                replicas.add(id);
+        System.out.println("Quorum size " + quorumSize);
+        synchronized (this) {
+            numReplies++;
+            try {
+                objectInput = new ObjectInputStream(new ByteArrayInputStream(tomMessage.getContent()));
+                int id = objectInput.readInt();
+                byte[] hash = (byte[]) objectInput.readObject();
+                String hashOperation = Utils.toHex(hash);
+                List<Integer> replicas = hashes.get(hashOperation);
+                if (replicas == null) {
+                    replicas = new LinkedList<>();
+                    replicas.add(id);
+                    hashes.put(hashOperation, replicas);
+                } else
+                    replicas.add(id);
 
-            if (replicas.size() == quorumSize) {
-                OpToVerify op = new OpToVerify(tomMessage.getContent(), replicas);
-                reply.complete((T) op);
+                if (replicas.size() == quorumSize) {
+                    OpToVerify op = new OpToVerify(tomMessage.getContent(), replicas);
+                    reply.complete((T) op);
+                }
+
+            } catch (IOException | ClassNotFoundException e) {
+                e.printStackTrace();
             }
-
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
         }
     }
 }

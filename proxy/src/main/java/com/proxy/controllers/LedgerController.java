@@ -15,7 +15,6 @@ import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
 
 import java.io.*;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -99,7 +98,7 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @PostMapping("/{who}/obtainCoins")
-    public ResultToRespond<Double> obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
+    public DecidedOP<Double> obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -123,7 +122,7 @@ public class LedgerController implements CommandLineRunner {
                     logger.info("BAD REQUEST");
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD request");
                 } else {
-                    ResultToRespond<Double> resultToRespond = new ResultToRespond<>(signedTransaction, new String(base64.encode(hash)), coins, replicas);
+                    DecidedOP<Double> resultToRespond = new DecidedOP<>(signedTransaction, new String(base64.encode(hash)), coins, replicas);
                     byteOut = new ByteArrayOutputStream();
                     objOut = new ObjectOutputStream(byteOut);
                     objOut.writeObject(LedgerRequestType.COMMIT);
@@ -145,7 +144,7 @@ public class LedgerController implements CommandLineRunner {
 
     @PostMapping("/transferMoney")
     @ResponseStatus(HttpStatus.OK)
-    public ResultToRespond<Void> transferAmount(@RequestBody SignedBody<Transaction> signedBody) {
+    public DecidedOP<Void> transferAmount(@RequestBody SignedBody<Transaction> signedBody) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -168,7 +167,7 @@ public class LedgerController implements CommandLineRunner {
                     logger.info("BAD REQUEST");
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
                 } else {
-                    ResultToRespond<Void> resultToRespond = new ResultToRespond<>(signedTransaction, new String(base64.encode(hash)), null, replicas);
+                    DecidedOP<Void> resultToRespond = new DecidedOP<>(signedTransaction, new String(base64.encode(hash)), null, replicas);
                     byteOut = new ByteArrayOutputStream();
                     objOut = new ObjectOutputStream(byteOut);
                     objOut.writeObject(LedgerRequestType.COMMIT);
@@ -236,7 +235,7 @@ public class LedgerController implements CommandLineRunner {
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
-            List<SignedTransaction> global_ledger = (List<SignedTransaction>) objIn.readObject();
+            List<DecidedOP> global_ledger = (List<DecidedOP>) objIn.readObject();
             byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(global_ledger)).getBytes());
             if (MessageDigest.isEqual(hash, msgToBeVerified)) {
                 logger.info("OK. Global ledger with length {}.", global_ledger.size());
@@ -267,7 +266,7 @@ public class LedgerController implements CommandLineRunner {
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
             boolean result = objIn.readBoolean();
-            List<SignedTransaction> user_ledger = (List<SignedTransaction>) objIn.readObject();
+            List<DecidedOP> user_ledger = (List<DecidedOP>) objIn.readObject();
             byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(gson.toJson(user_ledger)).getBytes());
             if (MessageDigest.isEqual(hash, msgToBeVerified)) {
                 if (!result) {

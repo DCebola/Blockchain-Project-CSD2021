@@ -216,9 +216,9 @@ public class RestClient {
             SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes);
             HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
 
-            ResponseEntity<ResultToRespond> response
+            ResponseEntity<DecidedOP> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_COINS_URL,port, currentSession.getUsername()), HttpMethod.POST, request, ResultToRespond.class);
+                    String.format(OBTAIN_COINS_URL,port, currentSession.getUsername()), HttpMethod.POST, request, DecidedOP.class);
             System.out.println(response.getStatusCode() + "\n" + response.getBody());
             if(response.getStatusCode().is2xxSuccessful()) {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
@@ -226,6 +226,9 @@ public class RestClient {
                 System.out.println(gson.toJson(response.getBody()));
                 System.out.println("Amount: " + (double) Objects.requireNonNull(response.getBody()).getResponse());
                 currentSession.setLastOp(gson.toJson(response.getBody()));
+                System.out.println("-----------------------------");
+                System.out.println(gson.toJson(response.getBody()));
+                System.out.println("-----------------------------");
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -249,9 +252,9 @@ public class RestClient {
             HttpEntity<SignedBody<Transaction>> request = new HttpEntity<>(signedBody);
 
 
-            ResponseEntity<ResultToRespond> response
+            ResponseEntity<DecidedOP> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(TRANSFER_MONEY_URL, port), HttpMethod.POST, request, ResultToRespond.class);
+                    String.format(TRANSFER_MONEY_URL, port), HttpMethod.POST, request, DecidedOP.class);
             System.out.println(response.getStatusCodeValue());
             if(response.getStatusCode().is2xxSuccessful()) {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
@@ -270,8 +273,9 @@ public class RestClient {
                     = new RestTemplate(requestFactory).exchange(
                     String.format(LEDGER_OF_GLOBAL_TRANSACTIONS_URL, port), HttpMethod.GET, null, Ledger.class);
 
-            for (SignedTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
-                System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
+            for (DecidedOP t : Objects.requireNonNull(response.getBody()).getTransactions()) {
+                System.out.println(t.getSignedTransaction().getOrigin() + " " + t.getSignedTransaction().getDestination()
+                        + " " + t.getSignedTransaction().getAmount() + " " + t.getSignedTransaction().getSignature());
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -286,8 +290,9 @@ public class RestClient {
                     = new RestTemplate(requestFactory).exchange(
                     String.format(LEDGER_OF_CLIENT_TRANSACTIONS_URL, port, currentSession.getUsername()), HttpMethod.GET, null, Ledger.class);
 
-            for (SignedTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
-                System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
+            for (DecidedOP t : Objects.requireNonNull(response.getBody()).getTransactions()) {
+                System.out.println(t.getSignedTransaction().getOrigin() + " " + t.getSignedTransaction().getDestination()
+                        + " " + t.getSignedTransaction().getAmount() + " " + t.getSignedTransaction().getSignature());
             }
 
         } catch (Exception e) {

@@ -6,7 +6,6 @@ mvn clean -f ../client
 
 rm -rf ../client/config
 rm ../client/src/main/resources/*.jks 
-rm ../client/src/main/resources/application.properties 
 rm -rf ../proxy/config
 rm -rf ../replica/config
 
