@@ -26,12 +26,12 @@ import java.util.Scanner;
 
 public class RestClient {
 
-    private static final String REGISTER_URL = "https://localhost:8443/register/%s";
-    private static final String OBTAIN_COINS_URL = "https://localhost:8443/%s/obtainCoins";
-    private static final String TRANSFER_MONEY_URL = "https://localhost:8443/transferMoney";
-    private static final String BALANCE_URL = "https://localhost:8443/%s/balance";
-    private static final String LEDGER_OF_GLOBAL_TRANSACTIONS = "https://localhost:8443/ledger";
-    private static final String LEDGER_OF_CLIENT_TRANSACTIONS = "https://localhost:8443/%s/ledger";
+    private static final String REGISTER_URL = "https://127.0.0.1:9001/register/%s";
+    private static final String OBTAIN_COINS_URL = "https://127.0.0.1:9001/%s/obtainCoins";
+    private static final String TRANSFER_MONEY_URL = "https://127.0.0.1:9001/transferMoney";
+    private static final String BALANCE_URL = "https://127.0.0.1:9001/%s/balance";
+    private static final String LEDGER_OF_GLOBAL_TRANSACTIONS = "https://127.0.0.1:9001/ledger";
+    private static final String LEDGER_OF_CLIENT_TRANSACTIONS = "https://127.0.0.1:9001/%s/ledger";
 
 
     private static final int REGISTER = 0;
