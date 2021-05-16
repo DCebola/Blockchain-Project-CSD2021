@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.Scanner;
 
 public class BenchmarkClient {
+    /*
 
     private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
     private static final String OBTAIN_COINS_URL = "https://127.0.0.1:%s/%s/obtainCoins";
@@ -394,5 +395,5 @@ public class BenchmarkClient {
             this.lastOp = lastOp;
         }
 
-    }
+    }*/
 }

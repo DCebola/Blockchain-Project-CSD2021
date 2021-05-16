@@ -5,8 +5,8 @@ public class SignedTransaction extends Transaction {
     private final String signature;
     private static final long serialVersionUID = 152968808267757799L;
 
-    public SignedTransaction(String origin, String destination, double amount, String signature){
-        super(origin, destination, amount);
+    public SignedTransaction(String origin, String destination, double amount, String signature, String date){
+        super(origin, destination, amount, date);
         this.signature = signature;
     }
 

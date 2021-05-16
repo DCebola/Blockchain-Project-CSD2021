@@ -19,11 +19,15 @@ import java.io.IOException;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 import java.util.Scanner;
 
 
 public class RestClient {
+
+    private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
 
     private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
     private static final String OBTAIN_COINS_URL = "https://127.0.0.1:%s/%s/obtainCoins";
@@ -50,10 +54,12 @@ public class RestClient {
     private static Gson gson;
     private static Session currentSession;
     private static String port = "9001";
+    private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(DATE_FORMATTER);
 
     public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, SignatureException, InvalidKeyException {
         if (args.length > 0)
             port = args[0];
+
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         SSLContextBuilder builder = new SSLContextBuilder();
@@ -181,7 +187,7 @@ public class RestClient {
         String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name());
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-        SignedBody<String> signedBody = new SignedBody<>("", sigBytes);
+        SignedBody<String> signedBody = new SignedBody<>("", sigBytes,null);
         HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
         ResponseEntity<String> response
                 = new RestTemplate(requestFactory).exchange(
@@ -208,12 +214,14 @@ public class RestClient {
 
     private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            String currentDate = LocalDateTime.now().format(dateTimeFormatter);
+
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
-            String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(currentSession.getNonce()));
+            String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(currentSession.getNonce()).concat(currentDate));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-            SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes);
+            SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes, currentDate);
             HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
 
             ResponseEntity<DecidedOP> response
@@ -224,7 +232,6 @@ public class RestClient {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
                 System.out.println("New Nonce: " + currentSession.getNonce());
                 System.out.println(gson.toJson(response.getBody()));
-                System.out.println("Amount: " + (double) Objects.requireNonNull(response.getBody()).getResponse());
                 currentSession.setLastOp(gson.toJson(response.getBody()));
             }
         } catch (Exception e) {
@@ -234,18 +241,20 @@ public class RestClient {
 
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+
         try {
+            String currentDate = LocalDateTime.now().format(dateTimeFormatter);
             System.out.print("Insert destination: ");
             String destination = in.next();
             in.nextLine();
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
 
-            Transaction t = new Transaction(currentSession.username, destination, amount);
-            String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t).concat(currentSession.getNonce()));
+            Transaction t = new Transaction(currentSession.username, destination, amount, currentDate);
+            String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t).concat(currentSession.getNonce()).concat(currentDate));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-            SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes);
+            SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes,currentDate);
             HttpEntity<SignedBody<Transaction>> request = new HttpEntity<>(signedBody);
 
 
@@ -265,14 +274,17 @@ public class RestClient {
     }
 
     private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
+        String start = "2021-05-17 00:16:00";
+        String end = "2021-05-17 00:17:52";
+        DateInterval dateInterval = new DateInterval(start,end);
+        HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
         try {
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(LEDGER_OF_GLOBAL_TRANSACTIONS_URL, port), HttpMethod.GET, null, Ledger.class);
+                    String.format(LEDGER_OF_GLOBAL_TRANSACTIONS_URL, port), HttpMethod.POST, request, Ledger.class);
 
             for (DecidedOP t : Objects.requireNonNull(response.getBody()).getTransactions()) {
-                System.out.println(t.getSignedTransaction().getOrigin() + " " + t.getSignedTransaction().getDestination()
-                        + " " + t.getSignedTransaction().getAmount() + " " + t.getSignedTransaction().getSignature());
+                System.out.println(gson.toJson(t));
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -280,17 +292,19 @@ public class RestClient {
     }
 
     private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+        String start = "2021-05-17 00:16:00";
+        String end = "2021-05-17 00:17:52";
+        DateInterval dateInterval = new DateInterval(start,end);
+        HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
         try {
             if (currentSession == null)
                 setSession(in);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS_URL, port, currentSession.getUsername()), HttpMethod.GET, null, Ledger.class);
+                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS_URL, port, currentSession.getUsername()), HttpMethod.POST, request, Ledger.class);
 
-            for (DecidedOP t : Objects.requireNonNull(response.getBody()).getTransactions()) {
-                System.out.println(t.getSignedTransaction().getOrigin() + " " + t.getSignedTransaction().getDestination()
-                        + " " + t.getSignedTransaction().getAmount() + " " + t.getSignedTransaction().getSignature());
-            }
+            for (DecidedOP t : Objects.requireNonNull(response.getBody()).getTransactions())
+                System.out.println(gson.toJson(t));
 
         } catch (Exception e) {
             System.out.println(e.getMessage());

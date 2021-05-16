@@ -10,17 +10,20 @@ public class Transaction implements Serializable {
     private final String origin;
     private final String destination;
     private final double amount;
+    private final String date;
 
-    public Transaction(String origin, String destination, double amount) {
+    public Transaction(String origin, String destination, double amount, String date) {
         this.origin = origin;
         this.destination = destination;
         this.amount = amount;
+        this.date = date;
     }
 
     public Transaction() {
         this.amount = -1;
         this.origin = "";
         this.destination = "";
+        this.date = "";
     }
 
     public String getOrigin() {
@@ -34,4 +37,6 @@ public class Transaction implements Serializable {
     public double getAmount() {
         return amount;
     }
+
+    public String getDate() { return date; }
 }

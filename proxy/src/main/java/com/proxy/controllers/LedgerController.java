@@ -23,6 +23,8 @@ import java.util.concurrent.*;
 @RestController
 public class LedgerController implements CommandLineRunner {
 
+    private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
+
     private AsynchServiceProxy asynchServiceProxy;
     private Logger logger;
     private Base64 base64;
@@ -107,6 +109,7 @@ public class LedgerController implements CommandLineRunner {
             objOut.writeObject(LedgerRequestType.OBTAIN_COINS);
             objOut.writeObject(who);
             objOut.writeDouble(signedBody.getContent());
+            objOut.writeObject(signedBody.getDate());
             objOut.writeObject(signedBody.getSignature());
             objOut.flush();
             byteOut.flush();
@@ -118,13 +121,14 @@ public class LedgerController implements CommandLineRunner {
             SignedTransaction signedTransaction = (SignedTransaction) objIn.readObject();
             boolean result = objIn.readBoolean();
             double coins = objIn.readDouble();
-            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(Double.toString(coins)).getBytes());
+            String date = (String) objIn.readObject();
+            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(Double.toString(coins)).concat(date).getBytes());
             if (MessageDigest.isEqual(hash, msgToBeVerified)) {
                 if (!result) {
                     logger.info("BAD REQUEST");
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD request");
                 } else {
-                    DecidedOP<Double> resultToRespond = new DecidedOP<>(signedTransaction, new String(base64.encode(hash)), coins, replicas);
+                    DecidedOP<Double> resultToRespond = new DecidedOP<>(signedTransaction, new String(base64.encode(hash)), replicas);
                     byteOut = new ByteArrayOutputStream();
                     objOut = new ObjectOutputStream(byteOut);
                     objOut.writeObject(LedgerRequestType.COMMIT);
@@ -147,6 +151,7 @@ public class LedgerController implements CommandLineRunner {
     @PostMapping("/transferMoney")
     @ResponseStatus(HttpStatus.OK)
     public DecidedOP<Void> transferAmount(@RequestBody SignedBody<Transaction> signedBody) {
+
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
@@ -169,7 +174,7 @@ public class LedgerController implements CommandLineRunner {
                     logger.info("BAD REQUEST");
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
                 } else {
-                    DecidedOP<Void> resultToRespond = new DecidedOP<>(signedTransaction, new String(base64.encode(hash)), null, replicas);
+                    DecidedOP<Void> resultToRespond = new DecidedOP<>(signedTransaction, new String(base64.encode(hash)), replicas);
                     byteOut = new ByteArrayOutputStream();
                     objOut = new ObjectOutputStream(byteOut);
                     objOut.writeObject(LedgerRequestType.COMMIT);
@@ -225,12 +230,13 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @SuppressWarnings("unchecked")
-    @GetMapping("/ledger")
-    public Ledger ledgerOfGlobalTransactions() {
+    @PostMapping("/ledger")
+    public Ledger ledgerOfGlobalTransactions(@RequestBody DateInterval dates) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.GLOBAL_LEDGER);
+            objOut.writeObject(dates);
             objOut.flush();
             byteOut.flush();
             OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
@@ -254,13 +260,14 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @SuppressWarnings("unchecked")
-    @GetMapping("/{who}/ledger")
-    public Ledger ledgerOfClientTransactions(@PathVariable String who) {
+    @PostMapping("/{who}/ledger")
+    public Ledger ledgerOfClientTransactions(@PathVariable String who, @RequestBody DateInterval dateInterval) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             objOut.writeObject(LedgerRequestType.CLIENT_LEDGER);
             objOut.writeObject(who);
+            objOut.writeObject(dateInterval);
             objOut.flush();
             byteOut.flush();
             OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);

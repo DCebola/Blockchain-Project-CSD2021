@@ -17,9 +17,14 @@ import java.security.*;
 
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
+
+import java.sql.Timestamp;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class BFTSmartServer extends DefaultSingleRecoverable {
+    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
 
     private static final String INITIAL_NONCE = "0";
     private static final String NO_NONCE = "-1";
@@ -115,21 +120,23 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeBoolean(false);
                     } else {
                         double amount = objIn.readDouble();
+                        String date = (String) objIn.readObject();
                         byte[] msgSignature = (byte[]) objIn.readObject();
                         String nonce = jedis.lrange(user.concat(USER_ACCOUNT), 4, -1).get(0);
-                        String msg = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(nonce));
+                        String msg = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(nonce).concat(date));
                         byte[] hash;
                         if (verifySignature(user, msg, msgSignature) && amount > 0) {
                             nonce = Integer.toString(Integer.parseInt(nonce) + 1);
                             jedis.lset(user.concat(USER_ACCOUNT), 4, nonce);
                             logger.info("Signature verified successfully");
-                            hash = TOMUtil.computeHash(Boolean.toString(true).concat(Double.toString(amount)).getBytes());
-                            SignedTransaction signedTransaction = new SignedTransaction(SYSTEM, user, amount, new String(base64.encode(msgSignature)));
+                            hash = TOMUtil.computeHash(Boolean.toString(true).concat(Double.toString(amount)).concat(date).getBytes());
+                            SignedTransaction signedTransaction = new SignedTransaction(SYSTEM, user, amount, new String(base64.encode(msgSignature)), date);
                             objOut.writeInt(id);
                             objOut.writeObject(hash);
                             objOut.writeObject(signedTransaction);
                             objOut.writeBoolean(true);
                             objOut.writeDouble(amount);
+                            objOut.writeObject(date);
                         } else {
                             hash = TOMUtil.computeHash(Boolean.toString(false).concat(Double.toString(-1)).getBytes());
                             objOut.writeInt(id);
@@ -137,16 +144,19 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             objOut.writeObject(null);
                             objOut.writeBoolean(false);
                             objOut.writeDouble(-1);
+                            objOut.writeObject(null);
                         }
                     }
                 }
                 break;
                 case TRANSFER_MONEY: {
+
                     logger.debug("New TRANSFER_MONEY operation.");
                     Transaction transaction = (Transaction) objIn.readObject();
                     String origin = transaction.getOrigin();
                     String destination = transaction.getDestination();
                     double amount = transaction.getAmount();
+                    String date = transaction.getDate();
                     byte[] hash;
                     if (!jedis.exists(origin.concat(USER_ACCOUNT)) || !jedis.exists(destination.concat(USER_ACCOUNT))
                             || origin.equals(destination)) {
@@ -160,7 +170,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     } else {
                         byte[] msgSignature = (byte[]) objIn.readObject();
                         String nonce = jedis.lrange(origin.concat(USER_ACCOUNT), 4, -1).get(0);
-                        String msg = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(transaction).concat(nonce));
+                        String msg = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(transaction).concat(nonce).concat(date));
                         if (verifySignature(origin, msg, msgSignature) && amount > 0) {
                             if (getBalance(origin) >= amount) {
                                 nonce = Integer.toString(Integer.parseInt(nonce) + 1);
@@ -168,7 +178,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                 hash = TOMUtil.computeHash(Boolean.toString(true).getBytes());
                                 logger.info("Signature verified successfully");
                                 logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
-                                SignedTransaction signedTransaction = new SignedTransaction(origin, destination, amount, new String(base64.encode(msgSignature)));
+                                SignedTransaction signedTransaction = new SignedTransaction(origin, destination, amount, new String(base64.encode(msgSignature)), date);
                                 logger.debug("Transaction ({}, {}, {}) added to the global ledgers.", origin, destination, amount);
                                 objOut.writeInt(id);
                                 objOut.writeObject(hash);
@@ -268,9 +278,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     break;
                 }
                 case GLOBAL_LEDGER: {
+                    DateInterval dateInterval = (DateInterval) objIn.readObject();
                     logger.debug("New GLOBAL_LEDGER operation.");
                     objOut.writeInt(id);
-                    List<DecidedOP> signedTransactions = getLedger(GLOBAL_LEDGER);
+                    List<DecidedOP> signedTransactions = getLedger(GLOBAL_LEDGER, dateInterval);
                     byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(signedTransactions)).getBytes());
                     objOut.writeObject(hash);
                     objOut.writeObject(signedTransactions);
@@ -279,6 +290,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case CLIENT_LEDGER: {
                     logger.debug("New CLIENT_LEDGER operation.");
                     String user = (String) objIn.readObject();
+                    DateInterval dateInterval = (DateInterval) objIn.readObject();
                     if (!jedis.exists(user.concat(USER_ACCOUNT))) {
                         logger.info("User {} does not exist", user);
                         objOut.writeInt(id);
@@ -287,7 +299,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeBoolean(false);
                         objOut.writeObject(null);
                     } else {
-                        List<DecidedOP> user_ledger = getLedger(user.concat(USER_LEDGER));
+                        List<DecidedOP> user_ledger = getLedger(user.concat(USER_LEDGER),dateInterval);
                         logger.info("User {} ledger found with length {}.", user_ledger.size(), user_ledger);
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(user_ledger)).getBytes());
                         objOut.writeInt(id);
@@ -351,10 +363,22 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return hash.digest();
     }
 
-    private List<DecidedOP> getLedger(String key) {
+    private List<DecidedOP> getLedger(String key, DateInterval dateInterval) {
+
+        long startDate = Timestamp.valueOf(dateInterval.getStartDate()).getTime();
+        long endDate = Timestamp.valueOf(dateInterval.getEndDate()).getTime();
+
         List<DecidedOP> deserialized_ledger = new LinkedList<>();
         List<String> serialized_ledger = jedis.lrange(key, 0, -1);
-        serialized_ledger.forEach((r) -> deserialized_ledger.add(gson.fromJson(r, DecidedOP.class)));
+
+        for(String t: serialized_ledger) {
+            DecidedOP decidedOP = gson.fromJson(t, DecidedOP.class);
+            long transactionTimeStamp = Timestamp.valueOf(decidedOP.getSignedTransaction().getDate()).getTime();
+
+            if(transactionTimeStamp >= startDate && transactionTimeStamp <= endDate) {
+                deserialized_ledger.add(decidedOP);
+            }
+        }
         return deserialized_ledger;
     }
 
