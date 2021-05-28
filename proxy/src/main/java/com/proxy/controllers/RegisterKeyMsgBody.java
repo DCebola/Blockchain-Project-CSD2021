@@ -9,7 +9,7 @@ public class RegisterKeyMsgBody implements Serializable {
     private final String publicKeyAlgorithm;
     private final String hashAlgorithm;
 
-    public RegisterKeyMsgBody(byte[] publicKey, String signatureAlgorithm, String publicKeyAlgorithm, String hashAlgorithm) {
+    public RegisterKeyMsgBody(String signatureAlgorithm, String publicKeyAlgorithm, String hashAlgorithm) {
         this.signatureAlgorithm = signatureAlgorithm;
         this.publicKeyAlgorithm = publicKeyAlgorithm;
         this.hashAlgorithm = hashAlgorithm;
