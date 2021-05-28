@@ -171,8 +171,8 @@ public class RestClient {
     private static void register(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             setSession(in);
-            HttpEntity<RegisterKeyMsgBody> request = new HttpEntity<>(new RegisterKeyMsgBody(currentSession.getPublicKey().getEncoded(),
-                    currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
+            HttpEntity<RegisterKeyMsgBody> request = new HttpEntity<>(
+                    new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
             ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(REGISTER_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
