@@ -54,6 +54,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         this.gson = new Gson();
         Properties jedis_properties = new Properties();
         //TODO: tls with redis
+        //TODO: Refactoring of methods
         jedis_properties.load(new FileInputStream("config/redis.config"));
         String redisPort = jedis_properties.getProperty("redis_port");
         String redis_ip = "172.18.30.".concat(Integer.toString(id));
