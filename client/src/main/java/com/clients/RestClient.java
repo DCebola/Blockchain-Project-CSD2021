@@ -1,6 +1,7 @@
 package com.clients;
 
 import com.google.gson.Gson;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
@@ -52,6 +53,7 @@ public class RestClient {
 
 
     private static Gson gson;
+    private static Base64 base64;
     private static Session currentSession;
     private static String port = "9001";
     private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(DATE_FORMATTER);
@@ -62,6 +64,7 @@ public class RestClient {
 
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
+        base64 = new Base64(true);
         SSLContextBuilder builder = new SSLContextBuilder();
         KeyStore ksTrust = KeyStore.getInstance(KeyStore.getDefaultType());
         ksTrust.load(new FileInputStream("src/main/resources/truststore.jks"), "truststorePass".toCharArray());
@@ -172,7 +175,7 @@ public class RestClient {
                     currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
             ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(REGISTER_URL, port, currentSession.getUsername()), HttpMethod.POST, request, String.class);
+                    String.format(REGISTER_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
             System.out.println(response.getStatusCodeValue() + "\n");
             String nonce = response.getBody();
             System.out.println("Nonce: " + nonce);
@@ -184,14 +187,14 @@ public class RestClient {
 
     private static void requestNonce(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
         setSession(in);
-        String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name());
+        String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(base64.encodeAsString(currentSession.getPublicKey().getEncoded())));
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-        SignedBody<String> signedBody = new SignedBody<>("", sigBytes,null);
+        SignedBody<String> signedBody = new SignedBody<>("", sigBytes, null);
         HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
         ResponseEntity<String> response
                 = new RestTemplate(requestFactory).exchange(
-                String.format(REQUEST_NONCE_URL, port, currentSession.getUsername()), HttpMethod.POST, request, String.class);
+                String.format(REQUEST_NONCE_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
         String nonce = response.getBody();
         System.out.println("Nonce: " + nonce);
         currentSession.setNonce(nonce);
@@ -202,9 +205,9 @@ public class RestClient {
         try {
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL,port, currentSession.getUsername()), HttpMethod.GET, null, Double.class);
+                    String.format(BALANCE_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, Double.class);
 
-            if(response.getStatusCode().is2xxSuccessful())
+            if (response.getStatusCode().is2xxSuccessful())
                 System.out.println("Balance: " + response.getBody());
 
         } catch (Exception e) {
@@ -224,11 +227,11 @@ public class RestClient {
             SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes, currentDate);
             HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
 
-            ResponseEntity<DecidedOP> response
+            ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_COINS_URL,port, currentSession.getUsername()), HttpMethod.POST, request, DecidedOP.class);
+                    String.format(OBTAIN_COINS_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, ValidTransaction.class);
             System.out.println(response.getStatusCode() + "\n" + response.getBody());
-            if(response.getStatusCode().is2xxSuccessful()) {
+            if (response.getStatusCode().is2xxSuccessful()) {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
                 System.out.println("New Nonce: " + currentSession.getNonce());
                 System.out.println(gson.toJson(response.getBody()));
@@ -250,20 +253,20 @@ public class RestClient {
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
 
-            Transaction t = new Transaction(currentSession.username, destination, amount, currentDate);
+            Transaction t = new Transaction(base64.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
             String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t).concat(currentSession.getNonce()).concat(currentDate));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-            SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes,currentDate);
+            SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes, currentDate);
             HttpEntity<SignedBody<Transaction>> request = new HttpEntity<>(signedBody);
 
 
-            ResponseEntity<DecidedOP> response
+            ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(TRANSFER_MONEY_URL, port), HttpMethod.POST, request, DecidedOP.class);
+                    String.format(TRANSFER_MONEY_URL, port), HttpMethod.POST, request, ValidTransaction.class);
             System.out.println(response.getStatusCodeValue());
-            if(response.getStatusCode().is2xxSuccessful()) {
-                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
+            if (response.getStatusCode().is2xxSuccessful()) {
+                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
                 System.out.println(currentSession.getNonce());
                 System.out.println(gson.toJson(response.getBody()));
                 currentSession.setLastOp(gson.toJson(response.getBody()));
@@ -276,14 +279,14 @@ public class RestClient {
     private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
         String start = "2021-05-17 00:16:00";
         String end = "2021-05-17 00:17:52";
-        DateInterval dateInterval = new DateInterval(start,end);
+        DateInterval dateInterval = new DateInterval(start, end);
         HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
         try {
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(LEDGER_OF_GLOBAL_TRANSACTIONS_URL, port), HttpMethod.POST, request, Ledger.class);
 
-            for (DecidedOP t : Objects.requireNonNull(response.getBody()).getTransactions()) {
+            for (ValidTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
                 System.out.println(gson.toJson(t));
             }
         } catch (Exception e) {
@@ -294,16 +297,16 @@ public class RestClient {
     private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         String start = "2021-05-17 00:16:00";
         String end = "2021-05-17 00:17:52";
-        DateInterval dateInterval = new DateInterval(start,end);
+        DateInterval dateInterval = new DateInterval(start, end);
         HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
         try {
             if (currentSession == null)
                 setSession(in);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS_URL, port, currentSession.getUsername()), HttpMethod.POST, request, Ledger.class);
+                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, Ledger.class);
 
-            for (DecidedOP t : Objects.requireNonNull(response.getBody()).getTransactions())
+            for (ValidTransaction t : Objects.requireNonNull(response.getBody()).getTransactions())
                 System.out.println(gson.toJson(t));
 
         } catch (Exception e) {
@@ -313,18 +316,18 @@ public class RestClient {
 
     private static void verifyOp(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
-            if(currentSession != null && !currentSession.getLastOp().equals("")) {
+            if (currentSession != null && !currentSession.getLastOp().equals("")) {
+                //TODO: Use ID for verification
                 HttpEntity<String> request = new HttpEntity<>(currentSession.getLastOp());
                 ResponseEntity<SignedTransaction> response
                         = new RestTemplate(requestFactory).exchange(
-                        String.format(VERIFY_OPERATION, port) , HttpMethod.POST, request, SignedTransaction.class);
+                        String.format(VERIFY_OPERATION, port), HttpMethod.POST, request, SignedTransaction.class);
 
                 SignedTransaction t = response.getBody();
-                if(t != null)
+                if (t != null)
                     System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
                 else
                     System.out.println("No operation returned");
-
 
 
             }
@@ -394,9 +397,13 @@ public class RestClient {
             return hashAlgorithm;
         }
 
-        public String getNonce() { return nonce; }
+        public String getNonce() {
+            return nonce;
+        }
 
-        public void setNonce(String nonce) { this.nonce = nonce; }
+        public void setNonce(String nonce) {
+            this.nonce = nonce;
+        }
 
         public String getLastOp() {
             return lastOp;

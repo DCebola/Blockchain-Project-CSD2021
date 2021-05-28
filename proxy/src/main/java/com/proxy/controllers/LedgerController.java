@@ -32,32 +32,20 @@ public class LedgerController implements CommandLineRunner {
 
 
     @PostMapping("/nonce/{who}")
-    public String getNonce(@PathVariable String who, @RequestBody SignedBody<String> signedBody) {
+    public String getNonce(@PathVariable String who, @RequestBody SignedBody<String> body) {
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutput objOut = new ObjectOutputStream(byteOut);
-            objOut.writeObject(LedgerRequestType.GET_NONCE);
-            objOut.writeObject(who);
-            objOut.writeObject(signedBody.getSignature());
-            objOut.flush();
-            byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
-            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createGetNonceRequest(who, body), UNORDERED_REQUEST);
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
-            byte[] hash = (byte[]) objIn.readObject();
-            boolean res = objIn.readBoolean();
-            String nonce = (String) objIn.readObject();
-            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(res).concat(nonce).getBytes());
-            if (MessageDigest.isEqual(msgToBeVerified, hash)) {
-                if (!res) {
-                    logger.info("BAD REQUEST");
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists.");
-                } else {
-                    logger.info("User {} current nonce: {}", who, nonce);
-                    return nonce;
-                }
-            } else
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message was Tampered");
+            objIn.readObject(); //Hash
+            if (!objIn.readBoolean()) {
+                logger.info("BAD REQUEST");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Key already registered.");
+            } else {
+                String nonce = (String) objIn.readObject();
+                logger.info("Key {} current nonce: {}", who, nonce);
+                return nonce;
+            }
         } catch (IOException | ExecutionException | InterruptedException | ClassNotFoundException e) {
             logger.error("Exception in obtainCoins. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -66,127 +54,74 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @PostMapping("/register/{who}")
-    public String register(@PathVariable String who, @RequestBody RegisterUserMsgBody body) {
+    public String register(@PathVariable String who, @RequestBody RegisterKeyMsgBody body) {
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutput objOut = new ObjectOutputStream(byteOut);
-            objOut.writeObject(LedgerRequestType.REGISTER_USER);
-            objOut.writeObject(who);
-            objOut.writeObject(body.getSignatureAlgorithm());
-            objOut.writeObject(body.getPublicKey());
-            objOut.writeObject(body.getPublicKeyAlgorithm());
-            objOut.writeObject(body.getHashAlgorithm());
-            objOut.flush();
-            byteOut.flush();
-            OpToVerify opToCommit = dispatchAsyncRequest(byteOut.toByteArray(), ORDERED_REQUEST);
-            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToCommit.getResponse()));
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createRegisterRequest(who, body), ORDERED_REQUEST);
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
-            boolean res = objIn.readBoolean();
-            String nonce = (String) objIn.readObject();
-            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(res).concat(nonce).getBytes());
-            if (MessageDigest.isEqual(msgToBeVerified, hash)) {
-                if (!res) {
-                    logger.info("BAD REQUEST");
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bad request");
-                } else {
-                    logger.info("OK. User {} registered successfully. Initial nonce {}", who, nonce);
-                    return nonce;
+            if (!objIn.readBoolean()) {
+                logger.info("BAD REQUEST");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bad request");
+            } else {
+                Wallet wallet = (Wallet) objIn.readObject();
+                Commit<Wallet> commit = new Commit<>(wallet, base64.encodeAsString(hash), quorumResponse.getReplicas());
+                quorumResponse = commit(commit, LedgerRequestType.COMMIT_WALLET);
+                objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+                objIn.readInt();
+                objIn.readObject(); //Hash
+                if (!objIn.readBoolean()) {
+                    logger.info("Found tampered request!");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tampered request.");
                 }
-            } else
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message was Tampered");
+                logger.info("OK. Key {} registered successfully.", who);
+                return (String) objIn.readObject(); //Nonce
+            }
         } catch (IOException | InterruptedException | ExecutionException | ClassNotFoundException e) {
-            logger.error("Exception in registerUser. Cause: {}", e.getMessage());
+            logger.error("Exception in register. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
+
     @PostMapping("/{who}/obtainCoins")
-    public DecidedOP<Double> obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
+    public ValidTransaction obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutput objOut = new ObjectOutputStream(byteOut);
-            objOut.writeObject(LedgerRequestType.OBTAIN_COINS);
-            objOut.writeObject(who);
-            objOut.writeDouble(signedBody.getContent());
-            objOut.writeObject(signedBody.getDate());
-            objOut.writeObject(signedBody.getSignature());
-            objOut.flush();
-            byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), ORDERED_REQUEST);
-            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
-            List<Integer> replicas = opToVerify.getReplicas();
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createObtainCoinsRequest(who, signedBody), ORDERED_REQUEST);
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
-            SignedTransaction signedTransaction = (SignedTransaction) objIn.readObject();
-            boolean result = objIn.readBoolean();
-            double coins = objIn.readDouble();
-            String date = (String) objIn.readObject();
-            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(Double.toString(coins)).concat(date).getBytes());
-            if (MessageDigest.isEqual(hash, msgToBeVerified)) {
-                if (!result) {
-                    logger.info("BAD REQUEST");
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD request");
-                } else {
-                    DecidedOP<Double> resultToRespond = new DecidedOP<>(signedTransaction, new String(base64.encode(hash)), replicas);
-                    byteOut = new ByteArrayOutputStream();
-                    objOut = new ObjectOutputStream(byteOut);
-                    objOut.writeObject(LedgerRequestType.COMMIT);
-                    objOut.writeObject(resultToRespond);
-                    objOut.flush();
-                    byteOut.flush();
-                    logger.info("OK. {} obtained {} coins.", who, coins);
-                    asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), null, ORDERED_REQUEST);
-                    return resultToRespond;
-                }
-            } else
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message tampered");
-
+            if (!objIn.readBoolean()) {
+                logger.info("BAD REQUEST");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD request");
+            } else {
+                ValidTransaction validTransaction = commitTransaction((SignedTransaction) objIn.readObject(), hash, quorumResponse);
+                logger.info("OK. {} obtained {} coins.", who, validTransaction.getAmount());
+                return validTransaction;
+            }
         } catch (IOException | ExecutionException | InterruptedException | ClassNotFoundException e) {
             logger.error("Exception in obtainCoins. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
+
     @PostMapping("/transferMoney")
     @ResponseStatus(HttpStatus.OK)
-    public DecidedOP<Void> transferAmount(@RequestBody SignedBody<Transaction> signedBody) {
-
+    public ValidTransaction transferAmount(@RequestBody SignedBody<Transaction> signedBody) {
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutput objOut = new ObjectOutputStream(byteOut);
-            objOut.writeObject(LedgerRequestType.TRANSFER_MONEY);
-            Transaction transaction = signedBody.getContent();
-            objOut.writeObject(transaction);
-            objOut.writeObject(signedBody.getSignature());
-            objOut.flush();
-            byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), ORDERED_REQUEST);
-            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
-            List<Integer> replicas = opToVerify.getReplicas();
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createTransferMoneyRequest(signedBody), ORDERED_REQUEST);
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
-            SignedTransaction signedTransaction = (SignedTransaction) objIn.readObject();
-            boolean result = objIn.readBoolean();
-            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).getBytes());
-            if (MessageDigest.isEqual(msgToBeVerified, hash)) {
-                if (!result) {
-                    logger.info("BAD REQUEST");
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-                } else {
-                    DecidedOP<Void> resultToRespond = new DecidedOP<>(signedTransaction, new String(base64.encode(hash)), replicas);
-                    byteOut = new ByteArrayOutputStream();
-                    objOut = new ObjectOutputStream(byteOut);
-                    objOut.writeObject(LedgerRequestType.COMMIT);
-                    objOut.writeObject(resultToRespond);
-                    objOut.flush();
-                    byteOut.flush();
-                    asynchServiceProxy.invokeAsynchRequest(byteOut.toByteArray(), null, ORDERED_REQUEST);
-                    logger.info("OK. {} transferred {} coins to {}.", transaction.getOrigin(), transaction.getAmount(), transaction.getDestination());
-                    return resultToRespond;
-                }
-            } else
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message tampered");
+            if (!objIn.readBoolean()) {
+                logger.info("BAD REQUEST");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+            } else {
+                ValidTransaction validTransaction = commitTransaction((SignedTransaction) objIn.readObject(), hash, quorumResponse);
+                logger.info("OK. {} transferred {} coins to {}.", validTransaction.getOrigin(), validTransaction.getAmount(), validTransaction.getDestination());
+                return validTransaction;
+            }
         } catch (IOException | InterruptedException | ExecutionException | ClassNotFoundException e) {
             logger.error("Exception in transferAmount. Cause: {}", e.getMessage());
             e.printStackTrace();
@@ -194,34 +129,22 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
+
     @GetMapping("/{who}/balance")
     public double currentAmount(@PathVariable String who) {
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutput objOut = new ObjectOutputStream(byteOut);
-            objOut.writeObject(LedgerRequestType.CURRENT_AMOUNT);
-            objOut.writeObject(who);
-            objOut.flush();
-            byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
-            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createCurrentAmountRequest(who), UNORDERED_REQUEST);
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
-            byte[] hash = (byte[]) objIn.readObject();
-            boolean result = objIn.readBoolean();
-            double balance = objIn.readDouble();
-            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(Double.toString(balance)).getBytes());
-
-            if (MessageDigest.isEqual(hash, msgToBeVerified)) {
-                if (!result) {
-                    logger.info("BAD REQUEST");
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
-                } else {
-                    logger.info("OK. User {} has the {} coins.", who, balance);
-                    return balance;
-                }
-            } else
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message tampered");
-
+            objIn.readObject(); // Hash
+            if (!objIn.readBoolean()) {
+                logger.info("BAD REQUEST");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
+            } else {
+                double balance = objIn.readDouble();
+                logger.info("OK. {} coins associated with key {}.", balance, who);
+                return balance;
+            }
         } catch (IOException | InterruptedException | ExecutionException | ClassNotFoundException e) {
             logger.error("Exception in currentAmount. Cause: {}", e.getMessage());
             e.printStackTrace();
@@ -229,29 +152,18 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
+
     @SuppressWarnings("unchecked")
     @PostMapping("/ledger")
     public Ledger ledgerOfGlobalTransactions(@RequestBody DateInterval dates) {
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutput objOut = new ObjectOutputStream(byteOut);
-            objOut.writeObject(LedgerRequestType.GLOBAL_LEDGER);
-            objOut.writeObject(dates);
-            objOut.flush();
-            byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
-            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createGlobalLedgerRequest(dates), UNORDERED_REQUEST);
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
-            byte[] hash = (byte[]) objIn.readObject();
-            List<DecidedOP> global_ledger = (List<DecidedOP>) objIn.readObject();
-            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(global_ledger)).getBytes());
-            if (MessageDigest.isEqual(hash, msgToBeVerified)) {
-                logger.info("OK. Global ledger with length {}.", global_ledger.size());
-                return new Ledger(global_ledger);
-            } else {
-                logger.error("Exception in ledgerOfGlobalTransactions. Cause: {}", "Message tampered");
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
-            }
+            objIn.readObject(); // Hash
+            List<Commit> global_ledger = (List<Commit>) objIn.readObject();
+            logger.info("OK. Global ledger with length {}.", global_ledger.size());
+            return new Ledger(global_ledger);
         } catch (IOException | ClassNotFoundException | InterruptedException | ExecutionException e) {
             logger.error("Exception in ledgerOfGlobalTransactions. Cause: {}", e.getMessage());
             e.printStackTrace();
@@ -263,31 +175,19 @@ public class LedgerController implements CommandLineRunner {
     @PostMapping("/{who}/ledger")
     public Ledger ledgerOfClientTransactions(@PathVariable String who, @RequestBody DateInterval dateInterval) {
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutput objOut = new ObjectOutputStream(byteOut);
-            objOut.writeObject(LedgerRequestType.CLIENT_LEDGER);
-            objOut.writeObject(who);
-            objOut.writeObject(dateInterval);
-            objOut.flush();
-            byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
-            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
+
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createClientLedgerRequest(who, dateInterval), UNORDERED_REQUEST);
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
-            byte[] hash = (byte[]) objIn.readObject();
+            objIn.readObject(); // Hash
             boolean result = objIn.readBoolean();
-            List<DecidedOP> user_ledger = (List<DecidedOP>) objIn.readObject();
-            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(gson.toJson(user_ledger)).getBytes());
-            if (MessageDigest.isEqual(hash, msgToBeVerified)) {
-                if (!result) {
-                    logger.info("BAD REQUEST");
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bad request");
-                } else {
-                    logger.info("OK. User {} ledger found with length {}.", who, user_ledger.size());
-                    return new Ledger(user_ledger);
-                }
+            List<Commit> client_ledger = (List<Commit>) objIn.readObject();
+            if (!result) {
+                logger.info("BAD REQUEST");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bad request");
             } else {
-                logger.error("Exception in ledgerOfClientTransactions. Cause: {}", "Message tampered");
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+                logger.info("OK. Found ledger with length {} associated to the key {}.", client_ledger.size(), who);
+                return new Ledger(client_ledger);
             }
         } catch (IOException | ClassNotFoundException | InterruptedException | ExecutionException e) {
             logger.error("IO exception in ledgerOfClientTransactions. Cause: {}", e.getMessage());
@@ -296,34 +196,25 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
+
     @PostMapping("/verifyOp")
     public SignedTransaction verifyOp(@RequestBody String operation) {
+        //TODO: Use ID for verification
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutput objOut = new ObjectOutputStream(byteOut);
-            objOut.writeObject(LedgerRequestType.VERIFY_OP);
-            objOut.writeObject(operation);
-            objOut.flush();
-            byteOut.flush();
-            OpToVerify opToVerify = dispatchAsyncRequest(byteOut.toByteArray(), UNORDERED_REQUEST);
-            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(opToVerify.getResponse()));
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createVerifyOpRequest(operation), UNORDERED_REQUEST);
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
             boolean result = objIn.readBoolean();
             SignedTransaction t = (SignedTransaction) objIn.readObject();
-            byte[] msgToBeVerified = TOMUtil.computeHash(Boolean.toString(result).concat(gson.toJson(t)).getBytes());
-            if (MessageDigest.isEqual(hash, msgToBeVerified)) {
-                if (!result) {
-                    logger.info("BAD REQUEST");
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
-                } else {
-                    logger.info("Found operation associated to {}: {}", operation, gson.toJson(t));
-                    return t;
-                }
+            if (!result) {
+                logger.info("BAD REQUEST");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
             } else {
-                logger.error("Exception in verifyOp. Cause: {}", "Message tampered");
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+                logger.info("Found operation associated to {}: {}", operation, gson.toJson(t));
+                return t;
             }
+
         } catch (IOException | ClassNotFoundException | InterruptedException | ExecutionException e) {
             logger.error("IO exception in verifyOp. Cause: {}", e.getMessage());
             e.printStackTrace();
@@ -348,13 +239,6 @@ public class LedgerController implements CommandLineRunner {
 
     }
 
-    private OpToVerify dispatchAsyncRequest(byte[] op, TOMMessageType messageType) throws IOException, ExecutionException, InterruptedException {
-        CompletableFuture<OpToVerify> reply = new CompletableFuture<>();
-        int quorumSize = getQuorumSize();
-        asynchServiceProxy.invokeAsynchRequest(op, new ReplyListenerImp<>(reply, quorumSize), messageType);
-        return reply.get();
-    }
-
     @Override
     public void run(String... args) {
         this.logger = LoggerFactory.getLogger("LedgerClient");
@@ -363,7 +247,7 @@ public class LedgerController implements CommandLineRunner {
                 int id = Integer.parseInt(args[0]);
                 logger.info("Launching client with uuid: {}", id);
                 this.asynchServiceProxy = new AsynchServiceProxy(id);
-                this.base64 = new Base64();
+                this.base64 = new Base64(true);
                 this.gson = new Gson();
             } else logger.error("Usage: LedgerController <client ID>");
         } catch (Exception e) {
@@ -373,6 +257,127 @@ public class LedgerController implements CommandLineRunner {
 
     private int getQuorumSize() {
         return asynchServiceProxy.getViewManager().getCurrentViewN() - asynchServiceProxy.getViewManager().getCurrentViewF();
+    }
+
+    private QuorumResponse dispatchAsyncRequest(byte[] request, TOMMessageType messageType) throws IOException, ExecutionException, InterruptedException {
+        CompletableFuture<QuorumResponse> reply = new CompletableFuture<>();
+        int quorumSize = getQuorumSize();
+        asynchServiceProxy.invokeAsynchRequest(request, new ReplyListenerImp<>(reply, quorumSize), messageType);
+        return reply.get();
+    }
+
+    private QuorumResponse commit(Commit<?> op, LedgerRequestType requestType) throws IOException, ExecutionException, InterruptedException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(requestType);
+        objOut.writeObject(op);
+        objOut.flush();
+        byteOut.flush();
+        return dispatchAsyncRequest(byteOut.toByteArray(), ORDERED_REQUEST);
+    }
+
+    private ValidTransaction commitTransaction(SignedTransaction signedTransaction, byte[] hash, QuorumResponse quorumResponse) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+        Commit<SignedTransaction> commit = new Commit<>(signedTransaction, base64.encodeAsString(hash), quorumResponse.getReplicas());
+        quorumResponse = commit(commit, LedgerRequestType.COMMIT_TRANSACTION);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readInt();
+        objIn.readObject(); //Hash
+        if (!objIn.readBoolean()) {
+            logger.info("Found tampered request!");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tampered request.");
+        }
+        return (ValidTransaction) objIn.readObject();
+    }
+
+    private byte[] createGetNonceRequest(String who, SignedBody<String> body) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.GET_NONCE);
+        objOut.writeObject(who);
+        objOut.writeObject(body.getSignature());
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createRegisterRequest(String key, RegisterKeyMsgBody body) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.REGISTER_KEY);
+        objOut.writeObject(key);
+        objOut.writeObject(body.getSignatureAlgorithm());
+        objOut.writeObject(body.getPublicKeyAlgorithm());
+        objOut.writeObject(body.getHashAlgorithm());
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createObtainCoinsRequest(String who, SignedBody<Double> signedBody) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.OBTAIN_COINS);
+        objOut.writeObject(who);
+        objOut.writeDouble(signedBody.getContent());
+        objOut.writeObject(signedBody.getDate());
+        objOut.writeObject(signedBody.getSignature());
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createTransferMoneyRequest(SignedBody<Transaction> signedBody) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.TRANSFER_MONEY);
+        Transaction transaction = signedBody.getContent();
+        objOut.writeObject(transaction);
+        objOut.writeObject(signedBody.getSignature());
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createCurrentAmountRequest(String who) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.CURRENT_AMOUNT);
+        objOut.writeObject(who);
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createGlobalLedgerRequest(DateInterval dates) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.GLOBAL_LEDGER);
+        objOut.writeObject(dates);
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createClientLedgerRequest(String who, DateInterval dateInterval) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.CLIENT_LEDGER);
+        objOut.writeObject(who);
+        objOut.writeObject(dateInterval);
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+
+    private byte[] createVerifyOpRequest(String operation) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.VERIFY_OP);
+        objOut.writeObject(operation);
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
     }
 
 }
