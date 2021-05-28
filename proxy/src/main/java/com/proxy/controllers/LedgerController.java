@@ -2,9 +2,8 @@ package com.proxy.controllers;
 
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessageType;
-import bftsmart.tom.util.TOMUtil;
 import com.google.gson.Gson;
-import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.codec.binary.Base32;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -16,7 +15,6 @@ import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
 import static bftsmart.tom.core.messages.TOMMessageType.UNORDERED_REQUEST;
 
 import java.io.*;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -27,7 +25,7 @@ public class LedgerController implements CommandLineRunner {
 
     private AsynchServiceProxy asynchServiceProxy;
     private Logger logger;
-    private Base64 base64;
+    private Base32 base32;
     private Gson gson;
 
 
@@ -65,7 +63,7 @@ public class LedgerController implements CommandLineRunner {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bad request");
             } else {
                 Wallet wallet = (Wallet) objIn.readObject();
-                Commit<Wallet> commit = new Commit<>(wallet, base64.encodeAsString(hash), quorumResponse.getReplicas());
+                Commit<Wallet> commit = new Commit<>(wallet, base32.encodeAsString(hash), quorumResponse.getReplicas());
                 quorumResponse = commit(commit, LedgerRequestType.COMMIT_WALLET);
                 objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
                 objIn.readInt();
@@ -247,7 +245,7 @@ public class LedgerController implements CommandLineRunner {
                 int id = Integer.parseInt(args[0]);
                 logger.info("Launching client with uuid: {}", id);
                 this.asynchServiceProxy = new AsynchServiceProxy(id);
-                this.base64 = new Base64(true);
+                this.base32 = new Base32();
                 this.gson = new Gson();
             } else logger.error("Usage: LedgerController <client ID>");
         } catch (Exception e) {
@@ -277,7 +275,7 @@ public class LedgerController implements CommandLineRunner {
     }
 
     private ValidTransaction commitTransaction(SignedTransaction signedTransaction, byte[] hash, QuorumResponse quorumResponse) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
-        Commit<SignedTransaction> commit = new Commit<>(signedTransaction, base64.encodeAsString(hash), quorumResponse.getReplicas());
+        Commit<SignedTransaction> commit = new Commit<>(signedTransaction, base32.encodeAsString(hash), quorumResponse.getReplicas());
         quorumResponse = commit(commit, LedgerRequestType.COMMIT_TRANSACTION);
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
         objIn.readInt();
@@ -319,8 +317,8 @@ public class LedgerController implements CommandLineRunner {
         objOut.writeObject(LedgerRequestType.OBTAIN_COINS);
         objOut.writeObject(who);
         objOut.writeDouble(signedBody.getContent());
-        objOut.writeObject(signedBody.getDate());
         objOut.writeObject(signedBody.getSignature());
+        objOut.writeObject(signedBody.getDate());
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();

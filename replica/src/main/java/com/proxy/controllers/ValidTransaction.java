@@ -1,4 +1,5 @@
 package com.proxy.controllers;
+
 import java.util.List;
 
 public class ValidTransaction extends SignedTransaction {
@@ -9,7 +10,7 @@ public class ValidTransaction extends SignedTransaction {
     private final String id;
 
     public ValidTransaction(String origin, String destination, double amount, String signature, String date, String hash, List<Integer> replicas, String id) {
-        super(origin, destination, amount, date, signature);
+        super(origin, destination, amount, signature, date);
         this.hash = hash;
         this.replicas = replicas;
         this.id = id;

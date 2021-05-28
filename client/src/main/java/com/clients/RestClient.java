@@ -1,7 +1,7 @@
 package com.clients;
 
 import com.google.gson.Gson;
-import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.codec.binary.Base32;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
@@ -53,7 +53,7 @@ public class RestClient {
 
 
     private static Gson gson;
-    private static Base64 base64;
+    private static Base32 base32;
     private static Session currentSession;
     private static String port = "9001";
     private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(DATE_FORMATTER);
@@ -64,7 +64,7 @@ public class RestClient {
 
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
-        base64 = new Base64(true);
+        base32 = new Base32();
         SSLContextBuilder builder = new SSLContextBuilder();
         KeyStore ksTrust = KeyStore.getInstance(KeyStore.getDefaultType());
         ksTrust.load(new FileInputStream("src/main/resources/truststore.jks"), "truststorePass".toCharArray());
@@ -175,7 +175,7 @@ public class RestClient {
                     new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
             ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(REGISTER_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
+                    String.format(REGISTER_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
             System.out.println(response.getStatusCodeValue() + "\n");
             String nonce = response.getBody();
             System.out.println("Nonce: " + nonce);
@@ -187,14 +187,14 @@ public class RestClient {
 
     private static void requestNonce(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
         setSession(in);
-        String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(base64.encodeAsString(currentSession.getPublicKey().getEncoded())));
+        String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(base32.encodeAsString(currentSession.getPublicKey().getEncoded())));
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
         SignedBody<String> signedBody = new SignedBody<>("", sigBytes, null);
         HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
         ResponseEntity<String> response
                 = new RestTemplate(requestFactory).exchange(
-                String.format(REQUEST_NONCE_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
+                String.format(REQUEST_NONCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
         String nonce = response.getBody();
         System.out.println("Nonce: " + nonce);
         currentSession.setNonce(nonce);
@@ -205,7 +205,7 @@ public class RestClient {
         try {
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, Double.class);
+                    String.format(BALANCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, Double.class);
 
             if (response.getStatusCode().is2xxSuccessful())
                 System.out.println("Balance: " + response.getBody());
@@ -229,7 +229,7 @@ public class RestClient {
 
             ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_COINS_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, ValidTransaction.class);
+                    String.format(OBTAIN_COINS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, ValidTransaction.class);
             System.out.println(response.getStatusCode() + "\n" + response.getBody());
             if (response.getStatusCode().is2xxSuccessful()) {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
@@ -253,7 +253,7 @@ public class RestClient {
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
 
-            Transaction t = new Transaction(base64.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
+            Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
             String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t).concat(currentSession.getNonce()).concat(currentDate));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
@@ -304,7 +304,7 @@ public class RestClient {
                 setSession(in);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS_URL, port, base64.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, Ledger.class);
+                    String.format(LEDGER_OF_CLIENT_TRANSACTIONS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, Ledger.class);
 
             for (ValidTransaction t : Objects.requireNonNull(response.getBody()).getTransactions())
                 System.out.println(gson.toJson(t));

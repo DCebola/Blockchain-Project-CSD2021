@@ -1,6 +1,8 @@
 package com.proxy.controllers;
 
-public class Wallet {
+import java.io.Serializable;
+
+public class Wallet implements Serializable {
     private static final long serialVersionUID = 152968238267857690L;
 
     private final String publicKey;

@@ -1,9 +1,6 @@
 package com.clients;
 
-
-import java.io.Serializable;
 import java.util.List;
-
 
 public class ValidTransaction extends SignedTransaction {
     private static final long serialVersionUID = 152968899267757729L;
