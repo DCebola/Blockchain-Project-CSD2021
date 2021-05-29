@@ -52,7 +52,7 @@ public class ReplyListenerImp<T> implements ReplyListener {
                 if (replicas.size() < quorumSize)
                     replicas.add(id);
                 if (replicas.size() == quorumSize) {
-                    OpToVerify op = new OpToVerify(tomMessage.getContent(), replicas);
+                    QuorumResponse op = new QuorumResponse(tomMessage.getContent(), replicas);
                     reply.complete((T) op);
                 }
 

@@ -5,18 +5,18 @@ import java.util.List;
 
 public class Ledger implements Serializable {
 
-    private final List<DecidedOP> transactions;
+    private final List<Commit> transactions;
     private static final long serialVersionUID = 5529685098267757690L;
 
     public Ledger() {
         this.transactions = null;
     }
 
-    public Ledger(List<DecidedOP> transactions) {
+    public Ledger(List<Commit> transactions) {
         this.transactions = transactions;
     }
 
-    public List<DecidedOP> getTransactions() {
+    public List<Commit> getTransactions() {
         return transactions;
     }
 
