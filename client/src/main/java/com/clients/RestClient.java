@@ -193,7 +193,7 @@ public class RestClient {
         }
     }
 
-    private static void requestNonce(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
+    private static void requestNonce(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             setSession(in);
             String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(base32.encodeAsString(currentSession.getPublicKey().getEncoded())));

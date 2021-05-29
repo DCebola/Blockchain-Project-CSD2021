@@ -220,9 +220,31 @@ public class LedgerController implements CommandLineRunner {
 
     }
 
-    @GetMapping("/{who}/minerate")
-    public double minerateMoney(@PathVariable String who) {
-        return 0.0f;
+    @GetMapping("/lastBlock")
+    public Block obtainLastMinedBlock() {
+        return new Block();
+    }
+
+    @GetMapping("/pendingTransactions/{numPending}")
+    public Block pickNotMineratedTransactions(@PathVariable int numPending) {
+        return new Block();
+    }
+
+    @GetMapping("/{who}/mine")
+    public Block sendMinedBlock(@RequestBody SignedBody signedBody) {
+        return new Block();
+    }
+
+    @PostMapping("/smartTransfer")
+    @ResponseStatus(HttpStatus.OK)
+    public void transferMoneyWithSmartContract(@RequestBody SignedBody signedBody) {
+
+    }
+
+    @PostMapping("/privacyTransfer")
+    @ResponseStatus(HttpStatus.OK)
+    public void transferMoneyWithPrivacy(@RequestBody SignedBody signedBody) {
+
     }
 
     @PostMapping("/{who}/installSmartContract")
@@ -230,11 +252,6 @@ public class LedgerController implements CommandLineRunner {
     public void installSmartContract(@PathVariable String who, @RequestBody SmartContract smartContract) {
     }
 
-    @PostMapping("/smartTransfer")
-    @ResponseStatus(HttpStatus.OK)
-    public void transferMoneyWithSmartContract(@RequestBody SmartTransferArgs args) {
-
-    }
 
     @Override
     public void run(String... args) {
