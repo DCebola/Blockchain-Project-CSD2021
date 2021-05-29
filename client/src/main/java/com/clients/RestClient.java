@@ -22,6 +22,9 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
 
@@ -29,6 +32,7 @@ import java.util.Scanner;
 public class RestClient {
 
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
+    private static final String GENESIS_DATE = "2021-01-01 01:01:01";
 
     private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
     private static final String OBTAIN_COINS_URL = "https://127.0.0.1:%s/%s/obtainCoins";
@@ -37,7 +41,7 @@ public class RestClient {
     private static final String LEDGER_OF_GLOBAL_TRANSACTIONS_URL = "https://127.0.0.1:%s/ledger";
     private static final String LEDGER_OF_CLIENT_TRANSACTIONS_URL = "https://127.0.0.1:%s/%s/ledger";
     private static final String REQUEST_NONCE_URL = "https://127.0.0.1:%s/nonce/%s";
-    private static final String VERIFY_OPERATION = "https://127.0.0.1:%s/verifyOp";
+    private static final String VERIFY_OPERATION = "https://127.0.0.1:%s/verify/%s";
 
     private static final int REGISTER = 0;
     private static final int REQUEST_NONCE = 1;
@@ -49,14 +53,17 @@ public class RestClient {
     private static final int VERIFY_OP = 7;
     private static final int QUIT = 8;
 
-    private static final String HASH_ALGORITHM = "SHA-256";
+    private static final int ALL = 0;
+    private static final int UP_TO = 1;
+    private static final int IN_BETWEEN = 2;
 
+    private static final String HASH_ALGORITHM = "SHA-256";
 
     private static Gson gson;
     private static Base32 base32;
     private static Session currentSession;
     private static String port = "9001";
-    private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(DATE_FORMATTER);
+    private static DateTimeFormatter dateTimeFormatter;
 
     public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, SignatureException, InvalidKeyException {
         if (args.length > 0)
@@ -65,6 +72,7 @@ public class RestClient {
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         base32 = new Base32();
+        dateTimeFormatter = DateTimeFormatter.ofPattern(DATE_FORMATTER);
         SSLContextBuilder builder = new SSLContextBuilder();
         KeyStore ksTrust = KeyStore.getInstance(KeyStore.getDefaultType());
         ksTrust.load(new FileInputStream("src/main/resources/truststore.jks"), "truststorePass".toCharArray());
@@ -104,16 +112,16 @@ public class RestClient {
                     transferMoney(requestFactory, in);
                     break;
                 case CURRENT_AMOUNT:
-                    balance(requestFactory);
+                    balance(requestFactory, in);
                     break;
                 case GLOBAL_LEDGER:
-                    ledgerOfGlobalTransactions(requestFactory);
+                    ledgerOfGlobalTransactions(requestFactory, in);
                     break;
                 case CLIENT_LEDGER:
                     ledgerOfClientTransactions(requestFactory, in);
                     break;
                 case VERIFY_OP:
-                    verifyOp(requestFactory);
+                    verify(requestFactory, in);
                     break;
                 case QUIT:
                     in.close();
@@ -150,18 +158,18 @@ public class RestClient {
 
     private static void printOps() {
         System.out.println("0 - Register");
-        System.out.println("1 - Request Nonce");
+        System.out.println("1 - Change session");
         System.out.println("2 - Obtain Coins");
         System.out.println("3 - Transfer Money");
         System.out.println("4 - Current Amount");
         System.out.println("5 - Global Ledger");
         System.out.println("6 - Client Ledger");
-        System.out.println("7 - Verify op");
+        System.out.println("7 - Verify transaction");
         System.out.println("8 - Quit");
         System.out.print("> ");
     }
 
-    private static KeyStore getKeyStore(String user, char[] password) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, UnrecoverableKeyException {
+    private static KeyStore getKeyStore(String user, char[] password) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException {
         FileInputStream is = new FileInputStream("src/main/resources/".concat(user).concat("_keystore.jks"));
         KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
         keystore.load(is, password);
@@ -186,23 +194,29 @@ public class RestClient {
     }
 
     private static void requestNonce(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
-        setSession(in);
-        String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(base32.encodeAsString(currentSession.getPublicKey().getEncoded())));
-        byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+        try {
+            setSession(in);
+            String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(base32.encodeAsString(currentSession.getPublicKey().getEncoded())));
+            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-        SignedBody<String> signedBody = new SignedBody<>("", sigBytes, null);
-        HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
-        ResponseEntity<String> response
-                = new RestTemplate(requestFactory).exchange(
-                String.format(REQUEST_NONCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
-        String nonce = response.getBody();
-        System.out.println("Nonce: " + nonce);
-        currentSession.setNonce(nonce);
+            SignedBody<String> signedBody = new SignedBody<>("", sigBytes, null);
+            HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
+            ResponseEntity<String> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(REQUEST_NONCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
+            String nonce = response.getBody();
+            System.out.println("Nonce: " + nonce);
+            currentSession.setNonce(nonce);
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
     }
 
 
-    private static void balance(HttpComponentsClientHttpRequestFactory requestFactory) {
+    private static void balance(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            if (currentSession == null)
+                requestNonce(requestFactory, in);
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(BALANCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, Double.class);
@@ -217,8 +231,9 @@ public class RestClient {
 
     private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            if (currentSession == null)
+                requestNonce(requestFactory, in);
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
             String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(currentSession.getNonce()).concat(currentDate));
@@ -230,12 +245,12 @@ public class RestClient {
             ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(OBTAIN_COINS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, ValidTransaction.class);
-            System.out.println(response.getStatusCode() + "\n" + response.getBody());
+            System.out.println(response.getStatusCode());
             if (response.getStatusCode().is2xxSuccessful()) {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
                 System.out.println("New Nonce: " + currentSession.getNonce());
-                System.out.println(gson.toJson(response.getBody()));
-                currentSession.setLastOp(gson.toJson(response.getBody()));
+                System.out.printf("[ %s ]\n", response.getBody());
+                currentSession.saveTransaction(response.getBody());
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -244,8 +259,9 @@ public class RestClient {
 
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
-
         try {
+            if (currentSession == null)
+                requestNonce(requestFactory, in);
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
             System.out.print("Insert destination: ");
             String destination = in.next();
@@ -268,26 +284,24 @@ public class RestClient {
             if (response.getStatusCode().is2xxSuccessful()) {
                 currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
                 System.out.println(currentSession.getNonce());
-                System.out.println(gson.toJson(response.getBody()));
-                currentSession.setLastOp(gson.toJson(response.getBody()));
+                System.out.printf("[ %s ]\n", response.getBody());
+                currentSession.saveTransaction(response.getBody());
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
-    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory) {
-        String start = "2021-05-17 00:16:00";
-        String end = "2021-05-17 00:17:52";
-        DateInterval dateInterval = new DateInterval(start, end);
-        HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
+    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
+            DateInterval dateInterval = getDateInterval(in);
+            HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(LEDGER_OF_GLOBAL_TRANSACTIONS_URL, port), HttpMethod.POST, request, Ledger.class);
 
             for (ValidTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
-                System.out.println(gson.toJson(t));
+                System.out.printf("[ %s ]\n", t);
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -295,46 +309,111 @@ public class RestClient {
     }
 
     private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
-        String start = "2021-05-17 00:16:00";
-        String end = "2021-05-17 00:17:52";
-        DateInterval dateInterval = new DateInterval(start, end);
-        HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
         try {
             if (currentSession == null)
-                setSession(in);
+                requestNonce(requestFactory, in);
+            DateInterval dateInterval = getDateInterval(in);
+            HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(LEDGER_OF_CLIENT_TRANSACTIONS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, Ledger.class);
 
             for (ValidTransaction t : Objects.requireNonNull(response.getBody()).getTransactions())
-                System.out.println(gson.toJson(t));
+                System.out.printf("[ %s ]\n", t);
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
-    private static void verifyOp(HttpComponentsClientHttpRequestFactory requestFactory) {
-        try {
-            if (currentSession != null && !currentSession.getLastOp().equals("")) {
-                //TODO: Use ID for verification
-                HttpEntity<String> request = new HttpEntity<>(currentSession.getLastOp());
-                ResponseEntity<SignedTransaction> response
-                        = new RestTemplate(requestFactory).exchange(
-                        String.format(VERIFY_OPERATION, port), HttpMethod.POST, request, SignedTransaction.class);
 
-                SignedTransaction t = response.getBody();
-                if (t != null)
-                    System.out.println(t.getOrigin() + " " + t.getDestination() + " " + t.getAmount() + " " + t.getSignature());
-                else
-                    System.out.println("No operation returned");
+    private static DateInterval getDateInterval(Scanner in) {
+        System.out.println("Select the range option:");
+        System.out.println("0 - All transactions.");
+        System.out.println("1 - All transactions before [date].");
+        System.out.println("2 - All transactions in [date-interval].");
+        System.out.print("> ");
+        int rangeOption = in.nextInt();
+        in.nextLine();
+        String start = GENESIS_DATE;
+        String end = GENESIS_DATE;
+        switch (rangeOption) {
+            case ALL:
+                end = LocalDateTime.now().format(dateTimeFormatter);
+                break;
+            case UP_TO:
+                System.out.printf("Specify the END DATE in the following format [%s]\nDate: ", DATE_FORMATTER);
+                end = parseDate(in);
+                break;
+            case IN_BETWEEN:
+                System.out.printf("Specify the START DATE in the following format [%s]\nDate: ", DATE_FORMATTER);
+                start = parseDate(in);
+                System.out.printf("Specify the END DATE in the following format [%s]\nDate: ", DATE_FORMATTER);
+                end = parseDate(in);
+                break;
+        }
+        return new DateInterval(start, end);
+    }
 
-
+    private static String parseDate(Scanner in) {
+        String date;
+        while (true) {
+            try {
+                date = in.nextLine();
+                dateTimeFormatter.parse(date);
+                return date;
+            } catch (DateTimeParseException e) {
+                System.out.printf("Bad date. Use the following format [%s]\n> ", DATE_FORMATTER);
             }
+        }
+    }
+
+
+    private static void verify(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+        try {
+            if (currentSession == null)
+                requestNonce(requestFactory, in);
+            String id = getTransactionId(in);
+            ResponseEntity<ValidTransaction> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(VERIFY_OPERATION, port, id),
+                    HttpMethod.GET, null, ValidTransaction.class);
+            if (response.getStatusCode().is2xxSuccessful()) {
+                System.out.println("Transaction verified.");
+                System.out.println(response.getBody());
+            } else
+                System.out.println("Transaction not found.");
+
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
 
+    }
+
+    private static String getTransactionId(Scanner in) {
+        System.out.println("Select transaction to verify:");
+        List<ValidTransaction> lTransactions = currentSession.getTransactions();
+        int i = 0;
+        for (ValidTransaction t : lTransactions) {
+            System.out.printf("%d - %s.\n", i, t.getId());
+            ++i;
+        }
+        System.out.printf("%d - Other [ID].\n> ", i);
+        int option;
+        String id = "";
+        while (true) {
+            option = in.nextInt();
+            in.nextLine();
+            if (option == 0 && lTransactions.isEmpty() || !lTransactions.isEmpty() && option == lTransactions.size()) {
+                System.out.print("Specify the ID: ");
+                id = in.next();
+                in.nextLine();
+                return id;
+            } else if (option < lTransactions.size()) {
+                return lTransactions.get(option).getId();
+            }
+            System.out.print("Invalid option.\n> ");
+        }
     }
 
     private static byte[] generateSignature(byte[] msg) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
@@ -358,7 +437,7 @@ public class RestClient {
         private final String username;
         private final char[] password;
         private String nonce;
-        private String lastOp;
+        private List<ValidTransaction> transactions;
 
         public Session(String username, char[] password) throws UnrecoverableKeyException, CertificateException, IOException, KeyStoreException, NoSuchAlgorithmException {
             this.nonce = "";
@@ -370,7 +449,7 @@ public class RestClient {
             this.privateKey = (PrivateKey) keystore.getKey(username, password);
             this.sigAlg = cert.getSigAlgName();
             this.hashAlgorithm = HASH_ALGORITHM;
-            this.lastOp = "";
+            this.transactions = new LinkedList<>();
         }
 
         public PrivateKey getPrivateKey() {
@@ -405,12 +484,12 @@ public class RestClient {
             this.nonce = nonce;
         }
 
-        public String getLastOp() {
-            return lastOp;
+        public List<ValidTransaction> getTransactions() {
+            return transactions;
         }
 
-        public void setLastOp(String lastOp) {
-            this.lastOp = lastOp;
+        public void saveTransaction(ValidTransaction t) {
+            this.transactions.add(t);
         }
 
     }

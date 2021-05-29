@@ -7,18 +7,15 @@ public class ValidTransaction extends SignedTransaction {
 
     private final String hash;
     private final List<Integer> replicas;
-    private final String id;
 
     public ValidTransaction(String origin, String destination, double amount, String signature, String date, String hash, List<Integer> replicas, String id) {
-        super(origin, destination, amount, date, signature);
+        super(origin, destination, amount, signature, date, id);
         this.hash = hash;
         this.replicas = replicas;
-        this.id = id;
     }
 
     public ValidTransaction() {
         super();
-        this.id = null;
         this.hash = null;
         this.replicas = null;
     }
@@ -31,7 +28,17 @@ public class ValidTransaction extends SignedTransaction {
         return replicas;
     }
 
-    public String getId() {
-        return id;
+    @Override
+    public String toString() {
+        return String.format(
+                "ID: %s , Origin: %s , Destination: %s , Amount: %s , Date: %s , Signature: %s , Replicas: %s , Hash: %s",
+                this.getId(),
+                this.getOrigin(),
+                this.getDestination(),
+                this.getAmount(),
+                this.getDate(),
+                this.getSignature(),
+                this.getReplicas(),
+                this.getHash());
     }
 }

@@ -195,21 +195,20 @@ public class LedgerController implements CommandLineRunner {
     }
 
 
-    @PostMapping("/verifyOp")
-    public SignedTransaction verifyOp(@RequestBody String operation) {
-        //TODO: Use ID for verification
+    @GetMapping("/verify/{id}")
+    public ValidTransaction verify(@PathVariable String id) {
         try {
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createVerifyOpRequest(operation), UNORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createVerifyRequest(id), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
             boolean result = objIn.readBoolean();
-            SignedTransaction t = (SignedTransaction) objIn.readObject();
+            ValidTransaction t = (ValidTransaction) objIn.readObject();
             if (!result) {
                 logger.info("BAD REQUEST");
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
             } else {
-                logger.info("Found operation associated to {}: {}", operation, gson.toJson(t));
+                logger.info("Transaction with id {} has been verified by replicas {}", id, t.getReplicas());
                 return t;
             }
 
@@ -368,11 +367,11 @@ public class LedgerController implements CommandLineRunner {
     }
 
 
-    private byte[] createVerifyOpRequest(String operation) throws IOException {
+    private byte[] createVerifyRequest(String id) throws IOException {
         ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
-        objOut.writeObject(LedgerRequestType.VERIFY_OP);
-        objOut.writeObject(operation);
+        objOut.writeObject(LedgerRequestType.VERIFY);
+        objOut.writeObject(id);
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();

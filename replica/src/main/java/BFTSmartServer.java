@@ -24,7 +24,6 @@ import java.util.*;
 
 public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
 
     private static final String INITIAL_NONCE = "0";
     private static final String NO_NONCE = "-1";
@@ -39,12 +38,14 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final int SIGNATURE_ALGORITHM = 1;
     private static final int HASH_ALGORITHM = 2;
     private static final int WALLET_NONCE = 3;
+    private static final int TRANSACTION_ID_SIZE = 20;
 
     private final Logger logger;
     private final Jedis jedis;
     private final Gson gson;
     private final Base32 base32;
     private final int id;
+    private final SecureRandom rand;
 
 
     public BFTSmartServer(int id) throws IOException {
@@ -52,9 +53,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         this.logger = LoggerFactory.getLogger(this.getClass().getName());
         this.base32 = new Base32();
         this.gson = new Gson();
+        this.rand = new SecureRandom();
         Properties jedis_properties = new Properties();
         //TODO: tls with redis
-        //TODO: Refactoring of methods<
         jedis_properties.load(new FileInputStream("config/redis.config"));
         String redisPort = jedis_properties.getProperty("redis_port");
         String redis_ip = "172.18.30.".concat(Integer.toString(id));
@@ -132,8 +133,17 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             nonce = Integer.toString(Integer.parseInt(nonce) + 1);
                             jedis.lset(publicKey, WALLET_NONCE, nonce);
                             logger.info("Signature verified successfully");
-                            hash = TOMUtil.computeHash(Boolean.toString(true).concat(Double.toString(amount)).concat(date).getBytes());
-                            SignedTransaction signedTransaction = new SignedTransaction(SYSTEM, publicKey, amount, base32.encodeAsString(msgSignature), date);
+                            hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
+                            byte[] idBytes = new byte[TRANSACTION_ID_SIZE];
+                            rand.nextBytes(idBytes);
+                            SignedTransaction signedTransaction = new SignedTransaction(
+                                    SYSTEM,
+                                    publicKey,
+                                    amount,
+                                    base32.encodeAsString(msgSignature),
+                                    date,
+                                    base32.encodeAsString(idBytes)
+                            );
                             logger.info("T {}", gson.toJson(signedTransaction));
                             objOut.writeInt(id);
                             objOut.writeObject(hash);
@@ -179,8 +189,17 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             if (getBalance(origin) >= amount) {
                                 nonce = Integer.toString(Integer.parseInt(nonce) + 1);
                                 jedis.lset(origin, WALLET_NONCE, nonce);
-                                hash = TOMUtil.computeHash(Boolean.toString(true).getBytes());
-                                SignedTransaction signedTransaction = new SignedTransaction(origin, destination, amount, base32.encodeAsString(msgSignature), date);
+                                hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
+                                byte[] idBytes = new byte[TRANSACTION_ID_SIZE];
+                                rand.nextBytes(idBytes);
+                                SignedTransaction signedTransaction = new SignedTransaction(
+                                        origin,
+                                        destination,
+                                        amount,
+                                        base32.encodeAsString(msgSignature),
+                                        date,
+                                        "0xT" + base32.encodeAsString(idBytes)
+                                );
                                 logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
                                 objOut.writeInt(id);
                                 objOut.writeObject(hash);
@@ -221,8 +240,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             t.getDate(),
                             commit.getHash(),
                             commit.getReplicas(),
-                            base32.encodeAsString(TOMUtil.computeHash(base32.decode(t.getSignature()))));
-                    logger.info("T {}", gson.toJson(transaction));
+                            t.getId());
+                    logger.info("T {}", t);
                     jedis.rpush(GLOBAL_LEDGER, gson.toJson(transaction));
                     objOut.writeInt(id);
                     objOut.writeObject(TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(transaction)).getBytes()));
@@ -278,25 +297,33 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case GET_NONCE: {
                     logger.debug("New REQUEST_NONCE operation");
                     String publicKey = (String) objIn.readObject();
-                    String message = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(publicKey));
-                    byte[] msgSignature = (byte[]) objIn.readObject();
-                    if (verifySignature(publicKey, message, msgSignature)) {
-                        logger.info("Signature verified");
-                        String nonce = jedis.lindex(publicKey, WALLET_NONCE);
-                        byte[] hashResult = TOMUtil.computeHash(Boolean.toString(true).concat(nonce).getBytes());
-                        objOut.writeInt(id);
-                        objOut.writeObject(hashResult);
-                        objOut.writeBoolean(true);
-                        objOut.writeObject(nonce);
+                    if (jedis.exists(publicKey)) {
+                        String message = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(publicKey));
+                        byte[] msgSignature = (byte[]) objIn.readObject();
+                        if (verifySignature(publicKey, message, msgSignature)) {
+                            logger.info("Signature verified");
+                            String nonce = jedis.lindex(publicKey, WALLET_NONCE);
+                            byte[] hashResult = TOMUtil.computeHash(Boolean.toString(true).concat(nonce).getBytes());
+                            objOut.writeInt(id);
+                            objOut.writeObject(hashResult);
+                            objOut.writeBoolean(true);
+                            objOut.writeObject(nonce);
+                        } else {
+                            logger.info("Signature not verified");
+                            byte[] hashResult = TOMUtil.computeHash(Boolean.toString(false).concat(NO_NONCE).getBytes());
+                            objOut.writeInt(id);
+                            objOut.writeObject(hashResult);
+                            objOut.writeBoolean(false);
+                            objOut.writeObject(NO_NONCE);
+                        }
                     } else {
-                        logger.info("Signature not verified");
+                        logger.info("Key not registered.");
                         byte[] hashResult = TOMUtil.computeHash(Boolean.toString(false).concat(NO_NONCE).getBytes());
                         objOut.writeInt(id);
                         objOut.writeObject(hashResult);
                         objOut.writeBoolean(false);
                         objOut.writeObject(NO_NONCE);
                     }
-
                 }
                 break;
                 case CURRENT_AMOUNT: {
@@ -324,10 +351,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     DateInterval dateInterval = (DateInterval) objIn.readObject();
                     logger.debug("New GLOBAL_LEDGER operation.");
                     objOut.writeInt(id);
-                    List<ValidTransaction> signedTransactions = getLedger(dateInterval);
-                    byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(signedTransactions)).getBytes());
+                    List<ValidTransaction> globalLedger = getLedger(dateInterval);
+                    byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(globalLedger)).getBytes());
                     objOut.writeObject(hash);
-                    objOut.writeObject(signedTransactions);
+                    objOut.writeObject(globalLedger);
                     break;
                 }
                 case CLIENT_LEDGER: {
@@ -342,36 +369,30 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeBoolean(false);
                         objOut.writeObject(null);
                     } else {
-                        List<ValidTransaction> client_ledger = getLedger(publicKey, dateInterval);
-                        logger.info("Found ledger with length {} associated with key {}.", client_ledger.size(), client_ledger);
-                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(client_ledger)).getBytes());
+                        List<ValidTransaction> clientLedger = getLedger(publicKey, dateInterval);
+                        logger.info("Found ledger with length {} associated with key {}.", clientLedger.size(), clientLedger);
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(clientLedger)).getBytes());
                         objOut.writeInt(id);
                         objOut.writeObject(hash);
                         objOut.writeBoolean(true);
-                        objOut.writeObject(client_ledger);
+                        objOut.writeObject(clientLedger);
                     }
                     break;
                 }
-                case VERIFY_OP: {
-                    //TODO: Use ID for verification
-                    logger.debug("New VERIFY_OP operation.");
-                    String op = (String) objIn.readObject();
-                    List<String> ops = jedis.lrange(GLOBAL_LEDGER, 0, -1);
-                    SignedTransaction signedTransaction = null;
-                    for (String opS : ops) {
-                        if (op.equals(opS)) {
-                            logger.info("Transaction found");
-                            signedTransaction = (SignedTransaction) gson.fromJson(opS, Commit.class).getRequest();
-                            objOut.writeInt(id);
-                            byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(signedTransaction)).getBytes());
-                            objOut.writeObject(hash);
-                            objOut.writeBoolean(true);
-                            objOut.writeObject(signedTransaction);
-                            break;
-                        }
-                    }
-                    if (signedTransaction == null) {
-                        logger.info("Transaction not found!!!");
+                case VERIFY: {
+                    logger.debug("New VERIFY operation.");
+                    String transactionId = (String) objIn.readObject();
+                    ValidTransaction transaction = findTransaction(transactionId);
+                    if (transaction != null) {
+                        logger.info("Transaction verified");
+                        objOut.writeInt(id);
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(transaction)).getBytes());
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(true);
+                        objOut.writeObject(transaction);
+                        break;
+                    } else {
+                        logger.info("Transaction not found.");
                         objOut.writeInt(id);
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
                         objOut.writeObject(hash);
@@ -405,41 +426,60 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return hash.digest();
     }
 
+    private ValidTransaction findTransaction(String id) {
+        List<String> serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
+        for (String t : serializedLedger) {
+            ValidTransaction transaction = gson.fromJson(t, ValidTransaction.class);
+            if (transaction.getId().equals(id))
+                return transaction;
+        }
+        return null;
+    }
+
+
+    private List<ValidTransaction> getLedger() {
+        List<ValidTransaction> deserializedLedger = new LinkedList<>();
+        List<String> serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
+        serializedLedger.forEach(t -> deserializedLedger.add(gson.fromJson(t, ValidTransaction.class)));
+        return deserializedLedger;
+    }
+
+
     private List<ValidTransaction> getLedger(DateInterval dateInterval) {
         long startDate = Timestamp.valueOf(dateInterval.getStartDate()).getTime();
         long endDate = Timestamp.valueOf(dateInterval.getEndDate()).getTime();
 
-        List<ValidTransaction> deserialized_ledger = new LinkedList<>();
-        List<String> serialized_ledger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
+        List<ValidTransaction> deserializedLedger = new LinkedList<>();
+        List<String> serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
 
-        for (String t : serialized_ledger) {
+        for (String t : serializedLedger) {
             ValidTransaction transaction = gson.fromJson(t, ValidTransaction.class);
             long transactionTimeStamp = Timestamp.valueOf(transaction.getDate()).getTime();
 
             if (transactionTimeStamp >= startDate && transactionTimeStamp <= endDate) {
-                deserialized_ledger.add(transaction);
+                deserializedLedger.add(transaction);
             }
         }
-        return deserialized_ledger;
+        return deserializedLedger;
     }
 
     private List<ValidTransaction> getLedger(String publicKey, DateInterval dateInterval) {
         long startDate = Timestamp.valueOf(dateInterval.getStartDate()).getTime();
         long endDate = Timestamp.valueOf(dateInterval.getEndDate()).getTime();
 
-        List<ValidTransaction> deserialized_ledger = new LinkedList<>();
-        List<String> serialized_ledger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
+        List<ValidTransaction> deserializedLedger = new LinkedList<>();
+        List<String> serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
 
-        for (String t : serialized_ledger) {
+        for (String t : serializedLedger) {
             ValidTransaction transaction = gson.fromJson(t, ValidTransaction.class);
-            if (transaction.getOrigin().equals(publicKey)) {
+            if (transaction.getOrigin().equals(publicKey) || transaction.getDestination().equals(publicKey)) {
                 long transactionTimeStamp = Timestamp.valueOf(transaction.getDate()).getTime();
                 if (transactionTimeStamp >= startDate && transactionTimeStamp <= endDate) {
-                    deserialized_ledger.add(transaction);
+                    deserializedLedger.add(transaction);
                 }
             }
         }
-        return deserialized_ledger;
+        return deserializedLedger;
     }
 
 
