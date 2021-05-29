@@ -142,7 +142,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                     amount,
                                     base32.encodeAsString(msgSignature),
                                     date,
-                                    base32.encodeAsString(idBytes)
+                                    "0xT" + base32.encodeAsString(idBytes)
                             );
                             logger.info("T {}", gson.toJson(signedTransaction));
                             objOut.writeInt(id);
