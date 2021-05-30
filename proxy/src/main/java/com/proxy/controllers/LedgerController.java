@@ -226,8 +226,15 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @GetMapping("/pendingTransactions/{numPending}")
-    public Block pickNotMineratedTransactions(@PathVariable int numPending) {
-        return new Block();
+    public BlockHeader pickNotMineratedTransactions(@PathVariable int numPending) {
+        try {
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createPickPendingTransactionsRequest(numPending), UNORDERED_REQUEST);
+        } catch (IOException | ExecutionException | InterruptedException e) {
+            logger.error("Exception in obtainLastBlock. Cause: {}", e.getMessage());
+            e.printStackTrace();
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return null;
     }
 
     @GetMapping("/{who}/mine")
@@ -389,6 +396,16 @@ public class LedgerController implements CommandLineRunner {
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.VERIFY);
         objOut.writeObject(id);
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createPickPendingTransactionsRequest(int numPending) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.PICK_NOT_MINED_TRANSACTIONS);
+        objOut.writeInt(numPending);
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();

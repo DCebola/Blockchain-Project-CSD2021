@@ -42,6 +42,9 @@ public class RestClient {
     private static final String LEDGER_OF_CLIENT_TRANSACTIONS_URL = "https://127.0.0.1:%s/%s/ledger";
     private static final String REQUEST_NONCE_URL = "https://127.0.0.1:%s/nonce/%s";
     private static final String VERIFY_OPERATION = "https://127.0.0.1:%s/verify/%s";
+    private static final String OBTAIN_LAST_BLOCK_URL = "https://127.0.0.1:%s/lastBlock";
+    private static final String PICK_NOT_MINED_TRANSACTIONS_URL = "https://127.0.0.1:%s/pendingTransactions/%s";
+    private static final String SEND_MINED_BLOCK_URL = "https://127.0.0.1:%s/%s/mine";
 
     private static final int REGISTER = 0;
     private static final int REQUEST_NONCE = 1;
@@ -51,7 +54,10 @@ public class RestClient {
     private static final int GLOBAL_LEDGER = 5;
     private static final int CLIENT_LEDGER = 6;
     private static final int VERIFY_OP = 7;
-    private static final int QUIT = 8;
+    private static final int OBTAIN_LAST_BLOCK = 8;
+    private static final int PICK_NOT_MINED_TRANSACTIONS = 9;
+    private static final int SEND_MINED_BLOCK = 10;
+    private static final int QUIT = 11;
 
     private static final int ALL = 0;
     private static final int UP_TO = 1;
@@ -123,6 +129,15 @@ public class RestClient {
                 case VERIFY_OP:
                     verify(requestFactory, in);
                     break;
+                case OBTAIN_LAST_BLOCK:
+                    obtainLastBlock(requestFactory, in);
+                    break;
+                case PICK_NOT_MINED_TRANSACTIONS:
+                    pickNotMinedTransactions(requestFactory, in);
+                    break;
+                case SEND_MINED_BLOCK:
+                    sendMinedBlock(requestFactory, in);
+                    break;
                 case QUIT:
                     in.close();
                     break;
@@ -165,7 +180,10 @@ public class RestClient {
         System.out.println("5 - Global Ledger");
         System.out.println("6 - Client Ledger");
         System.out.println("7 - Verify transaction");
-        System.out.println("8 - Quit");
+        System.out.println("8 - Obtain last block");
+        System.out.println("9 - Pick not mined transactions");
+        System.out.println("10 - Send mined block");
+        System.out.println("11 - Quit");
         System.out.print("> ");
     }
 
@@ -324,6 +342,29 @@ public class RestClient {
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
+    }
+
+    private static void obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+    }
+
+    private static void pickNotMinedTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+        try {
+            if(currentSession == null)
+                requestNonce(requestFactory, in);
+            System.out.print("Specify the number of transactions you want: ");
+            int numberTransactions = in.nextInt();
+            in.nextLine();
+            ResponseEntity<BlockHeader> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(PICK_NOT_MINED_TRANSACTIONS_URL, port, numberTransactions),
+                    HttpMethod.GET, null, BlockHeader.class);
+
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
     }
 
 

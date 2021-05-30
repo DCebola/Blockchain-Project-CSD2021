@@ -10,6 +10,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
+import sun.jvm.hotspot.opto.Block;
 
 
 import java.io.*;
@@ -390,7 +391,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeObject(hash);
                         objOut.writeBoolean(true);
                         objOut.writeObject(transaction);
-                        break;
                     } else {
                         logger.info("Transaction not found.");
                         objOut.writeInt(id);
@@ -399,8 +399,17 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeBoolean(false);
                         objOut.writeObject(null);
                     }
+                    break;
                 }
-                break;
+                case PICK_NOT_MINED_TRANSACTIONS: {
+                    int numTransactions = objIn.readInt();
+                    List<ValidTransaction> notMinedTransactions = getLedger(numTransactions);
+                    if(notMinedTransactions != null) {
+                        BlockHeader blockHeader = buildBlockHeader(notMinedTransactions);
+                    } else
+                        logger.info("Insert non-negative number of transactions");
+                    break;
+                }
             }
             objOut.flush();
             byteOut.flush();
@@ -409,6 +418,20 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             e.printStackTrace();
             return ERROR_MSG.getBytes();
         }
+    }
+
+    private BlockHeader buildBlockHeader(List<ValidTransaction> notMinedTransactions) {
+        byte[] cumulativeHash = buildCumulativeHash(notMinedTransactions);
+    }
+
+    private byte[] buildCumulativeHash(List<ValidTransaction> notMinedTransactions) {
+        String finalHash = "";
+        for(int i = 0; i < notMinedTransactions.size(); i++) {
+            gson.toJson(TOMUtil.computeHash(gson.toJson(notMinedTransactions.get(i)).getBytes()));
+
+
+        }
+
     }
 
     private boolean verifySignature(String publicKey, String msg, byte[] signature) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
@@ -436,6 +459,20 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return null;
     }
 
+
+    private List<ValidTransaction> getLedger(int numTransactions) {
+        List<ValidTransaction> deserializedLedger = new LinkedList<>();
+        List<String> serializedLedger = null;
+        if (numTransactions > 0) {
+            if (numTransactions <= jedis.llen(GLOBAL_LEDGER))
+                 serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, numTransactions);
+            else
+                serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
+            serializedLedger.forEach(t -> deserializedLedger.add(gson.fromJson(t, ValidTransaction.class)));
+            return deserializedLedger;
+        }
+        return null;
+    }
 
     private List<ValidTransaction> getLedger() {
         List<ValidTransaction> deserializedLedger = new LinkedList<>();
