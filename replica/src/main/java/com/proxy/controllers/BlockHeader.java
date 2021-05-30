@@ -49,4 +49,8 @@ public class BlockHeader implements Serializable {
     public List<String> getTransactions() {
         return transactions;
     }
+
+    public void setWork(int work) {
+        this.work = work;
+    }
 }

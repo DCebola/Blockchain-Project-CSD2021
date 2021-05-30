@@ -4,13 +4,13 @@ import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 import bftsmart.tom.util.TOMUtil;
 import com.google.gson.Gson;
 import com.proxy.controllers.*;
+import org.apache.commons.codec.EncoderException;
 import org.apache.commons.codec.binary.Base32;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
-import sun.jvm.hotspot.opto.Block;
 
 
 import java.io.*;
@@ -20,6 +20,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -34,6 +35,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final String GLOBAL_LEDGER = "GLOBAL-LEDGER";
     private static final String USER_ACCOUNT = "-ACCOUNT";
     private static final String USER_LEDGER = "-LEDGER";
+    private static final String BLOCK_CHAIN = "BLOCK-CHAIN";
 
     private static final int KEY_ALGORITHM = 0;
     private static final int SIGNATURE_ALGORITHM = 1;
@@ -405,32 +407,56 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     int numTransactions = objIn.readInt();
                     List<ValidTransaction> notMinedTransactions = getLedger(numTransactions);
                     if(notMinedTransactions != null) {
+                        logger.info("Building block header");
                         BlockHeader blockHeader = buildBlockHeader(notMinedTransactions);
-                    } else
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(blockHeader)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(true);
+                        objOut.writeObject(blockHeader);
+                    } else {
                         logger.info("Insert non-negative number of transactions");
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(false);
+                        objOut.writeObject(null);
+                    }
                     break;
                 }
             }
             objOut.flush();
             byteOut.flush();
             return byteOut.toByteArray();
-        } catch (IOException | ClassNotFoundException | NoSuchAlgorithmException | InvalidKeySpecException | SignatureException | InvalidKeyException e) {
+        } catch (IOException | ClassNotFoundException | NoSuchAlgorithmException | InvalidKeySpecException | SignatureException | InvalidKeyException | EncoderException e) {
             e.printStackTrace();
             return ERROR_MSG.getBytes();
         }
     }
 
-    private BlockHeader buildBlockHeader(List<ValidTransaction> notMinedTransactions) {
-        byte[] cumulativeHash = buildCumulativeHash(notMinedTransactions);
+    private BlockHeader buildBlockHeader(List<ValidTransaction> notMinedTransactions) throws EncoderException {
+        String integrityHash = buildCumulativeHash(notMinedTransactions);
+        String timeStamp = LocalDateTime.now().format(formatter);
+        int work = -1;
+        List<String> blockTransactions = new LinkedList<>();
+        for(int i = 0; i < notMinedTransactions.size(); i++) {
+            blockTransactions.add(notMinedTransactions.get(i).getId());
+        }
+        //String previousHash = gson.fromJson(jedis.lrange(BLOCK_CHAIN,-1,-1).get(0),Block.class).getBlockHeader().;
+        String previousHash = "test";
+        return new BlockHeader(previousHash,blockTransactions,integrityHash,timeStamp);
     }
 
-    private byte[] buildCumulativeHash(List<ValidTransaction> notMinedTransactions) {
+    private String buildCumulativeHash(List<ValidTransaction> notMinedTransactions) throws EncoderException {
         String finalHash = "";
         for(int i = 0; i < notMinedTransactions.size(); i++) {
-            gson.toJson(TOMUtil.computeHash(gson.toJson(notMinedTransactions.get(i)).getBytes()));
-
-
+            if(i == 0)
+                finalHash = finalHash.concat(notMinedTransactions.get(i).getHash());
+            else
+                finalHash = gson.toJson(TOMUtil.computeHash(finalHash.concat(notMinedTransactions.get(i).getHash()).getBytes()));
         }
+
+        return base32.encodeAsString(finalHash.getBytes());
 
     }
 
@@ -465,7 +491,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         List<String> serializedLedger = null;
         if (numTransactions > 0) {
             if (numTransactions <= jedis.llen(GLOBAL_LEDGER))
-                 serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, numTransactions);
+                 serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, numTransactions-1);
             else
                 serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
             serializedLedger.forEach(t -> deserializedLedger.add(gson.fromJson(t, ValidTransaction.class)));

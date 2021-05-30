@@ -1,4 +1,4 @@
-package com.proxy.controllers;
+package com.clients;
 
 import java.io.Serializable;
 import java.util.List;
@@ -29,3 +29,4 @@ public class Block implements Serializable {
         return signedTransactions;
     }
 }
+

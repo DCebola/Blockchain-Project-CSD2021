@@ -229,12 +229,23 @@ public class LedgerController implements CommandLineRunner {
     public BlockHeader pickNotMineratedTransactions(@PathVariable int numPending) {
         try {
             QuorumResponse quorumResponse = dispatchAsyncRequest(createPickPendingTransactionsRequest(numPending), UNORDERED_REQUEST);
-        } catch (IOException | ExecutionException | InterruptedException e) {
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+            objIn.readInt();
+            byte[] hash = (byte[]) objIn.readObject();
+            boolean result = objIn.readBoolean();
+            BlockHeader blockHeader = (BlockHeader) objIn.readObject();
+            if(!result) {
+                logger.info("BAD REQUEST");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
+            } else {
+                logger.info("Obtained valid block header from a quorum of replicas");
+                return blockHeader;
+            }
+        } catch (IOException | ExecutionException | InterruptedException | ClassNotFoundException e) {
             logger.error("Exception in obtainLastBlock. Cause: {}", e.getMessage());
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        return null;
     }
 
     @GetMapping("/{who}/mine")

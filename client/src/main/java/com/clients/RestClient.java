@@ -23,16 +23,14 @@ import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Scanner;
+import java.util.*;
 
 
 public class RestClient {
 
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
     private static final String GENESIS_DATE = "2021-01-01 01:01:01";
+    private static final String PROOF_OF_WORK_CHALLENGE = "0000000000000000";
 
     private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
     private static final String OBTAIN_COINS_URL = "https://127.0.0.1:%s/%s/obtainCoins";
@@ -349,7 +347,7 @@ public class RestClient {
 
     private static void pickNotMinedTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
-            if(currentSession == null)
+            if (currentSession == null)
                 requestNonce(requestFactory, in);
             System.out.print("Specify the number of transactions you want: ");
             int numberTransactions = in.nextInt();
@@ -359,9 +357,43 @@ public class RestClient {
                     String.format(PICK_NOT_MINED_TRANSACTIONS_URL, port, numberTransactions),
                     HttpMethod.GET, null, BlockHeader.class);
 
+            BlockHeader blockHeader = response.getBody();
+            if(blockHeader != null) {
+                BlockHeader finalBlock = startProofOfWork(blockHeader);
+            }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
+    }
+
+    private static BlockHeader startProofOfWork(BlockHeader blockHeader) throws NoSuchAlgorithmException {
+        boolean proofOfWorkComplete = false;
+        Random random = new Random();
+        while (!proofOfWorkComplete) {
+            int work = random.nextInt();
+            blockHeader.setWork(work);
+            byte[] hashedResult = hashBlock(blockHeader);
+            String leftMostByte = Integer.toBinaryString(hashedResult[0] & 255 | 256).substring(1);
+            String secondLeftMostByte = Integer.toBinaryString(hashedResult[1] & 255 | 256).substring(1);
+            String mostSignificantBytes = leftMostByte.concat(secondLeftMostByte);
+            if (mostSignificantBytes.equals(PROOF_OF_WORK_CHALLENGE)) {
+                System.out.println("Proof of work complete");
+                proofOfWorkComplete = true;
+                String hashedResult1And0s = "";
+                for(byte b: hashedResult)
+                    hashedResult1And0s=hashedResult1And0s.concat(Integer.toBinaryString(b & 255 | 256).substring(1));
+                System.out.println(hashedResult1And0s);
+            } else
+                System.out.println(mostSignificantBytes);
+        }
+        return blockHeader;
+    }
+
+    private static byte[] hashBlock(BlockHeader blockHeader) throws NoSuchAlgorithmException {
+        byte[] block = gson.toJson(blockHeader).getBytes();
+        MessageDigest hash = MessageDigest.getInstance("SHA-256");
+        hash.update(block);
+        return hash.digest();
     }
 
     private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
@@ -409,7 +441,6 @@ public class RestClient {
         }
     }
 
-
     private static void verify(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             if (currentSession == null)
@@ -428,7 +459,6 @@ public class RestClient {
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
-
     }
 
     private static String getTransactionId(Scanner in) {
