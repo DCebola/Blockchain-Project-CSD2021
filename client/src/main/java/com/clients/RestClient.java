@@ -41,7 +41,7 @@ public class RestClient {
     private static final String REQUEST_NONCE_URL = "https://127.0.0.1:%s/nonce/%s";
     private static final String VERIFY_OPERATION = "https://127.0.0.1:%s/verify/%s";
     private static final String OBTAIN_LAST_BLOCK_URL = "https://127.0.0.1:%s/lastBlock";
-    private static final String PICK_NOT_MINED_TRANSACTIONS_URL = "https://127.0.0.1:%s/pendingTransactions/%s";
+    private static final String MINE_TRANSACTIONS_URL = "https://127.0.0.1:%s/pendingTransactions/%s";
     private static final String SEND_MINED_BLOCK_URL = "https://127.0.0.1:%s/%s/mine";
 
     private static final int REGISTER = 0;
@@ -53,7 +53,7 @@ public class RestClient {
     private static final int CLIENT_LEDGER = 6;
     private static final int VERIFY_OP = 7;
     private static final int OBTAIN_LAST_BLOCK = 8;
-    private static final int PICK_NOT_MINED_TRANSACTIONS = 9;
+    private static final int MINE_TRANSACTIONS = 9;
     private static final int SEND_MINED_BLOCK = 10;
     private static final int QUIT = 11;
 
@@ -128,13 +128,10 @@ public class RestClient {
                     verify(requestFactory, in);
                     break;
                 case OBTAIN_LAST_BLOCK:
-                    obtainLastBlock(requestFactory, in);
+                    obtainLastBlock(requestFactory);
                     break;
-                case PICK_NOT_MINED_TRANSACTIONS:
-                    pickNotMinedTransactions(requestFactory, in);
-                    break;
-                case SEND_MINED_BLOCK:
-                    sendMinedBlock(requestFactory, in);
+                case MINE_TRANSACTIONS:
+                    mineTransactions(requestFactory, in);
                     break;
                 case QUIT:
                     in.close();
@@ -179,7 +176,7 @@ public class RestClient {
         System.out.println("6 - Client Ledger");
         System.out.println("7 - Verify transaction");
         System.out.println("8 - Obtain last block");
-        System.out.println("9 - Pick not mined transactions");
+        System.out.println("9 - Mine transactions");
         System.out.println("10 - Send mined block");
         System.out.println("11 - Quit");
         System.out.print("> ");
@@ -342,10 +339,10 @@ public class RestClient {
         }
     }
 
-    private static void obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+    private static void obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory) {
     }
 
-    private static void pickNotMinedTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+    private static void mineTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             if (currentSession == null)
                 requestNonce(requestFactory, in);
@@ -354,16 +351,27 @@ public class RestClient {
             in.nextLine();
             ResponseEntity<BlockHeader> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(PICK_NOT_MINED_TRANSACTIONS_URL, port, numberTransactions),
+                    String.format(MINE_TRANSACTIONS_URL, port, numberTransactions),
                     HttpMethod.GET, null, BlockHeader.class);
 
             BlockHeader blockHeader = response.getBody();
             if(blockHeader != null) {
                 BlockHeader finalBlock = startProofOfWork(blockHeader);
+                sendMinedBlock(requestFactory,finalBlock);
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
+    }
+
+    private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
+        String msgToBeHashed = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeader).concat(currentSession.getNonce()));
+        byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+        SignedBody<BlockHeader> signedBody = new SignedBody<>(blockHeader,sigBytes,null);
+        HttpEntity<SignedBody<BlockHeader>> request = new HttpEntity<>(signedBody);
+        ResponseEntity<String> response
+                = new RestTemplate(requestFactory).exchange(
+                String.format(SEND_MINED_BLOCK_URL, port,base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
     }
 
     private static BlockHeader startProofOfWork(BlockHeader blockHeader) throws NoSuchAlgorithmException {
@@ -395,10 +403,6 @@ public class RestClient {
         hash.update(block);
         return hash.digest();
     }
-
-    private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
-    }
-
 
     private static DateInterval getDateInterval(Scanner in) {
         System.out.println("Select the range option:");

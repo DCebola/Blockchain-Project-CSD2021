@@ -234,7 +234,7 @@ public class LedgerController implements CommandLineRunner {
             byte[] hash = (byte[]) objIn.readObject();
             boolean result = objIn.readBoolean();
             BlockHeader blockHeader = (BlockHeader) objIn.readObject();
-            if(!result) {
+            if (!result) {
                 logger.info("BAD REQUEST");
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
             } else {
@@ -248,20 +248,22 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
-    @GetMapping("/{who}/mine")
-    public Block sendMinedBlock(@RequestBody SignedBody signedBody) {
-        return new Block();
+    @PostMapping("/{who}/mine")
+    public String sendMinedBlock(@PathVariable String who, @RequestBody SignedBody<BlockHeader> signedBody) throws IOException, ExecutionException, InterruptedException {
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createSendMinedBlockRequest(signedBody, who), ORDERED_REQUEST);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readInt();
     }
 
     @PostMapping("/smartTransfer")
     @ResponseStatus(HttpStatus.OK)
-    public void transferMoneyWithSmartContract(@RequestBody SignedBody signedBody) {
+    public void transferMoneyWithSmartContract(@RequestBody SignedBody<BlockHeader> signedBody) {
 
     }
 
     @PostMapping("/privacyTransfer")
     @ResponseStatus(HttpStatus.OK)
-    public void transferMoneyWithPrivacy(@RequestBody SignedBody signedBody) {
+    public void transferMoneyWithPrivacy(@RequestBody SignedBody<BlockHeader> signedBody) {
 
     }
 
@@ -417,6 +419,20 @@ public class LedgerController implements CommandLineRunner {
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.PICK_NOT_MINED_TRANSACTIONS);
         objOut.writeInt(numPending);
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createSendMinedBlockRequest(SignedBody<BlockHeader> signedBody, String who) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.SEND_MINED_BLOCK);
+        objOut.writeObject(who);
+        System.out.println(gson.toJson(signedBody.getSignature()));
+        BlockHeader blockHeader = signedBody.getContent();
+        objOut.writeObject(blockHeader);
+        objOut.writeObject(signedBody.getSignature());
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();

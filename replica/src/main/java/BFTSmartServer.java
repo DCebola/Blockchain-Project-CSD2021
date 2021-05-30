@@ -36,6 +36,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final String USER_ACCOUNT = "-ACCOUNT";
     private static final String USER_LEDGER = "-LEDGER";
     private static final String BLOCK_CHAIN = "BLOCK-CHAIN";
+    private static final String PROOF_OF_WORK_CHALLENGE = "0000000000000000";
 
     private static final int KEY_ALGORITHM = 0;
     private static final int SIGNATURE_ALGORITHM = 1;
@@ -278,6 +279,60 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     logger.debug("Registered key {} with hash algorithm {}, signature algorithm {} and nonce {}", publicKey, hashAlgorithm, signatureAlgorithm, INITIAL_NONCE);
                     logger.info("Registered key {}", publicKey);
                 }
+                break;
+                case SEND_MINED_BLOCK: {
+                    logger.debug("New SEND_MINED_BLOCK operation.");
+                    String pubKey = (String) objIn.readObject();
+                    BlockHeader blockHeader = (BlockHeader) objIn.readObject();
+                    byte[] sigBytes = (byte[]) objIn.readObject();
+                    String nonce = jedis.lindex(pubKey, WALLET_NONCE);
+                    String msg = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeader).concat(nonce));
+                    if(verifySignature(pubKey,msg,sigBytes)) {
+                        logger.info("Signature verified successfully.");
+                        byte[] block = gson.toJson(blockHeader).getBytes();
+                        byte[] hashedBlock = generateHash(block,"SHA-256");
+                        if(validProofOfWork(hashedBlock)) {
+                            logger.info("Valid proof of work");
+                            nonce = Integer.toString(Integer.parseInt(nonce) + 1);
+                            jedis.lset(pubKey, WALLET_NONCE, nonce);
+                            List<ValidTransaction> transactionsToBeVerified = getLedger(blockHeader.getTransactions().size() - 1);
+                            assert transactionsToBeVerified != null;
+                            if(verifyBlockContent(blockHeader,transactionsToBeVerified)) {
+                                logger.info("Block completely verified!!");
+                                Block finalBlock = new Block(blockHeader,transactionsToBeVerified);
+                                byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(finalBlock)).getBytes());
+                                objOut.writeInt(id);
+                                objOut.writeObject(hash);
+                                objOut.writeBoolean(true);
+                                objOut.writeObject(finalBlock);
+                                //jedis.rpush(BLOCK_CHAIN, gson.toJson(finalBlock));
+                                //jedis.ltrim(GLOBAL_LEDGER,transactionsToBeVerified.size(),-1);
+                            } else {
+                                logger.info("Block content invalid!!");
+                                byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                                objOut.writeInt(id);
+                                objOut.writeObject(hash);
+                                objOut.writeBoolean(false);
+                                objOut.writeObject(null);
+                            }
+                        } else {
+                            logger.info("Invalid proof of work!!");
+                            byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                            objOut.writeInt(id);
+                            objOut.writeObject(hash);
+                            objOut.writeBoolean(false);
+                            objOut.writeObject(null);
+                        }
+                    } else {
+                        logger.info("Signature not verified");
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(false);
+                        objOut.writeObject(null);
+                    }
+                }
+                break;
             }
             objOut.flush();
             byteOut.flush();
@@ -405,7 +460,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 }
                 case PICK_NOT_MINED_TRANSACTIONS: {
                     int numTransactions = objIn.readInt();
-                    List<ValidTransaction> notMinedTransactions = getLedger(numTransactions);
+                    List<ValidTransaction> notMinedTransactions = getLedger(numTransactions-1);
                     if(notMinedTransactions != null) {
                         logger.info("Building block header");
                         BlockHeader blockHeader = buildBlockHeader(notMinedTransactions);
@@ -457,7 +512,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         }
 
         return base32.encodeAsString(finalHash.getBytes());
-
     }
 
     private boolean verifySignature(String publicKey, String msg, byte[] signature) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
@@ -469,10 +523,45 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return sign.verify(signature);
     }
 
+    private boolean verifyBlockContent(BlockHeader blockHeader, List<ValidTransaction> transactionsToBeVerified) {
+        /*
+        for(int i = 0; i < notMinedTransactions.size(); i++) {
+        if(i == 0)
+            finalHash = finalHash.concat(notMinedTransactions.get(i).getHash());
+        else
+            finalHash = gson.toJson(TOMUtil.computeHash(finalHash.concat(notMinedTransactions.get(i).getHash()).getBytes()));
+        }
+         */
+        List<String> transactionsInBlock = blockHeader.getTransactions();
+        String finalHash = "";
+        assert transactionsToBeVerified != null;
+        if(transactionsInBlock.size() == transactionsToBeVerified.size()) {
+            for (int i = 0; i < transactionsToBeVerified.size(); i++) {
+                ValidTransaction transaction = transactionsToBeVerified.get(i);
+                if (transaction.getId().equals(transactionsInBlock.get(i))) {
+                    if (i == 0)
+                        finalHash = finalHash.concat(transaction.getHash());
+                    else
+                        finalHash = gson.toJson(TOMUtil.computeHash(finalHash.concat(transaction.getHash()).getBytes()));
+                } else
+                    return false;
+            }
+            return finalHash.equals(blockHeader.getIntegrityHash());
+        }
+        return false;
+    }
+
     private byte[] generateHash(byte[] msg, String algorithm) throws NoSuchAlgorithmException {
         MessageDigest hash = MessageDigest.getInstance(algorithm);
         hash.update(msg);
         return hash.digest();
+    }
+
+    private boolean validProofOfWork(byte[] block) {
+        String leftMostByte = Integer.toBinaryString(block[0] & 255 | 256).substring(1);
+        String secondLeftMostByte = Integer.toBinaryString(block[1] & 255 | 256).substring(1);
+        String mostSignificantBytes = leftMostByte.concat(secondLeftMostByte);
+        return mostSignificantBytes.equals(PROOF_OF_WORK_CHALLENGE);
     }
 
     private ValidTransaction findTransaction(String id) {
@@ -491,7 +580,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         List<String> serializedLedger = null;
         if (numTransactions > 0) {
             if (numTransactions <= jedis.llen(GLOBAL_LEDGER))
-                 serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, numTransactions-1);
+                 serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, numTransactions);
             else
                 serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
             serializedLedger.forEach(t -> deserializedLedger.add(gson.fromJson(t, ValidTransaction.class)));

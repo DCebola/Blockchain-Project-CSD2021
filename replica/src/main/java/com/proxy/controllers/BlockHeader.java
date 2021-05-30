@@ -22,7 +22,7 @@ public class BlockHeader implements Serializable {
         this.work = -1;
     }
 
-    public BlockHeader(){
+    public BlockHeader() {
         this.previousHash = null;
         this.transactions = null;
         this.integrityHash = null;
