@@ -366,7 +366,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     byte[] hashedBlock = generateHash(blockHeaderBytes, "SHA-256");
 
                     if(validProofOfWork(hashedBlock) && block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(hashedBlock))) {
-                        jedis.ltrim(GLOBAL_LEDGER, block.getSignedTransactions().size(), -1);
+                        jedis.lpop(GLOBAL_LEDGER, block.getSignedTransactions().size());
                         addBlock(publicKey,nonce,block,t,commit,objOut,blockAndReward);
                     } else {
                         l = jedis.lrange(BLOCK_CHAIN, -2, -2);
@@ -380,6 +380,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                     notifyWithNotAddedBlock(objOut);
                                 } else if(lastBlock.getSignedTransactions().size() == block.getSignedTransactions().size()) {
                                     if(newBlockHasBetterProof(block,lastBlock)) {
+                                        cancelReward(lastBlock.getBlockHeader().getWhoSigned());
                                         jedis.rpop(BLOCK_CHAIN,1);
                                         addBlock(publicKey,nonce,block,t,commit,objOut,blockAndReward);
                                     } else {
@@ -388,6 +389,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                     }
                                 } else {
                                     jedis.rpop(BLOCK_CHAIN,1);
+                                    jedis.rpop(GLOBAL_LEDGER,block.getSignedTransactions().size()-lastBlock.getSignedTransactions().size());
+                                    cancelReward(lastBlock.getBlockHeader().getWhoSigned());
                                     addBlock(publicKey,nonce,block,t,commit,objOut,blockAndReward);
                                 }
                             } else {
@@ -407,6 +410,17 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         } catch (IOException | ClassNotFoundException | NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
             e.printStackTrace();
             return ERROR_MSG.getBytes();
+        }
+    }
+
+    private void cancelReward(String whoSigned) {
+        List<String> transactions = jedis.lrange(GLOBAL_LEDGER,0,-1);
+        for(int i = 0; i < transactions.size(); i++) {
+            ValidTransaction validTransaction = gson.fromJson(transactions.get(i),ValidTransaction.class);
+            if(validTransaction.getDestination().equals(whoSigned)) {
+                jedis.lrem(GLOBAL_LEDGER, 1, transactions.get(i));
+                break;
+            }
         }
     }
 
