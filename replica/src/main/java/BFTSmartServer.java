@@ -358,24 +358,47 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     String nonce = jedis.lindex(publicKey, WALLET_NONCE);
                     Block block = blockAndReward.getBlock();
                     nonce = Integer.toString(Integer.parseInt(nonce) + 1);
-                    jedis.lset(publicKey, WALLET_NONCE, nonce);
-                    jedis.rpush(BLOCK_CHAIN, gson.toJson(block));
-                    jedis.ltrim(GLOBAL_LEDGER, block.getSignedTransactions().size(), -1);
-                    ValidTransaction transaction = new ValidTransaction(
-                            t.getOrigin(),
-                            t.getDestination(),
-                            t.getAmount(),
-                            t.getSignature(),
-                            t.getDate(),
-                            commit.getHash(),
-                            commit.getReplicas(),
-                            t.getId());
-                    jedis.rpush(GLOBAL_LEDGER, gson.toJson(transaction));
-                    objOut.writeInt(id);
-                    objOut.writeObject(TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(blockAndReward)).getBytes()));
-                    objOut.writeBoolean(true);
-                    objOut.writeObject(blockAndReward);
-                    logger.info("Block added to global ledger");
+
+                    List<String> l = jedis.lrange(BLOCK_CHAIN, -1, -1);
+                    Block lastBlock = gson.fromJson(l.get(0), Block.class);
+                    BlockHeader lastBlockBlockHeader = lastBlock.getBlockHeader();
+                    byte[] blockHeaderBytes = gson.toJson(lastBlockBlockHeader).getBytes();
+                    byte[] hashedBlock = generateHash(blockHeaderBytes, "SHA-256");
+
+                    if(validProofOfWork(hashedBlock) && block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(hashedBlock))) {
+                        jedis.ltrim(GLOBAL_LEDGER, block.getSignedTransactions().size(), -1);
+                        addBlock(publicKey,nonce,block,t,commit,objOut,blockAndReward);
+                    } else {
+                        l = jedis.lrange(BLOCK_CHAIN, -2, -2);
+                        if(l.size() > 0) {
+                            BlockHeader secondLastBlockHeader = gson.fromJson(l.get(0),Block.class).getBlockHeader();
+                            blockHeaderBytes = gson.toJson(secondLastBlockHeader).getBytes();
+                            hashedBlock = generateHash(blockHeaderBytes, "SHA-256");
+                            if(validProofOfWork(hashedBlock) && block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(hashedBlock))) {
+                                if(lastBlock.getSignedTransactions().size() > block.getSignedTransactions().size()) {
+                                    logger.info("The old block was better");
+                                    notifyWithNotAddedBlock(objOut);
+                                } else if(lastBlock.getSignedTransactions().size() == block.getSignedTransactions().size()) {
+                                    if(newBlockHasBetterProof(block,lastBlock)) {
+                                        jedis.rpop(BLOCK_CHAIN,1);
+                                        addBlock(publicKey,nonce,block,t,commit,objOut,blockAndReward);
+                                    } else {
+                                        logger.info("The older block had a better proof");
+                                        notifyWithNotAddedBlock(objOut);
+                                    }
+                                } else {
+                                    jedis.rpop(BLOCK_CHAIN,1);
+                                    addBlock(publicKey,nonce,block,t,commit,objOut,blockAndReward);
+                                }
+                            } else {
+                                logger.info("This block is too old to be registered!!");
+                                notifyWithNotAddedBlock(objOut);
+                            }
+                        } else {
+                            logger.info("Too small of a chain to be able to replace blocks!!");
+                            notifyWithNotAddedBlock(objOut);
+                        }
+                    }
                 }
             }
             objOut.flush();
@@ -385,6 +408,54 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             e.printStackTrace();
             return ERROR_MSG.getBytes();
         }
+    }
+
+    private void notifyWithNotAddedBlock(ObjectOutput objOut) throws IOException {
+        objOut.writeInt(id);
+        objOut.writeObject(TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes()));
+        objOut.writeBoolean(false);
+        objOut.writeObject(null);
+    }
+
+    private void addBlock(String publicKey, String nonce, Block block, SignedTransaction t, Commit commit, ObjectOutput objOut, BlockAndReward blockAndReward) throws IOException {
+        jedis.lset(publicKey, WALLET_NONCE, nonce);
+        jedis.rpush(BLOCK_CHAIN, gson.toJson(block));
+        ValidTransaction transaction = new ValidTransaction(
+                t.getOrigin(),
+                t.getDestination(),
+                t.getAmount(),
+                t.getSignature(),
+                t.getDate(),
+                commit.getHash(),
+                commit.getReplicas(),
+                t.getId());
+        jedis.rpush(GLOBAL_LEDGER, gson.toJson(transaction));
+        objOut.writeInt(id);
+        objOut.writeObject(TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(blockAndReward)).getBytes()));
+        objOut.writeBoolean(true);
+        objOut.writeObject(blockAndReward);
+        logger.info("Block added to global ledger");
+
+    }
+
+    private boolean newBlockHasBetterProof(Block block, Block lastBlock) throws NoSuchAlgorithmException {
+        BlockHeader blockHeader = block.getBlockHeader();
+        byte[] blockHeaderBytes = gson.toJson(blockHeader).getBytes();
+        byte[] hashedBlock = generateHash(blockHeaderBytes, "SHA-256");
+
+        BlockHeader lastBlockHeader = lastBlock.getBlockHeader();
+        byte[] lastBlockHeaderBytes = gson.toJson(lastBlockHeader).getBytes();
+        byte[] hashedLastBlock = generateHash(lastBlockHeaderBytes, "SHA-256");
+
+        for (int i = 2; i < hashedBlock.length; i++) {
+            byte blockByte = hashedBlock[i];
+            byte lastBlockByte = hashedLastBlock[i];
+            if (blockByte > lastBlockByte)
+                return false;
+            if (blockByte < lastBlockByte)
+                return true;
+        }
+        return false;
     }
 
     @Override
