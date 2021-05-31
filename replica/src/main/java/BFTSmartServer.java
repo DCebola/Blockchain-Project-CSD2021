@@ -59,9 +59,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         this.rand = new SecureRandom();
         this.gson = new Gson();
         int work = -100283092;
-        BlockHeader blockHeader = new BlockHeader(null,null,null,base32.encodeAsString(TOMUtil.computeHash(gson.toJson(null).getBytes())),null,-100283092);
-        byte[] block = gson.toJson(blockHeader).getBytes();
-        byte[] hashedBlock = generateHash(block,"SHA-256");
+        BlockHeader blockHeader = new BlockHeader(null,null,null,base32.encodeAsString(TOMUtil.computeHash(gson.toJson(null).getBytes())),null,work);
+
+
         Block genesisBlock = new Block(blockHeader,null);
         Properties jedis_properties = new Properties();
 
@@ -504,43 +504,43 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 }
                 case PICK_NOT_MINED_TRANSACTIONS: {
                     int numTransactions = objIn.readInt();
+                    List<String> l = jedis.lrange(BLOCK_CHAIN,-1,-1);
+                    Block lastBlock = gson.fromJson(l.get(0), Block.class);
+                    BlockHeader lastBlockBlockHeader = lastBlock.getBlockHeader();
+                    byte[] blockHeaderBytes = gson.toJson(lastBlockBlockHeader).getBytes();
+                    byte[] hashedBlock = generateHash(blockHeaderBytes,"SHA-256");
+
                     List<ValidTransaction> notMinedTransactions = getLedger(numTransactions-1);
-                    if(notMinedTransactions != null) {
+                    if(notMinedTransactions != null && validProofOfWork(hashedBlock)) {
                         logger.info("Building block header");
-                        BlockHeader blockHeader = buildBlockHeader(notMinedTransactions);
-                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(blockHeader)).getBytes());
+                        BlockHeader blockHeader = buildBlockHeader(notMinedTransactions,base32.encodeAsString(hashedBlock));
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(blockHeader)).concat(gson.toJson(lastBlock)).getBytes());
                         objOut.writeInt(id);
                         objOut.writeObject(hash);
                         objOut.writeBoolean(true);
                         objOut.writeObject(blockHeader);
+                        objOut.writeObject(lastBlock);
                     } else {
-                        logger.info("Insert non-negative number of transactions");
-                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                        logger.info("Not building block header");
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).concat(gson.toJson(null)).getBytes());
                         objOut.writeInt(id);
                         objOut.writeObject(hash);
                         objOut.writeBoolean(false);
+                        objOut.writeObject(null);
                         objOut.writeObject(null);
                     }
                     break;
                 } case OBTAIN_LAST_BLOCK: {
                     logger.info("Obtaining last block");
                     List<String> l = jedis.lrange(BLOCK_CHAIN,-1,-1);
-                    if(l.size() == 0) {
-                        logger.info("No blocks available");
-                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
-                        objOut.writeInt(id);
-                        objOut.writeObject(hash);
-                        objOut.writeBoolean(false);
-                        objOut.writeObject(null);
-                    } else {
-                        logger.info("Sending the last block");
-                        Block block = gson.fromJson(l.get(0),Block.class);
-                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(block)).getBytes());
-                        objOut.writeInt(id);
-                        objOut.writeObject(hash);
-                        objOut.writeBoolean(true);
-                        objOut.writeObject(block);
-                    }
+                    logger.info("Sending the last block");
+                    Block block = gson.fromJson(l.get(0), Block.class);
+                    byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(block)).getBytes());
+                    objOut.writeInt(id);
+                    objOut.writeObject(hash);
+                    objOut.writeBoolean(true);
+                    objOut.writeObject(block);
+
                     break;
                 }
             }
@@ -553,7 +553,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         }
     }
 
-    private BlockHeader buildBlockHeader(List<ValidTransaction> notMinedTransactions) throws EncoderException {
+    private BlockHeader buildBlockHeader(List<ValidTransaction> notMinedTransactions, String previousHash) throws EncoderException {
         String integrityHash = buildCumulativeHash(notMinedTransactions);
         String timeStamp = LocalDateTime.now().format(formatter);
         int work = -1;
@@ -562,7 +562,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             blockTransactions.add(notMinedTransactions.get(i).getId());
         }
         //String previousHash = gson.fromJson(jedis.lrange(BLOCK_CHAIN,-1,-1).get(0),Block.class).getBlockHeader().;
-        String previousHash = "test";
         return new BlockHeader(null,previousHash,blockTransactions,integrityHash,timeStamp);
     }
 
@@ -636,8 +635,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private List<ValidTransaction> getLedger(int numTransactions) {
         List<ValidTransaction> deserializedLedger = new LinkedList<>();
         List<String> serializedLedger = null;
-        if (numTransactions > 0) {
-            if (numTransactions <= jedis.llen(GLOBAL_LEDGER))
+        long globalLedgerSize = jedis.llen(GLOBAL_LEDGER);
+        if (numTransactions >= 0 && globalLedgerSize > 0) {
+            if (numTransactions <= globalLedgerSize)
                  serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, numTransactions);
             else
                 serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);

@@ -365,16 +365,23 @@ public class RestClient {
             System.out.print("Specify the number of transactions you want: ");
             int numberTransactions = in.nextInt();
             in.nextLine();
-            ResponseEntity<BlockHeader> response
+            ResponseEntity<LastBlockWithMiningInfo> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(MINE_TRANSACTIONS_URL, port, numberTransactions),
-                    HttpMethod.GET, null, BlockHeader.class);
-
-            BlockHeader blockHeader = response.getBody();
-            if(blockHeader != null) {
-                blockHeader.setWhoSigned(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
-                BlockHeader finalBlock = startProofOfWork(blockHeader);
-                sendMinedBlock(requestFactory,finalBlock);
+                    HttpMethod.GET, null, LastBlockWithMiningInfo.class);
+            if(response.getBody() != null) {
+                Block lastMinedBlock = response.getBody().getLastMinedBlock();
+                byte[] hashedResult = hashBlock(lastMinedBlock.getBlockHeader());
+                String leftMostByte = Integer.toBinaryString(hashedResult[0] & 255 | 256).substring(1);
+                String secondLeftMostByte = Integer.toBinaryString(hashedResult[1] & 255 | 256).substring(1);
+                String mostSignificantBytes = leftMostByte.concat(secondLeftMostByte);
+                BlockHeader blockHeader = response.getBody().getBlockHeader();
+                if(mostSignificantBytes.equals(PROOF_OF_WORK_CHALLENGE) && base32.encodeAsString(hashedResult).equals(blockHeader.getPreviousHash())) {
+                    System.out.println("The mined block received is valid");
+                    blockHeader.setWhoSigned(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
+                    BlockHeader finalBlock = startProofOfWork(blockHeader);
+                    sendMinedBlock(requestFactory,finalBlock);
+                }
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
