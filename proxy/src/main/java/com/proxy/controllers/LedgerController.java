@@ -221,7 +221,25 @@ public class LedgerController implements CommandLineRunner {
 
     @GetMapping("/lastBlock")
     public Block obtainLastMinedBlock() {
-        return new Block();
+        try {
+            QuorumResponse quorumResponse = dispatchAsyncRequest(obtainLastBlockRequest(), UNORDERED_REQUEST);
+            ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+            objIn.readInt();
+            byte[] hash = (byte[]) objIn.readObject();
+            boolean result = objIn.readBoolean();
+            Block block = (Block) objIn.readObject();
+            if(!result) {
+                logger.info("BAD REQUEST");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
+            } else {
+                logger.info("Obtained valid block from a quorum of replicas");
+                return block;
+            }
+        } catch(InterruptedException | ExecutionException | IOException | ClassNotFoundException e) {
+            logger.error("Exception in obtainLastBlock. Cause: {}", e.getMessage());
+            e.printStackTrace();
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     @GetMapping("/pendingTransactions/{numPending}")
@@ -442,6 +460,15 @@ public class LedgerController implements CommandLineRunner {
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.PICK_NOT_MINED_TRANSACTIONS);
         objOut.writeInt(numPending);
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] obtainLastBlockRequest() throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.OBTAIN_LAST_BLOCK);
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();

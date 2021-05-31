@@ -347,7 +347,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     Commit commit = (Commit) objIn.readObject();
                     BlockAndReward blockAndReward = (BlockAndReward) commit.getRequest();
                     SignedTransaction t = (SignedTransaction) blockAndReward.getTransaction();
-                    String publicKey = (String) objIn.readObject();
+                    String publicKey = blockAndReward.getBlock().getBlockHeader().getWhoSigned();
                     String nonce = jedis.lindex(publicKey, WALLET_NONCE);
                     Block block = blockAndReward.getBlock();
                     nonce = Integer.toString(Integer.parseInt(nonce) + 1);
@@ -515,6 +515,26 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         objOut.writeObject(null);
                     }
                     break;
+                } case OBTAIN_LAST_BLOCK: {
+                    logger.info("Obtaining last block");
+                    List<String> l = jedis.lrange(BLOCK_CHAIN,-1,-1);
+                    if(l.size() == 0) {
+                        logger.info("No blocks available");
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(false);
+                        objOut.writeObject(null);
+                    } else {
+                        logger.info("Sending the last block");
+                        Block block = gson.fromJson(l.get(0),Block.class);
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(block)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(true);
+                        objOut.writeObject(block);
+                    }
+                    break;
                 }
             }
             objOut.flush();
@@ -561,14 +581,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     }
 
     private boolean verifyBlockContent(BlockHeader blockHeader, List<ValidTransaction> transactionsToBeVerified) {
-        /*
-        for(int i = 0; i < notMinedTransactions.size(); i++) {
-        if(i == 0)
-            finalHash = finalHash.concat(notMinedTransactions.get(i).getHash());
-        else
-            finalHash = gson.toJson(TOMUtil.computeHash(finalHash.concat(notMinedTransactions.get(i).getHash()).getBytes()));
-        }
-         */
         List<String> transactionsInBlock = blockHeader.getTransactions();
         String finalHash = "";
         assert transactionsToBeVerified != null;
@@ -580,9 +592,11 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         finalHash = finalHash.concat(transaction.getHash());
                     else
                         finalHash = gson.toJson(TOMUtil.computeHash(finalHash.concat(transaction.getHash()).getBytes()));
-                } else
+                } else {
                     return false;
+                }
             }
+            finalHash = base32.encodeAsString(finalHash.getBytes());
             return finalHash.equals(blockHeader.getIntegrityHash());
         }
         return false;

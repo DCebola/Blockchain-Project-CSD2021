@@ -341,7 +341,21 @@ public class RestClient {
         }
     }
 
-    private static void obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory) {
+    private static Block obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory) {
+        try {
+            ResponseEntity<Block> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(OBTAIN_LAST_BLOCK_URL,port),
+                    HttpMethod.GET, null, Block.class);
+            if(response.getStatusCode().is2xxSuccessful()) {
+                Block block = response.getBody();
+                System.out.println(gson.toJson(block));
+                return block;
+            }
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+        return null;
     }
 
     private static void mineTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
@@ -378,6 +392,8 @@ public class RestClient {
         ResponseEntity<BlockAndReward> response
                 = new RestTemplate(requestFactory).exchange(
                 String.format(SEND_MINED_BLOCK_URL, port), HttpMethod.POST, request, BlockAndReward.class);
+        if (response.getStatusCode().is2xxSuccessful())
+            currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
         System.out.println(gson.toJson(response.getBody()));
     }
 
