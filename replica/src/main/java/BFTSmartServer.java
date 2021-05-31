@@ -296,7 +296,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     byte[] sigBytes = (byte[]) objIn.readObject();
                     String nonce = jedis.lindex(pubKey, WALLET_NONCE);
                     String msg = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeaderAndReward).concat(nonce));
-                    if (verifySignature(pubKey, msg, sigBytes)) {
+                    if (verifySignature(pubKey, msg, sigBytes) && transaction.getDestination().equals(pubKey) && transaction.getOrigin().equals("SYSTEM") && transaction.getAmount() == 20) {
                         logger.info("Signature verified successfully.");
                         byte[] block = gson.toJson(blockHeader).getBytes();
                         byte[] hashedBlock = generateHash(block, "SHA-256");
