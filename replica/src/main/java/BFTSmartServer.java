@@ -623,11 +623,14 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     }
 
     private ValidTransaction findTransaction(String id) {
-        List<String> serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
-        for (String t : serializedLedger) {
-            ValidTransaction transaction = gson.fromJson(t, ValidTransaction.class);
-            if (transaction.getId().equals(id))
-                return transaction;
+        List<String> blocks = jedis.lrange(BLOCK_CHAIN,1,-1);
+        for(String b: blocks) {
+            Block block = gson.fromJson(b,Block.class);
+            List<ValidTransaction> validTransactions = block.getSignedTransactions();
+            for(ValidTransaction transaction: validTransactions) {
+                if (transaction.getId().equals(id))
+                    return transaction;
+            }
         }
         return null;
     }
