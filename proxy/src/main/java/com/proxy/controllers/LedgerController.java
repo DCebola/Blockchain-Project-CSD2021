@@ -48,7 +48,6 @@ public class LedgerController implements CommandLineRunner {
             logger.error("Exception in obtainCoins. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
-
     }
 
     @PostMapping("/register/{who}")
@@ -248,11 +247,21 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
-    @PostMapping("/{who}/mine")
-    public String sendMinedBlock(@PathVariable String who, @RequestBody SignedBody<BlockHeader> signedBody) throws IOException, ExecutionException, InterruptedException {
-        QuorumResponse quorumResponse = dispatchAsyncRequest(createSendMinedBlockRequest(signedBody, who), ORDERED_REQUEST);
+    @PostMapping("/mine")
+    public BlockAndReward sendMinedBlock(@RequestBody SignedBody<BlockHeaderAndReward> signedBody) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createSendMinedBlockRequest(signedBody), ORDERED_REQUEST);
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
         objIn.readInt();
+        byte[] hash = (byte[]) objIn.readObject();
+        if (!objIn.readBoolean()) {
+            logger.info("BAD REQUEST");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
+        } else {
+            BlockAndReward blockAndReward = (BlockAndReward) objIn.readObject();
+            blockAndReward = commitBlock(blockAndReward, hash, quorumResponse);
+            logger.info("OK. Adding block to blockchain");
+            return blockAndReward;
+        }
     }
 
     @PostMapping("/smartTransfer")
@@ -321,6 +330,20 @@ public class LedgerController implements CommandLineRunner {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tampered request.");
         }
         return (ValidTransaction) objIn.readObject();
+    }
+
+    private BlockAndReward commitBlock(BlockAndReward blockAndReward, byte[] hash, QuorumResponse quorumResponse) throws InterruptedException, ExecutionException, IOException, ClassNotFoundException {
+        Commit<BlockAndReward> commit = new Commit<>(blockAndReward, base32.encodeAsString(hash), quorumResponse.getReplicas());
+        quorumResponse = commit(commit, LedgerRequestType.COMMIT_BLOCK);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readInt();
+        objIn.readObject(); //Hash
+        if (!objIn.readBoolean()) {
+            logger.info("Found tampered request!");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tampered request.");
+        }
+        return (BlockAndReward) objIn.readObject();
+
     }
 
     private byte[] createGetNonceRequest(String who, SignedBody<String> body) throws IOException {
@@ -424,14 +447,12 @@ public class LedgerController implements CommandLineRunner {
         return byteOut.toByteArray();
     }
 
-    private byte[] createSendMinedBlockRequest(SignedBody<BlockHeader> signedBody, String who) throws IOException {
+    private byte[] createSendMinedBlockRequest(SignedBody<BlockHeaderAndReward> signedBody) throws IOException {
         ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.SEND_MINED_BLOCK);
-        objOut.writeObject(who);
-        System.out.println(gson.toJson(signedBody.getSignature()));
-        BlockHeader blockHeader = signedBody.getContent();
-        objOut.writeObject(blockHeader);
+        BlockHeaderAndReward blockHeaderAndReward = signedBody.getContent();
+        objOut.writeObject(blockHeaderAndReward);
         objOut.writeObject(signedBody.getSignature());
         objOut.flush();
         byteOut.flush();

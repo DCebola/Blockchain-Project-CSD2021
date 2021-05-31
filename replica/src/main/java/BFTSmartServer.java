@@ -282,31 +282,40 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 break;
                 case SEND_MINED_BLOCK: {
                     logger.debug("New SEND_MINED_BLOCK operation.");
-                    String pubKey = (String) objIn.readObject();
-                    BlockHeader blockHeader = (BlockHeader) objIn.readObject();
+                    BlockHeaderAndReward blockHeaderAndReward = (BlockHeaderAndReward) objIn.readObject();
+                    BlockHeader blockHeader = blockHeaderAndReward.getBlockHeader();
+                    Transaction transaction = blockHeaderAndReward.getTransaction();
+                    String pubKey = blockHeader.getWhoSigned();
                     byte[] sigBytes = (byte[]) objIn.readObject();
                     String nonce = jedis.lindex(pubKey, WALLET_NONCE);
-                    String msg = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeader).concat(nonce));
+                    String msg = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeaderAndReward).concat(nonce));
                     if(verifySignature(pubKey,msg,sigBytes)) {
                         logger.info("Signature verified successfully.");
                         byte[] block = gson.toJson(blockHeader).getBytes();
                         byte[] hashedBlock = generateHash(block,"SHA-256");
                         if(validProofOfWork(hashedBlock)) {
                             logger.info("Valid proof of work");
-                            nonce = Integer.toString(Integer.parseInt(nonce) + 1);
-                            jedis.lset(pubKey, WALLET_NONCE, nonce);
                             List<ValidTransaction> transactionsToBeVerified = getLedger(blockHeader.getTransactions().size() - 1);
                             assert transactionsToBeVerified != null;
                             if(verifyBlockContent(blockHeader,transactionsToBeVerified)) {
                                 logger.info("Block completely verified!!");
                                 Block finalBlock = new Block(blockHeader,transactionsToBeVerified);
-                                byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(finalBlock)).getBytes());
+                                byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(finalBlock)).concat(pubKey).getBytes());
                                 objOut.writeInt(id);
                                 objOut.writeObject(hash);
                                 objOut.writeBoolean(true);
-                                objOut.writeObject(finalBlock);
-                                //jedis.rpush(BLOCK_CHAIN, gson.toJson(finalBlock));
-                                //jedis.ltrim(GLOBAL_LEDGER,transactionsToBeVerified.size(),-1);
+                                byte[] idBytes = new byte[TRANSACTION_ID_SIZE];
+                                rand.nextBytes(idBytes);
+                                SignedTransaction signedTransaction = new SignedTransaction(
+                                        transaction.getOrigin(),
+                                        transaction.getDestination(),
+                                        transaction.getAmount(),
+                                        base32.encodeAsString(sigBytes),
+                                        transaction.getDate(),
+                                        "0xTB" + base32.encodeAsString(idBytes)
+                                );
+                                BlockAndReward blockAndReward = new BlockAndReward(finalBlock,signedTransaction);
+                                objOut.writeObject(blockAndReward);
                             } else {
                                 logger.info("Block content invalid!!");
                                 byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
@@ -333,6 +342,34 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     }
                 }
                 break;
+                case COMMIT_BLOCK: {
+                    logger.info("Commit block");
+                    Commit commit = (Commit) objIn.readObject();
+                    BlockAndReward blockAndReward = (BlockAndReward) commit.getRequest();
+                    SignedTransaction t = (SignedTransaction) blockAndReward.getTransaction();
+                    String publicKey = (String) objIn.readObject();
+                    String nonce = jedis.lindex(publicKey, WALLET_NONCE);
+                    Block block = blockAndReward.getBlock();
+                    nonce = Integer.toString(Integer.parseInt(nonce) + 1);
+                    jedis.lset(publicKey, WALLET_NONCE, nonce);
+                    jedis.rpush(BLOCK_CHAIN, gson.toJson(block));
+                    jedis.ltrim(GLOBAL_LEDGER,block.getSignedTransactions().size(),-1);
+                    ValidTransaction transaction = new ValidTransaction(
+                            t.getOrigin(),
+                            t.getDestination(),
+                            t.getAmount(),
+                            t.getSignature(),
+                            t.getDate(),
+                            commit.getHash(),
+                            commit.getReplicas(),
+                            t.getId());
+                    jedis.rpush(GLOBAL_LEDGER, gson.toJson(transaction));
+                    objOut.writeInt(id);
+                    objOut.writeObject(TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(blockAndReward)).getBytes()));
+                    objOut.writeBoolean(true);
+                    objOut.writeObject(blockAndReward);
+                    logger.info("Block added to global ledger");
+                }
             }
             objOut.flush();
             byteOut.flush();
@@ -499,7 +536,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         }
         //String previousHash = gson.fromJson(jedis.lrange(BLOCK_CHAIN,-1,-1).get(0),Block.class).getBlockHeader().;
         String previousHash = "test";
-        return new BlockHeader(previousHash,blockTransactions,integrityHash,timeStamp);
+        return new BlockHeader(null,previousHash,blockTransactions,integrityHash,timeStamp);
     }
 
     private String buildCumulativeHash(List<ValidTransaction> notMinedTransactions) throws EncoderException {

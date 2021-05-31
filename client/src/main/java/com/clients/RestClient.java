@@ -2,6 +2,7 @@ package com.clients;
 
 import com.google.gson.Gson;
 import org.apache.commons.codec.binary.Base32;
+import org.apache.http.Header;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
@@ -31,6 +32,7 @@ public class RestClient {
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
     private static final String GENESIS_DATE = "2021-01-01 01:01:01";
     private static final String PROOF_OF_WORK_CHALLENGE = "0000000000000000";
+    private static final String SYSTEM = "SYSTEM";
 
     private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
     private static final String OBTAIN_COINS_URL = "https://127.0.0.1:%s/%s/obtainCoins";
@@ -42,7 +44,7 @@ public class RestClient {
     private static final String VERIFY_OPERATION = "https://127.0.0.1:%s/verify/%s";
     private static final String OBTAIN_LAST_BLOCK_URL = "https://127.0.0.1:%s/lastBlock";
     private static final String MINE_TRANSACTIONS_URL = "https://127.0.0.1:%s/pendingTransactions/%s";
-    private static final String SEND_MINED_BLOCK_URL = "https://127.0.0.1:%s/%s/mine";
+    private static final String SEND_MINED_BLOCK_URL = "https://127.0.0.1:%s/mine";
 
     private static final int REGISTER = 0;
     private static final int REQUEST_NONCE = 1;
@@ -356,6 +358,7 @@ public class RestClient {
 
             BlockHeader blockHeader = response.getBody();
             if(blockHeader != null) {
+                blockHeader.setWhoSigned(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
                 BlockHeader finalBlock = startProofOfWork(blockHeader);
                 sendMinedBlock(requestFactory,finalBlock);
             }
@@ -365,13 +368,17 @@ public class RestClient {
     }
 
     private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
-        String msgToBeHashed = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeader).concat(currentSession.getNonce()));
+        String currentDate = LocalDateTime.now().format(dateTimeFormatter);
+        Transaction reward = new Transaction(SYSTEM,blockHeader.getWhoSigned(),20,currentDate);
+        BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader,reward);
+        String msgToBeHashed = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeaderAndReward).concat(currentSession.getNonce()));
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
-        SignedBody<BlockHeader> signedBody = new SignedBody<>(blockHeader,sigBytes,null);
-        HttpEntity<SignedBody<BlockHeader>> request = new HttpEntity<>(signedBody);
-        ResponseEntity<String> response
+        SignedBody<BlockHeaderAndReward> signedBody = new SignedBody<>(blockHeaderAndReward,sigBytes,null);
+        HttpEntity<SignedBody<BlockHeaderAndReward>> request = new HttpEntity<>(signedBody);
+        ResponseEntity<BlockAndReward> response
                 = new RestTemplate(requestFactory).exchange(
-                String.format(SEND_MINED_BLOCK_URL, port,base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
+                String.format(SEND_MINED_BLOCK_URL, port), HttpMethod.POST, request, BlockAndReward.class);
+        System.out.println(gson.toJson(response.getBody()));
     }
 
     private static BlockHeader startProofOfWork(BlockHeader blockHeader) throws NoSuchAlgorithmException {

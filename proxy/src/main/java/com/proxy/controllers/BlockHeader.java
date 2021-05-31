@@ -12,9 +12,11 @@ public class BlockHeader implements Serializable {
     private int work;
     private final String integrityHash;
     private final List<String> transactions;
+    private String whoSigned;
 
 
-    public BlockHeader(String previousHash, List<String> transactions, String integrityHash, String timeStamp) {
+    public BlockHeader(String whoSigned, String previousHash, List<String> transactions, String integrityHash, String timeStamp) {
+        this.whoSigned = whoSigned;
         this.previousHash = previousHash;
         this.transactions = transactions;
         this.integrityHash = integrityHash;
@@ -22,12 +24,17 @@ public class BlockHeader implements Serializable {
         this.work = -1;
     }
 
-    public BlockHeader(){
+    public BlockHeader() {
+        this.whoSigned = null;
         this.previousHash = null;
         this.transactions = null;
         this.integrityHash = null;
         this.timeStamp = null;
         this.work = -1;
+    }
+
+    public String getWhoSigned() {
+        return whoSigned;
     }
 
     public String getPreviousHash() {
@@ -52,5 +59,9 @@ public class BlockHeader implements Serializable {
 
     public void setWork(int work) {
         this.work = work;
+    }
+
+    public void setWhoSigned(String whoSigned) {
+        this.whoSigned = whoSigned;
     }
 }
