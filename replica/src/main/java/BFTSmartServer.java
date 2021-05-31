@@ -661,14 +661,16 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         long endDate = Timestamp.valueOf(dateInterval.getEndDate()).getTime();
 
         List<ValidTransaction> deserializedLedger = new LinkedList<>();
-        List<String> serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
-
-        for (String t : serializedLedger) {
-            ValidTransaction transaction = gson.fromJson(t, ValidTransaction.class);
-            long transactionTimeStamp = Timestamp.valueOf(transaction.getDate()).getTime();
-
-            if (transactionTimeStamp >= startDate && transactionTimeStamp <= endDate) {
-                deserializedLedger.add(transaction);
+        //List<String> serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
+        List<String> blocks = jedis.lrange(BLOCK_CHAIN, 1, -1);
+        for(String b: blocks) {
+            Block block = gson.fromJson(b,Block.class);
+            List<ValidTransaction> validTransactions = block.getSignedTransactions();
+            for (ValidTransaction transaction : validTransactions) {
+                long transactionTimeStamp = Timestamp.valueOf(transaction.getDate()).getTime();
+                if (transactionTimeStamp >= startDate && transactionTimeStamp <= endDate) {
+                    deserializedLedger.add(transaction);
+                }
             }
         }
         return deserializedLedger;
