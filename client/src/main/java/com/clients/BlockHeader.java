@@ -24,6 +24,15 @@ public class BlockHeader implements Serializable {
         this.work = -1;
     }
 
+    public BlockHeader(String whoSigned, String previousHash, List<String> transactions, String integrityHash, String timeStamp, int work) {
+        this.whoSigned = whoSigned;
+        this.previousHash = previousHash;
+        this.transactions = transactions;
+        this.integrityHash = integrityHash;
+        this.timeStamp = timeStamp;
+        this.work = work;
+    }
+
     public BlockHeader() {
         this.whoSigned = null;
         this.previousHash = null;

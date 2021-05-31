@@ -52,23 +52,30 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private final SecureRandom rand;
 
 
-    public BFTSmartServer(int id) throws IOException {
+    public BFTSmartServer(int id) throws IOException, NoSuchAlgorithmException {
         this.id = id;
         this.logger = LoggerFactory.getLogger(this.getClass().getName());
         this.base32 = new Base32();
-        this.gson = new Gson();
         this.rand = new SecureRandom();
+        this.gson = new Gson();
+        int work = -100283092;
+        BlockHeader blockHeader = new BlockHeader(null,null,null,base32.encodeAsString(TOMUtil.computeHash(gson.toJson(null).getBytes())),null,-100283092);
+        byte[] block = gson.toJson(blockHeader).getBytes();
+        byte[] hashedBlock = generateHash(block,"SHA-256");
+        Block genesisBlock = new Block(blockHeader,null);
         Properties jedis_properties = new Properties();
+
         //TODO: tls with redis
         jedis_properties.load(new FileInputStream("config/redis.config"));
         String redisPort = jedis_properties.getProperty("redis_port");
         String redis_ip = "172.18.30.".concat(Integer.toString(id));
         jedis = new Jedis("redis://".concat(redis_ip).concat(":").concat(redisPort));
+        jedis.rpush(BLOCK_CHAIN,gson.toJson(genesisBlock));
         new ServiceReplica(id, this, this);
 
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
         if (args.length == 1) {
             Security.addProvider(new BouncyCastleProvider()); //Added bouncy castle provider
             new BFTSmartServer(Integer.parseInt(args[0]));
