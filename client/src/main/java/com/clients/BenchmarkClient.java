@@ -60,11 +60,33 @@ public class BenchmarkClient {
     private static final String CLIENT = "client";
     private static final String PASS = "Pass";
 
-    private static final int ALL = 0;
-    private static final int UP_TO = 1;
-    private static final int IN_BETWEEN = 2;
+    private static final String ALL = "ALL";
+    private static final String UP_TO = "UP_TO";
+    private static final String IN_BETWEEN = "IN_BETWEEN";
 
     private static final String HASH_ALGORITHM = "SHA-256";
+
+    /*
+    REQUEST_NONCE
+    OBTAIN_COINS 200
+    OBTAIN_COINS 200
+    OBTAIN_COINS 200
+    OBTAIN_COINS 200
+    OBTAIN_COINS 200
+    OBTAIN_COINS 200
+    OBTAIN_COINS 200
+    OBTAIN_COINS
+    MINE_TRANSACTIONS 2
+    TRANSFER_MONEY 200
+    GLOBAL_LEDGER ALL
+    GLOBAL_LEDGER UP_TO 2022-01-01,01:01:01
+    GLOBAL_LEDGER IN_BETWEEN 2021-01-01,01:01:01 2022-01-01,01:01:01
+    CLIENT_LEDGER IN_BETWEEN 2021-01-01,01:01:01 2022-01-01,01:01:01
+    CLIENT_LEDGER ALL
+    CLIENT_LEDGER UP_TO 2022-01-01,01:01:01
+    OBTAIN_LAST_BLOCK
+     */
+
 
     private static Gson gson;
     private static Base32 base32;
@@ -80,7 +102,6 @@ public class BenchmarkClient {
             client = args[2];
             clientPassword = args[3].toCharArray();
         }
-
 
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
@@ -128,10 +149,10 @@ public class BenchmarkClient {
                     balance(requestFactory);
                     break;
                 case GLOBAL_LEDGER:
-                    ledgerOfGlobalTransactions(requestFactory, in);
+                    ledgerOfGlobalTransactions(requestFactory, opInfo);
                     break;
                 case CLIENT_LEDGER:
-                    ledgerOfClientTransactions(requestFactory, in);
+                    ledgerOfClientTransactions(requestFactory, opInfo);
                     break;
                 case VERIFY_OP:
                     verify(requestFactory, in);
@@ -140,7 +161,7 @@ public class BenchmarkClient {
                     obtainLastBlock(requestFactory);
                     break;
                 case MINE_TRANSACTIONS:
-                    mineTransactions(requestFactory, in);
+                    mineTransactions(requestFactory, Integer.parseInt(opInfo[1]));
                     break;
             }
             line = buf.readLine();
@@ -164,37 +185,15 @@ public class BenchmarkClient {
 
     private static String obtainClientPubKey(String client) throws CertificateException, NoSuchAlgorithmException, KeyStoreException, IOException {
         String publicKey;
-        String clientNum = client.substring(client.length()-1);
-        if(Integer.parseInt(clientNum) == 5)
-            return getPublicKey(CLIENT_1,CLIENT_1_PASS.toCharArray());
+        String clientNum = client.substring(client.length() - 1);
+        if (Integer.parseInt(clientNum) == 5)
+            return getPublicKey(CLIENT_1, CLIENT_1_PASS.toCharArray());
         else {
             clientNum = Integer.toString(Integer.parseInt(clientNum) + 1);
             return getPublicKey(CLIENT.concat(clientNum), CLIENT.concat(clientNum).concat(PASS).toCharArray());
         }
     }
 
-    private static void printSession() {
-        if (currentSession == null)
-            System.out.println("[No session active]");
-        else
-            System.out.println("[Current session: " + currentSession.getUsername() + "]");
-    }
-
-    private static void printOps() {
-        System.out.println("0 - Register");
-        System.out.println("1 - Change session");
-        System.out.println("2 - Obtain Coins");
-        System.out.println("3 - Transfer Money");
-        System.out.println("4 - Current Amount");
-        System.out.println("5 - Global Ledger");
-        System.out.println("6 - Client Ledger");
-        System.out.println("7 - Verify transaction");
-        System.out.println("8 - Obtain last block");
-        System.out.println("9 - Mine transactions");
-        System.out.println("10 - Send mined block");
-        System.out.println("11 - Quit");
-        System.out.print("> ");
-    }
 
     private static KeyStore getKeyStore(String user, char[] password) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException {
         FileInputStream is = new FileInputStream("src/main/resources/".concat(user).concat("_keystore.jks"));
@@ -257,13 +256,12 @@ public class BenchmarkClient {
     private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, double amount) {
         try {
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-            System.out.print("Insert amount: ");
             String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(currentSession.getNonce()).concat(currentDate));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes, currentDate);
             HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
-
+            System.out.println(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
             ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(OBTAIN_COINS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, ValidTransaction.class);
@@ -307,9 +305,9 @@ public class BenchmarkClient {
         }
     }
 
-    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory, String[] opInfo) {
         try {
-            DateInterval dateInterval = getDateInterval(in);
+            DateInterval dateInterval = getDateInterval(opInfo);
             HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
@@ -323,9 +321,9 @@ public class BenchmarkClient {
         }
     }
 
-    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, String[] opInfo ) {
         try {
-            DateInterval dateInterval = getDateInterval(in);
+            DateInterval dateInterval = getDateInterval(opInfo);
             HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
             ResponseEntity<Ledger> response
                     = new RestTemplate(requestFactory).exchange(
@@ -356,11 +354,8 @@ public class BenchmarkClient {
         return null;
     }
 
-    private static void mineTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+    private static void mineTransactions(HttpComponentsClientHttpRequestFactory requestFactory, int numberTransactions) {
         try {
-            System.out.print("Specify the number of transactions you want: ");
-            int numberTransactions = in.nextInt();
-            in.nextLine();
             ResponseEntity<LastBlockWithMiningInfo> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(MINE_TRANSACTIONS_URL, port, numberTransactions),
@@ -430,45 +425,36 @@ public class BenchmarkClient {
         return hash.digest();
     }
 
-    private static DateInterval getDateInterval(Scanner in) {
-        System.out.println("Select the range option:");
-        System.out.println("0 - All transactions.");
-        System.out.println("1 - All transactions before [date].");
-        System.out.println("2 - All transactions in [date-interval].");
-        System.out.print("> ");
-        int rangeOption = in.nextInt();
-        in.nextLine();
+    private static DateInterval getDateInterval(String[] opInfo) {
         String start = GENESIS_DATE;
         String end = GENESIS_DATE;
+        String rangeOption = opInfo[1];
         switch (rangeOption) {
             case ALL:
                 end = LocalDateTime.now().format(dateTimeFormatter);
                 break;
             case UP_TO:
-                System.out.printf("Specify the END DATE in the following format [%s]\nDate: ", DATE_FORMATTER);
-                end = parseDate(in);
+                end = parseDate(opInfo[2]);
                 break;
             case IN_BETWEEN:
-                System.out.printf("Specify the START DATE in the following format [%s]\nDate: ", DATE_FORMATTER);
-                start = parseDate(in);
-                System.out.printf("Specify the END DATE in the following format [%s]\nDate: ", DATE_FORMATTER);
-                end = parseDate(in);
+                start = parseDate(opInfo[2]);
+                end = parseDate(opInfo[3]);
                 break;
         }
         return new DateInterval(start, end);
     }
 
-    private static String parseDate(Scanner in) {
-        String date;
-        while (true) {
-            try {
-                date = in.nextLine();
-                dateTimeFormatter.parse(date);
-                return date;
-            } catch (DateTimeParseException e) {
-                System.out.printf("Bad date. Use the following format [%s]\n> ", DATE_FORMATTER);
-            }
+    private static String parseDate(String date) {
+        String[] d = date.split(",");
+        date = d[0].concat(" ").concat(d[1]);
+        System.out.println(date);
+        try {
+            dateTimeFormatter.parse(date);
+            return date;
+        } catch (DateTimeParseException e) {
+            System.out.printf("Bad date. Use the following format [%s]\n> ", DATE_FORMATTER);
         }
+        return null;
     }
 
     private static void verify(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {

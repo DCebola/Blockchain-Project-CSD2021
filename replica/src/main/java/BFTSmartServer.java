@@ -516,6 +516,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case CURRENT_AMOUNT: {
                     logger.debug("New CURRENT_AMOUNT operation.");
                     String publicKey = (String) objIn.readObject();
+                    System.out.println(publicKey);
                     if (!jedis.exists(publicKey)) {
                         logger.info("Key {} not registered.", publicKey);
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(Double.toString(-1)).getBytes());
