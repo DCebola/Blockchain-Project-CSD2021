@@ -23,7 +23,7 @@ public class BlockAndReward implements Serializable {
         return block;
     }
 
-    public SignedTransaction getReward() {
+    public SignedTransaction getTransaction() {
         return transaction;
     }
 }

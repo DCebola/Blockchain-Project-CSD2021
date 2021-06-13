@@ -276,6 +276,7 @@ public class LedgerController implements CommandLineRunner {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
         } else {
             BlockAndReward blockAndReward = (BlockAndReward) objIn.readObject();
+            logger.info(gson.toJson(blockAndReward));
             ValidTransaction reward = commitBlock(blockAndReward, hash, quorumResponse);
             logger.info("OK. Adding block to blockchain");
             return reward;

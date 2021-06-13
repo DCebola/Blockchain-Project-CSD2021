@@ -255,7 +255,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 } else {
                     hash = TOMUtil.computeHash(Boolean.toString(false).getBytes());
                     writeTransferMoneyResponse(objOut, hash, false, null);
-                    logger.info("Invalid Signature");
+                    logger.info("Not enough balance.");
                 }
             } else {
                 hash = TOMUtil.computeHash(Boolean.toString(true).getBytes());
@@ -291,13 +291,13 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
                 if (checkProofOfWork(hashedBlock)) {
                     logger.info("Valid proof of work");
-                    List<ValidTransaction> transactionsVerify = getPendingTransactions(blockHeader.getTransactions().size() - 1);
-                    assert transactionsVerify != null;
-                    if (verifyBlockContent(blockHeader, transactionsVerify)) {
+                    List<ValidTransaction> transactionsToVerify = getPendingTransactions(blockHeader.getTransactions().size() - 1);
+                    assert transactionsToVerify != null;
+                    if (verifyBlockContent(blockHeader, transactionsToVerify)) {
                         logger.info("Block completely verified.");
                         nonce = Integer.toString(Integer.parseInt(nonce) + 1);
                         jedis.lset(publicKey, WALLET_NONCE, nonce);
-                        Block finalBlock = new Block(blockHeader, transactionsVerify);
+                        Block finalBlock = new Block(blockHeader, transactionsToVerify);
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(finalBlock)).concat(publicKey).getBytes());
                         SignedTransaction signedReward = createSignedTransaction(
                                 reward.getOrigin(),
@@ -307,7 +307,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                 reward.getDate(),
                                 REWARD_TRANSACTION_ID_PREFIX
                         );
-                        writeSendMinedResponse(objOut, hash, true, new BlockAndReward(finalBlock, signedReward));
+                        BlockAndReward blockAndReward = new BlockAndReward(finalBlock, signedReward);
+                        logger.info("{}", gson.toJson(blockAndReward));
+                        writeSendMinedResponse(objOut, hash, true, blockAndReward);
                     } else {
                         logger.info("Block content invalid.");
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
@@ -406,21 +408,24 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         logger.debug("New COMMIT_BLOCK operation.");
         Commit commit = (Commit) objIn.readObject();
         BlockAndReward blockAndReward = (BlockAndReward) commit.getRequest();
-        SignedTransaction reward = blockAndReward.getReward();
+        SignedTransaction reward = blockAndReward.getTransaction();
         String publicKey = blockAndReward.getBlock().getBlockHeader().getAuthor();
         String nonce = jedis.lindex(publicKey, WALLET_NONCE);
         Block block = blockAndReward.getBlock();
+        logger.info("{}", gson.toJson(block));
+
         nonce = Integer.toString(Integer.parseInt(nonce) + 1);
 
         List<String> l = jedis.lrange(BLOCK_CHAIN, -1, -1);
+
         Block lastBlock = gson.fromJson(l.get(0), Block.class);
         BlockHeader lastBlockBlockHeader = lastBlock.getBlockHeader();
         byte[] lastBlockHeaderBytes = gson.toJson(lastBlockBlockHeader).getBytes();
         byte[] lastBlockHash = generateHash(lastBlockHeaderBytes, BLOCK_HASH_ALGORITHM);
-
         if (block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(lastBlockHash))) {
-            List<String> removedTransactions = jedis.lpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size());
-            cleanPendingRewards(removedTransactions);
+            jedis.lpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size());
+            //logger.info("{}", gson.toJson(removedTransactions));
+            //cleanPendingRewards(removedTransactions);
             addBlock(publicKey, nonce, block, reward, commit, objOut);
         } else {
             l = jedis.lrange(BLOCK_CHAIN, -2, -2);
@@ -464,20 +469,22 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     }
 
     private void cleanPendingRewards(List<String> removedTransactions) {
-        List<String> ids = new LinkedList<>();
-        removedTransactions.forEach(t -> ids.add(gson.fromJson(t, ValidTransaction.class).getId()));
-        List<String> pendingRewards = jedis.lrange(PENDING_REWARD, 0, -1);
-        int count = 0;
-        ListIterator<String> reverseIt = pendingRewards.listIterator();
-        PendingReward reward;
-        while (reverseIt.hasPrevious()) {
-            reward = gson.fromJson(reverseIt.previous(), PendingReward.class);
-            assert (reward != null);
-            if (ids.contains(reward.getRewardId()))
-                break;
-            count += 1;
+        if (removedTransactions != null) {
+            List<String> ids = new LinkedList<>();
+            removedTransactions.forEach(t -> ids.add(gson.fromJson(t, ValidTransaction.class).getId()));
+            List<String> pendingRewards = jedis.lrange(PENDING_REWARD, 0, -1);
+            int count = 0;
+            ListIterator<String> reverseIt = pendingRewards.listIterator();
+            PendingReward reward;
+            while (reverseIt.hasPrevious()) {
+                reward = gson.fromJson(reverseIt.previous(), PendingReward.class);
+                assert (reward != null);
+                if (ids.contains(reward.getRewardId()))
+                    break;
+                count += 1;
+            }
+            jedis.rpop(PENDING_REWARD, pendingRewards.size() - count);
         }
-        jedis.rpop(PENDING_REWARD, pendingRewards.size() - count);
     }
 
     private void cancelReward(String previousBlockHash) {
