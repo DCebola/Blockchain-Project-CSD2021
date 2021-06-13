@@ -66,10 +66,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
         int work = -100283092;
         BlockHeader blockHeader = new BlockHeader(
+                SYSTEM,
                 null,
                 null,
-                null,
-                base32.encodeAsString(TOMUtil.computeHash(gson.toJson(null).getBytes())),
+                base32.encodeAsString(TOMUtil.computeHash(SYSTEM.getBytes())),
                 null,
                 work);
         Block genesisBlock = new Block(blockHeader, null);
@@ -475,25 +475,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis.rpop(PENDING_REWARD, pendingRewards.size() - count);
     }
 
-    private void addBlock(String publicKey, String nonce, Block block, SignedTransaction t, Commit commit, ObjectOutput objOut) throws IOException {
-        jedis.lset(publicKey, WALLET_NONCE, nonce);
-        jedis.rpush(BLOCK_CHAIN, gson.toJson(block));
-        ValidTransaction validReward = new ValidTransaction(
-                t.getOrigin(),
-                t.getDestination(),
-                t.getAmount(),
-                t.getSignature(),
-                t.getDate(),
-                commit.getHash(),
-                commit.getReplicas(),
-                t.getId());
-        jedis.rpush(PENDING_REWARD, gson.toJson(new PendingReward(block.getBlockHeader().getPreviousHash(), validReward.getId())));
-        jedis.rpush(PENDING_TRANSACTIONS, gson.toJson(validReward));
-        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(block)).concat(gson.toJson(validReward)).getBytes());
-        writeCommitBlockResponse(objOut, hash, true, validReward);
-        logger.info("Block added to global ledger");
-    }
-
     private void cancelReward(String previousBlockHash) {
         List<String> pendingRewards = jedis.lrange(PENDING_REWARD, 0, -1);
         String rewardId = "";
@@ -515,6 +496,25 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 }
             }
         }
+    }
+
+    private void addBlock(String publicKey, String nonce, Block block, SignedTransaction t, Commit commit, ObjectOutput objOut) throws IOException {
+        jedis.lset(publicKey, WALLET_NONCE, nonce);
+        jedis.rpush(BLOCK_CHAIN, gson.toJson(block));
+        ValidTransaction validReward = new ValidTransaction(
+                t.getOrigin(),
+                t.getDestination(),
+                t.getAmount(),
+                t.getSignature(),
+                t.getDate(),
+                commit.getHash(),
+                commit.getReplicas(),
+                t.getId());
+        jedis.rpush(PENDING_REWARD, gson.toJson(new PendingReward(block.getBlockHeader().getPreviousHash(), validReward.getId())));
+        jedis.rpush(PENDING_TRANSACTIONS, gson.toJson(validReward));
+        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(block)).concat(gson.toJson(validReward)).getBytes());
+        writeCommitBlockResponse(objOut, hash, true, validReward);
+        logger.info("Block added to global ledger");
     }
 
     private boolean compareProofsOfWork(Block block, Block lastBlock) throws NoSuchAlgorithmException {
