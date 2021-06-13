@@ -270,7 +270,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         logger.debug("New SEND_MINED_BLOCK operation.");
         BlockHeaderAndReward blockHeaderAndReward = (BlockHeaderAndReward) objIn.readObject();
         BlockHeader blockHeader = blockHeaderAndReward.getBlockHeader();
-        Transaction reward = blockHeaderAndReward.getReward();
+        Transaction reward = blockHeaderAndReward.getTransaction();
         logger.info("{}", reward);
         String publicKey = blockHeader.getAuthor();
         byte[] sigBytes = (byte[]) objIn.readObject();
