@@ -98,9 +98,16 @@ public class BenchmarkClient {
         port = args[0];
         String client = "";
         char[] clientPassword = null;
+        String filename = "";
+        BufferedWriter writer = null;
         if(args.length > 2) {
             client = args[2];
             clientPassword = args[3].toCharArray();
+            filename = "src/main/resources/".concat(client).concat("_").concat("_results.csv");
+            writer = new BufferedWriter(new FileWriter(filename, true));
+            /*writer.append("Hello\t" + "World\n");
+            writer.append("Hello\t" + "World\n");
+            writer.close();*/
         }
 
         Security.addProvider(new BouncyCastleProvider());
@@ -140,32 +147,34 @@ public class BenchmarkClient {
                     requestNonce(requestFactory,client, clientPassword);
                     break;
                 case OBTAIN_COINS:
-                    callObtainCoins(requestFactory, Double.parseDouble(opInfo[1]));
+                    callObtainCoins(requestFactory, Double.parseDouble(opInfo[1]),writer);
                     break;
                 case TRANSFER_MONEY:
-                    transferMoney(requestFactory, Double.parseDouble(opInfo[1]));
+                    transferMoney(requestFactory, Double.parseDouble(opInfo[1]),writer);
                     break;
                 case CURRENT_AMOUNT:
-                    balance(requestFactory);
+                    balance(requestFactory,writer);
                     break;
                 case GLOBAL_LEDGER:
-                    ledgerOfGlobalTransactions(requestFactory, opInfo);
+                    ledgerOfGlobalTransactions(requestFactory, opInfo,writer);
                     break;
                 case CLIENT_LEDGER:
-                    ledgerOfClientTransactions(requestFactory, opInfo);
+                    ledgerOfClientTransactions(requestFactory, opInfo,writer);
                     break;
                 case VERIFY_OP:
-                    verify(requestFactory, in);
+                    verify(requestFactory, in,writer);
                     break;
                 case OBTAIN_LAST_BLOCK:
-                    obtainLastBlock(requestFactory);
+                    obtainLastBlock(requestFactory,writer);
                     break;
                 case MINE_TRANSACTIONS:
-                    mineTransactions(requestFactory, Integer.parseInt(opInfo[1]));
+                    mineTransactions(requestFactory, Integer.parseInt(opInfo[1]),writer);
                     break;
             }
             line = buf.readLine();
         }
+        if(writer != null)
+            writer.close();
     }
 
     private static void setSession(String client, char[] password) {
@@ -239,22 +248,27 @@ public class BenchmarkClient {
     }
 
 
-    private static void balance(HttpComponentsClientHttpRequestFactory requestFactory) {
+    private static void balance(HttpComponentsClientHttpRequestFactory requestFactory, BufferedWriter writer) {
         try {
+            long start = System.currentTimeMillis();
             ResponseEntity<Double> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(BALANCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, Double.class);
 
-            if (response.getStatusCode().is2xxSuccessful())
+            if (response.getStatusCode().is2xxSuccessful()) {
                 System.out.println("Balance: " + response.getBody());
+                long duration = System.currentTimeMillis() - start;
+                writer.append(CURRENT_AMOUNT.concat("\t").concat(Long.toString(duration)).concat("\n"));
+            }
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
-    private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, double amount) {
+    private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, double amount, BufferedWriter writer) {
         try {
+            long start = System.currentTimeMillis();
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
             String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(currentSession.getNonce()).concat(currentDate));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
@@ -271,6 +285,8 @@ public class BenchmarkClient {
                 System.out.println("New Nonce: " + currentSession.getNonce());
                 System.out.printf("[ %s ]\n", response.getBody());
                 currentSession.saveTransaction(response.getBody());
+                long duration = System.currentTimeMillis() - start;
+                writer.append(OBTAIN_COINS.concat("\t").concat(Long.toString(duration)).concat("\n"));
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -278,8 +294,9 @@ public class BenchmarkClient {
     }
 
 
-    private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, double amount) {
+    private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, double amount, BufferedWriter writer) {
         try {
+            long start = System.currentTimeMillis();
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
             String destination = obtainClientPubKey(currentSession.getUsername());
             Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
@@ -299,14 +316,17 @@ public class BenchmarkClient {
                 System.out.println(currentSession.getNonce());
                 System.out.printf("[ %s ]\n", response.getBody());
                 currentSession.saveTransaction(response.getBody());
+                long duration = System.currentTimeMillis() - start;
+                writer.append(TRANSFER_MONEY.concat("\t").concat(Long.toString(duration)).concat("\n"));
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
-    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory, String[] opInfo) {
+    private static void ledgerOfGlobalTransactions(HttpComponentsClientHttpRequestFactory requestFactory, String[] opInfo, BufferedWriter writer) {
         try {
+            long start = System.currentTimeMillis();
             DateInterval dateInterval = getDateInterval(opInfo);
             HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
             ResponseEntity<Ledger> response
@@ -316,13 +336,16 @@ public class BenchmarkClient {
             for (ValidTransaction t : Objects.requireNonNull(response.getBody()).getTransactions()) {
                 System.out.printf("[ %s ]\n", t);
             }
+            long duration = System.currentTimeMillis() - start;
+            writer.append(GLOBAL_LEDGER.concat("\t").concat(Long.toString(duration)).concat("\n"));
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
-    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, String[] opInfo ) {
+    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, String[] opInfo, BufferedWriter writer ) {
         try {
+            long start = System.currentTimeMillis();
             DateInterval dateInterval = getDateInterval(opInfo);
             HttpEntity<DateInterval> request = new HttpEntity<>(dateInterval);
             ResponseEntity<Ledger> response
@@ -331,14 +354,16 @@ public class BenchmarkClient {
 
             for (ValidTransaction t : Objects.requireNonNull(response.getBody()).getTransactions())
                 System.out.printf("[ %s ]\n", t);
-
+            long duration = System.currentTimeMillis() - start;
+            writer.append(CLIENT_LEDGER.concat("\t").concat(Long.toString(duration)).concat("\n"));
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
-    private static Block obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory) {
+    private static Block obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory, BufferedWriter writer) {
         try {
+            long start = System.currentTimeMillis();
             ResponseEntity<Block> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(OBTAIN_LAST_BLOCK_URL,port),
@@ -346,6 +371,8 @@ public class BenchmarkClient {
             if(response.getStatusCode().is2xxSuccessful()) {
                 Block block = response.getBody();
                 System.out.println(gson.toJson(block));
+                long duration = System.currentTimeMillis() - start;
+                writer.append(OBTAIN_LAST_BLOCK.concat("\t").concat(Long.toString(duration)).concat("\n"));
                 return block;
             }
         } catch (Exception e) {
@@ -354,8 +381,9 @@ public class BenchmarkClient {
         return null;
     }
 
-    private static void mineTransactions(HttpComponentsClientHttpRequestFactory requestFactory, int numberTransactions) {
+    private static void mineTransactions(HttpComponentsClientHttpRequestFactory requestFactory, int numberTransactions, BufferedWriter writer) {
         try {
+            long start = System.currentTimeMillis();
             ResponseEntity<LastBlockWithMiningInfo> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(MINE_TRANSACTIONS_URL, port, numberTransactions),
@@ -372,6 +400,8 @@ public class BenchmarkClient {
                     blockHeader.setWhoSigned(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
                     BlockHeader finalBlock = startProofOfWork(blockHeader);
                     sendMinedBlock(requestFactory,finalBlock);
+                    long duration = System.currentTimeMillis() - start;
+                    writer.append(MINE_TRANSACTIONS.concat("\t").concat(Long.toString(duration).concat("\n")));
                 }
             }
         } catch (Exception e) {
@@ -457,7 +487,7 @@ public class BenchmarkClient {
         return null;
     }
 
-    private static void verify(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+    private static void verify(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in, BufferedWriter writer) {
         try {
             String id = getTransactionId(in);
             ResponseEntity<ValidTransaction> response
