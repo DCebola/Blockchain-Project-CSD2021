@@ -268,9 +268,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
     private void sendMinedBlockRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException, NoSuchAlgorithmException, InvalidKeySpecException, SignatureException, InvalidKeyException {
         logger.debug("New SEND_MINED_BLOCK operation.");
-        BlockHeader blockHeader = (BlockHeader) objIn.readObject();
-        Transaction reward = (Transaction) objIn.readObject();
-        logger.info("{}",reward.getOrigin());
+        BlockHeaderAndReward blockHeaderAndReward = (BlockHeaderAndReward) objIn.readObject();
+        BlockHeader blockHeader = blockHeaderAndReward.getBlockHeader();
+        Transaction reward = blockHeaderAndReward.getReward();
+        logger.info("{}", reward);
         String publicKey = blockHeader.getAuthor();
         byte[] sigBytes = (byte[]) objIn.readObject();
         if (!jedis.exists(publicKey)) {
@@ -279,7 +280,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             writeSendMinedResponse(objOut, hash, false, null);
         } else {
             String nonce = jedis.lindex(publicKey, WALLET_NONCE);
-            String msg = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeader)).concat(gson.toJson(reward)).concat(nonce);
+            String msg = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(nonce);
             if (verifySignature(publicKey, msg, sigBytes)
                     && reward.getDestination().equals(publicKey)
                     && reward.getOrigin().equals(SYSTEM)

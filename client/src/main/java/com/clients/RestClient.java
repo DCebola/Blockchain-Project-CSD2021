@@ -381,7 +381,7 @@ public class RestClient {
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
         Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), REWARD, currentDate);
         BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader, reward);
-        String msgToBeHashed = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeader)).concat(gson.toJson(reward)).concat(currentSession.getNonce());
+        String msgToBeHashed = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(currentSession.getNonce());
         System.out.println(msgToBeHashed);
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
         SignedBody<BlockHeaderAndReward> signedBody = new SignedBody<>(blockHeaderAndReward, sigBytes, null);

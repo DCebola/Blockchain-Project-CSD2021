@@ -29,4 +29,3 @@ public class BlockHeaderAndReward implements Serializable {
 
 }
 
-

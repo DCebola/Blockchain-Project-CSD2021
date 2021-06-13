@@ -476,9 +476,7 @@ public class LedgerController implements CommandLineRunner {
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.SEND_MINED_BLOCK);
         BlockHeaderAndReward blockHeaderAndReward = signedBody.getContent();
-        logger.info("{}", gson.toJson(blockHeaderAndReward));
-        objOut.writeObject(blockHeaderAndReward.getBlockHeader());
-        objOut.writeObject(blockHeaderAndReward.getReward());
+        objOut.writeObject(blockHeaderAndReward);
         objOut.writeObject(signedBody.getSignature());
         objOut.flush();
         byteOut.flush();
