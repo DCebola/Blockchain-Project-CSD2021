@@ -23,6 +23,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -57,7 +58,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private final SecureRandom rand;
 
 
-    public BFTSmartServer(int id) throws IOException {
+    public BFTSmartServer(int id) throws IOException, InterruptedException {
         this.id = id;
         this.logger = LoggerFactory.getLogger(this.getClass().getName());
         this.base32 = new Base32();
@@ -83,13 +84,13 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String redis_ip = "172.18.30.".concat(Integer.toString(id));
         jedis = new Jedis("redis://".concat(redis_ip).concat(":").concat(redisPort));
 
-
+        TimeUnit.SECONDS.sleep(1);
         jedis.rpush(BLOCK_CHAIN, gson.toJson(genesisBlock));
         new ServiceReplica(id, this, this);
 
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         if (args.length == 1) {
             Security.addProvider(new BouncyCastleProvider()); //Added bouncy castle provider
             new BFTSmartServer(Integer.parseInt(args[0]));
@@ -179,7 +180,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             byte[] msgSignature = (byte[]) objIn.readObject();
             String date = (String) objIn.readObject();
             String nonce = jedis.lindex(publicKey, WALLET_NONCE);
-            String msg = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(nonce).concat(date));
+            String msg = LedgerRequestType.OBTAIN_COINS.name().concat(gson.toJson(amount)).concat(nonce).concat(date);
             byte[] hash;
             if (verifySignature(publicKey, msg, msgSignature) && amount > 0) {
                 nonce = Integer.toString(Integer.parseInt(nonce) + 1);
@@ -234,7 +235,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             String date = transaction.getDate();
             byte[] msgSignature = (byte[]) objIn.readObject();
             String nonce = jedis.lindex(origin, WALLET_NONCE);
-            String msg = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(transaction).concat(nonce).concat(date));
+            String msg = LedgerRequestType.TRANSFER_MONEY.name().concat(gson.toJson(transaction)).concat(nonce).concat(date);
             if (amount > 0 && verifySignature(origin, msg, msgSignature)) {
                 logger.info("Signature verified successfully.");
                 if (getBalance(origin) >= amount) {
@@ -269,6 +270,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         logger.debug("New SEND_MINED_BLOCK operation.");
         BlockHeader blockHeader = (BlockHeader) objIn.readObject();
         Transaction reward = (Transaction) objIn.readObject();
+        logger.info("{}",reward.getOrigin());
         String publicKey = blockHeader.getAuthor();
         byte[] sigBytes = (byte[]) objIn.readObject();
         if (!jedis.exists(publicKey)) {
@@ -277,7 +279,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             writeSendMinedResponse(objOut, hash, false, null);
         } else {
             String nonce = jedis.lindex(publicKey, WALLET_NONCE);
-            String msg = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeader).concat(gson.toJson(reward)).concat(nonce));
+            String msg = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeader)).concat(gson.toJson(reward)).concat(nonce);
             if (verifySignature(publicKey, msg, sigBytes)
                     && reward.getDestination().equals(publicKey)
                     && reward.getOrigin().equals(SYSTEM)
@@ -292,6 +294,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     assert transactionsVerify != null;
                     if (verifyBlockContent(blockHeader, transactionsVerify)) {
                         logger.info("Block completely verified.");
+                        nonce = Integer.toString(Integer.parseInt(nonce) + 1);
+                        jedis.lset(publicKey, WALLET_NONCE, nonce);
                         Block finalBlock = new Block(blockHeader, transactionsVerify);
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(finalBlock)).concat(publicKey).getBytes());
                         SignedTransaction signedReward = createSignedTransaction(
@@ -584,7 +588,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         logger.debug("New REQUEST_NONCE operation");
         String publicKey = (String) objIn.readObject();
         if (jedis.exists(publicKey)) {
-            String message = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(publicKey));
+            String message = LedgerRequestType.GET_NONCE.name().concat(publicKey);
             byte[] msgSignature = (byte[]) objIn.readObject();
             if (verifySignature(publicKey, message, msgSignature)) {
                 logger.info("Signature verified");

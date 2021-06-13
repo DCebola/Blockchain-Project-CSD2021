@@ -212,7 +212,7 @@ public class RestClient {
     private static void requestNonce(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             setSession(in);
-            String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(base32.encodeAsString(currentSession.getPublicKey().getEncoded())));
+            String msgToBeHashed = LedgerRequestType.GET_NONCE.name().concat(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<String> signedBody = new SignedBody<>("", sigBytes, null);
@@ -252,7 +252,7 @@ public class RestClient {
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
             System.out.print("Insert amount: ");
             double amount = in.nextDouble();
-            String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(currentSession.getNonce()).concat(currentDate));
+            String msgToBeHashed = LedgerRequestType.OBTAIN_COINS.name().concat(gson.toJson(amount)).concat(currentSession.getNonce()).concat(currentDate);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes, currentDate);
@@ -290,7 +290,7 @@ public class RestClient {
             double amount = in.nextDouble();
 
             Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
-            String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t).concat(currentSession.getNonce()).concat(currentDate));
+            String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY.name().concat(gson.toJson(t)).concat(currentSession.getNonce()).concat(currentDate);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes, currentDate);
@@ -381,9 +381,11 @@ public class RestClient {
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
         Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), REWARD, currentDate);
         BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader, reward);
-        String msgToBeHashed = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeader).concat(gson.toJson(reward)).concat(currentSession.getNonce()));
+        String msgToBeHashed = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeader)).concat(gson.toJson(reward)).concat(currentSession.getNonce());
+        System.out.println(msgToBeHashed);
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
         SignedBody<BlockHeaderAndReward> signedBody = new SignedBody<>(blockHeaderAndReward, sigBytes, null);
+        System.out.println(gson.toJson(signedBody.getContent()));
         HttpEntity<SignedBody<BlockHeaderAndReward>> request = new HttpEntity<>(signedBody);
         ResponseEntity<ValidTransaction> response
                 = new RestTemplate(requestFactory).exchange(

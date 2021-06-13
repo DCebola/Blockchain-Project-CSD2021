@@ -5,18 +5,18 @@ import java.io.Serializable;
 public class BlockHeaderAndReward implements Serializable {
 
     private final BlockHeader blockHeader;
-    private final Transaction reward;
+    private final Transaction transaction;
 
-    private static final long serialVersionUID = 6345655068467727690L;
+    private static final long serialVersionUID = 6342655068467727690L;
 
     public BlockHeaderAndReward() {
         this.blockHeader = null;
-        this.reward = null;
+        this.transaction = null;
     }
 
-    public BlockHeaderAndReward(BlockHeader blockHeader, Transaction reward) {
+    public BlockHeaderAndReward(BlockHeader blockHeader, Transaction transaction) {
         this.blockHeader = blockHeader;
-        this.reward = reward;
+        this.transaction = transaction;
     }
 
     public BlockHeader getBlockHeader() {
@@ -24,7 +24,7 @@ public class BlockHeaderAndReward implements Serializable {
     }
 
     public Transaction getReward() {
-        return reward;
+        return transaction;
     }
 
 }
