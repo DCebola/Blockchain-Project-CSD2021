@@ -403,11 +403,161 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         }
                     }
                 }
+                break;
+                case GET_NONCE: {
+                    logger.debug("New REQUEST_NONCE operation");
+                    String publicKey = (String) objIn.readObject();
+                    if (jedis.exists(publicKey)) {
+                        String message = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(publicKey));
+                        byte[] msgSignature = (byte[]) objIn.readObject();
+                        if (verifySignature(publicKey, message, msgSignature)) {
+                            logger.info("Signature verified");
+                            String nonce = jedis.lindex(publicKey, WALLET_NONCE);
+                            byte[] hashResult = TOMUtil.computeHash(Boolean.toString(true).concat(nonce).getBytes());
+                            objOut.writeInt(id);
+                            objOut.writeObject(hashResult);
+                            objOut.writeBoolean(true);
+                            objOut.writeObject(nonce);
+                        } else {
+                            logger.info("Signature not verified");
+                            byte[] hashResult = TOMUtil.computeHash(Boolean.toString(false).concat(NO_NONCE).getBytes());
+                            objOut.writeInt(id);
+                            objOut.writeObject(hashResult);
+                            objOut.writeBoolean(false);
+                            objOut.writeObject(NO_NONCE);
+                        }
+                    } else {
+                        logger.info("Key not registered.");
+                        byte[] hashResult = TOMUtil.computeHash(Boolean.toString(false).concat(NO_NONCE).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hashResult);
+                        objOut.writeBoolean(false);
+                        objOut.writeObject(NO_NONCE);
+                    }
+                    break;
+                }
+                case CURRENT_AMOUNT: {
+                    logger.debug("New CURRENT_AMOUNT operation.");
+                    String publicKey = (String) objIn.readObject();
+                    System.out.println(publicKey);
+                    if (!jedis.exists(publicKey)) {
+                        logger.info("Key {} not registered.", publicKey);
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(Double.toString(-1)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(false);
+                        objOut.writeDouble(-1);
+                    } else {
+                        double balance = getBalance(publicKey);
+                        logger.info("{} coins associated with key {}.", publicKey, balance);
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(Double.toString(balance)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(true);
+                        objOut.writeDouble(balance);
+                    }
+                    break;
+                }
+                case GLOBAL_LEDGER: {
+                    DateInterval dateInterval = (DateInterval) objIn.readObject();
+                    logger.debug("New GLOBAL_LEDGER operation.");
+                    objOut.writeInt(id);
+                    List<ValidTransaction> globalLedger = getLedger(dateInterval);
+                    byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(globalLedger)).getBytes());
+                    objOut.writeObject(hash);
+                    objOut.writeObject(globalLedger);
+                    break;
+                }
+                case CLIENT_LEDGER: {
+                    logger.debug("New CLIENT_LEDGER operation.");
+                    String publicKey = (String) objIn.readObject();
+                    DateInterval dateInterval = (DateInterval) objIn.readObject();
+                    if (!jedis.exists(publicKey)) {
+                        logger.info("Key {} not registered.", publicKey);
+                        objOut.writeInt(id);
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(false);
+                        objOut.writeObject(null);
+                    } else {
+                        List<ValidTransaction> clientLedger = getLedger(publicKey, dateInterval);
+                        logger.info("Found ledger with length {} associated with key {}.", clientLedger.size(), clientLedger);
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(clientLedger)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(true);
+                        objOut.writeObject(clientLedger);
+                    }
+                    break;
+                }
+                case VERIFY: {
+                    logger.debug("New VERIFY operation.");
+                    String transactionId = (String) objIn.readObject();
+                    ValidTransaction transaction = findTransaction(transactionId);
+                    if (transaction != null) {
+                        logger.info("Transaction verified");
+                        objOut.writeInt(id);
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(transaction)).getBytes());
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(true);
+                        objOut.writeObject(transaction);
+                    } else {
+                        logger.info("Transaction not found.");
+                        objOut.writeInt(id);
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(false);
+                        objOut.writeObject(null);
+                    }
+                    break;
+                }
+                case PICK_NOT_MINED_TRANSACTIONS: {
+                    int numTransactions = objIn.readInt();
+                    List<String> l = jedis.lrange(BLOCK_CHAIN, -1, -1);
+                    Block lastBlock = gson.fromJson(l.get(0), Block.class);
+                    BlockHeader lastBlockBlockHeader = lastBlock.getBlockHeader();
+                    byte[] blockHeaderBytes = gson.toJson(lastBlockBlockHeader).getBytes();
+                    byte[] hashedBlock = generateHash(blockHeaderBytes, "SHA-256");
+
+                    List<ValidTransaction> notMinedTransactions = getLedger(numTransactions - 1);
+                    if (notMinedTransactions != null && validProofOfWork(hashedBlock)) {
+                        logger.info("Building block header");
+                        BlockHeader blockHeader = buildBlockHeader(notMinedTransactions, base32.encodeAsString(hashedBlock));
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(blockHeader)).concat(gson.toJson(lastBlock)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(true);
+                        objOut.writeObject(blockHeader);
+                        objOut.writeObject(lastBlock);
+                    } else {
+                        logger.info("Not building block header");
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).concat(gson.toJson(null)).getBytes());
+                        objOut.writeInt(id);
+                        objOut.writeObject(hash);
+                        objOut.writeBoolean(false);
+                        objOut.writeObject(null);
+                        objOut.writeObject(null);
+                    }
+                    break;
+                }
+                case OBTAIN_LAST_BLOCK: {
+                    logger.info("Obtaining last block");
+                    List<String> l = jedis.lrange(BLOCK_CHAIN, -1, -1);
+                    logger.info("Sending the last block");
+                    Block block = gson.fromJson(l.get(0), Block.class);
+                    byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(block)).getBytes());
+                    objOut.writeInt(id);
+                    objOut.writeObject(hash);
+                    objOut.writeBoolean(true);
+                    objOut.writeObject(block);
+
+                    break;
+                }
             }
             objOut.flush();
             byteOut.flush();
             return byteOut.toByteArray();
-        } catch (IOException | ClassNotFoundException | NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
+        } catch (IOException | ClassNotFoundException | NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException | EncoderException e) {
             e.printStackTrace();
             return ERROR_MSG.getBytes();
         }
