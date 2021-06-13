@@ -216,7 +216,6 @@ public class LedgerController implements CommandLineRunner {
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
-
     }
 
     @GetMapping("/lastBlock")

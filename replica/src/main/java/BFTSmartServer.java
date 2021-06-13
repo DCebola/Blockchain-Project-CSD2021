@@ -6,11 +6,14 @@ import com.google.gson.Gson;
 import com.proxy.controllers.*;
 import org.apache.commons.codec.EncoderException;
 import org.apache.commons.codec.binary.Base32;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
 
 
 import java.io.*;
@@ -45,11 +48,12 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final int TRANSACTION_ID_SIZE = 20;
 
     private final Logger logger;
-    private final Jedis jedis;
+    private Jedis jedis;
     private final Gson gson;
     private final Base32 base32;
     private final int id;
     private final SecureRandom rand;
+    private final JedisPool jedisPool;
 
 
     public BFTSmartServer(int id) throws IOException, NoSuchAlgorithmException {
@@ -69,8 +73,15 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis_properties.load(new FileInputStream("config/redis.config"));
         String redisPort = jedis_properties.getProperty("redis_port");
         String redis_ip = "172.18.30.".concat(Integer.toString(id));
-        jedis = new Jedis("redis://".concat(redis_ip).concat(":").concat(redisPort));
+        JedisPoolConfig jedisPoolConfig = new JedisPoolConfig();
+        jedisPoolConfig.setMaxTotal(128);
+        jedisPoolConfig.setMaxIdle(128);
+        jedisPoolConfig.setMinIdle(16);
+        this.jedisPool = new JedisPool(jedisPoolConfig,redis_ip,Integer.parseInt(redisPort));
+        jedis = jedisPool.getResource();
+        //jedis = new Jedis("redis://".concat(redis_ip).concat(":").concat(redisPort));
         jedis.rpush(BLOCK_CHAIN, gson.toJson(genesisBlock));
+        jedis.close();
         new ServiceReplica(id, this, this);
 
     }
@@ -99,6 +110,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     String publicKeyAlgorithm = (String) objIn.readObject();
                     String hashAlgorithm = (String) objIn.readObject();
                     byte[] hashResult;
+                    jedis = jedisPool.getResource();
                     if (jedis.exists(publicKey)) {
                         logger.info("Key {} already registered", publicKey);
                         hashResult = TOMUtil.computeHash(
@@ -130,19 +142,25 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case OBTAIN_COINS: {
                     logger.debug("New OBTAIN_COINS operation.");
                     String publicKey = (String) objIn.readObject();
+                    jedis = jedisPool.getResource();
                     if (!jedis.exists(publicKey)) {
+                        jedis.close();
                         logger.info("Key {} does not exist", publicKey);
                         objOut.writeBoolean(false);
                     } else {
                         double amount = objIn.readDouble();
                         byte[] msgSignature = (byte[]) objIn.readObject();
                         String date = (String) objIn.readObject();
+                        jedis = jedisPool.getResource();
                         String nonce = jedis.lindex(publicKey, WALLET_NONCE);
+                        jedis.close();
                         String msg = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(nonce).concat(date));
                         byte[] hash;
                         if (verifySignature(publicKey, msg, msgSignature) && amount > 0) {
                             nonce = Integer.toString(Integer.parseInt(nonce) + 1);
+                            jedis = jedisPool.getResource();
                             jedis.lset(publicKey, WALLET_NONCE, nonce);
+                            jedis.close();
                             logger.info("Signature verified successfully");
                             hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
                             byte[] idBytes = new byte[TRANSACTION_ID_SIZE];
@@ -634,12 +652,16 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case GET_NONCE: {
                     logger.debug("New REQUEST_NONCE operation");
                     String publicKey = (String) objIn.readObject();
+                    jedis = jedisPool.getResource();
                     if (jedis.exists(publicKey)) {
+                        jedis.close();
                         String message = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(publicKey));
                         byte[] msgSignature = (byte[]) objIn.readObject();
                         if (verifySignature(publicKey, message, msgSignature)) {
                             logger.info("Signature verified");
+                            jedis = jedisPool.getResource();
                             String nonce = jedis.lindex(publicKey, WALLET_NONCE);
+                            jedis.close();
                             byte[] hashResult = TOMUtil.computeHash(Boolean.toString(true).concat(nonce).getBytes());
                             objOut.writeInt(id);
                             objOut.writeObject(hashResult);
@@ -815,7 +837,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     }
 
     private boolean verifySignature(String publicKey, String msg, byte[] signature) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
+        jedis = jedisPool.getResource();
         List<String> walletData = jedis.lrange(publicKey, 0, -1);
+        jedis.close();
         Signature sign = Signature.getInstance(walletData.get(SIGNATURE_ALGORITHM));
         sign.initVerify(KeyFactory.getInstance(walletData.get(KEY_ALGORITHM)).
                 generatePublic(new X509EncodedKeySpec(base32.decode(publicKey))));
