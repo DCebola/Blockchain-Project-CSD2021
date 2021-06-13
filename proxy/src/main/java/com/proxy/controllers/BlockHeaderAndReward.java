@@ -23,7 +23,7 @@ public class BlockHeaderAndReward implements Serializable {
         return blockHeader;
     }
 
-    public Transaction getTransaction() {
+    public Transaction getReward() {
         return transaction;
     }
 

@@ -7,16 +7,16 @@ public class Block implements Serializable {
 
     private static final long serialVersionUID = 152968899267765429L;
     private final BlockHeader blockHeader;
-    private final List<ValidTransaction> signedTransactions;
+    private final List<ValidTransaction> transactions;
 
     public Block() {
         this.blockHeader = null;
-        this.signedTransactions = null;
+        this.transactions = null;
     }
 
-    public Block(BlockHeader blockHeader, List<ValidTransaction> signedTransactions) {
+    public Block(BlockHeader blockHeader, List<ValidTransaction> transactions) {
         this.blockHeader = blockHeader;
-        this.signedTransactions = signedTransactions;
+        this.transactions = transactions;
 
     }
 
@@ -25,7 +25,7 @@ public class Block implements Serializable {
         return blockHeader;
     }
 
-    public List<ValidTransaction> getSignedTransactions() {
-        return signedTransactions;
+    public List<ValidTransaction> getTransactions() {
+        return transactions;
     }
 }

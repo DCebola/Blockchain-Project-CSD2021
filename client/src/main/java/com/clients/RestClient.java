@@ -2,7 +2,6 @@ package com.clients;
 
 import com.google.gson.Gson;
 import org.apache.commons.codec.binary.Base32;
-import org.apache.http.Header;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
@@ -58,6 +57,8 @@ public class RestClient {
     private static final int MINE_TRANSACTIONS = 9;
     private static final int SEND_MINED_BLOCK = 10;
     private static final int QUIT = 11;
+
+    private static final int REWARD = 20;
 
     private static final int ALL = 0;
     private static final int UP_TO = 1;
@@ -260,18 +261,22 @@ public class RestClient {
             ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(OBTAIN_COINS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, ValidTransaction.class);
-            System.out.println(response.getStatusCode());
-            if (response.getStatusCode().is2xxSuccessful()) {
-                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
-                System.out.println("New Nonce: " + currentSession.getNonce());
-                System.out.printf("[ %s ]\n", response.getBody());
-                currentSession.saveTransaction(response.getBody());
-            }
+            processResponseWithTransaction(response);
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
+    private static void processResponseWithTransaction(ResponseEntity<ValidTransaction> response) {
+        System.out.println(response.getStatusCodeValue());
+        if (response.getStatusCode().is2xxSuccessful()) {
+            currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
+            System.out.println(currentSession.getNonce());
+            System.out.printf("[ %s ]\n", response.getBody());
+            currentSession.saveTransaction(response.getBody());
+        }
+
+    }
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
@@ -290,18 +295,10 @@ public class RestClient {
 
             SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes, currentDate);
             HttpEntity<SignedBody<Transaction>> request = new HttpEntity<>(signedBody);
-
-
             ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(TRANSFER_MONEY_URL, port), HttpMethod.POST, request, ValidTransaction.class);
-            System.out.println(response.getStatusCodeValue());
-            if (response.getStatusCode().is2xxSuccessful()) {
-                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
-                System.out.println(currentSession.getNonce());
-                System.out.printf("[ %s ]\n", response.getBody());
-                currentSession.saveTransaction(response.getBody());
-            }
+            processResponseWithTransaction(response);
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
@@ -345,9 +342,9 @@ public class RestClient {
         try {
             ResponseEntity<Block> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_LAST_BLOCK_URL,port),
+                    String.format(OBTAIN_LAST_BLOCK_URL, port),
                     HttpMethod.GET, null, Block.class);
-            if(response.getStatusCode().is2xxSuccessful()) {
+            if (response.getStatusCode().is2xxSuccessful()) {
                 Block block = response.getBody();
                 System.out.println(gson.toJson(block));
                 return block;
@@ -365,23 +362,15 @@ public class RestClient {
             System.out.print("Specify the number of transactions you want: ");
             int numberTransactions = in.nextInt();
             in.nextLine();
-            ResponseEntity<LastBlockWithMiningInfo> response
+            ResponseEntity<BlockHeader> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(MINE_TRANSACTIONS_URL, port, numberTransactions),
-                    HttpMethod.GET, null, LastBlockWithMiningInfo.class);
-            if(response.getBody() != null) {
-                Block lastMinedBlock = response.getBody().getLastMinedBlock();
-                byte[] hashedResult = hashBlock(lastMinedBlock.getBlockHeader());
-                String leftMostByte = Integer.toBinaryString(hashedResult[0] & 255 | 256).substring(1);
-                String secondLeftMostByte = Integer.toBinaryString(hashedResult[1] & 255 | 256).substring(1);
-                String mostSignificantBytes = leftMostByte.concat(secondLeftMostByte);
-                BlockHeader blockHeader = response.getBody().getBlockHeader();
-                if(mostSignificantBytes.equals(PROOF_OF_WORK_CHALLENGE) && base32.encodeAsString(hashedResult).equals(blockHeader.getPreviousHash())) {
-                    System.out.println("The mined block received is valid");
-                    blockHeader.setWhoSigned(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
-                    BlockHeader finalBlock = startProofOfWork(blockHeader);
-                    sendMinedBlock(requestFactory,finalBlock);
-                }
+                    HttpMethod.GET, null, BlockHeader.class);
+            if (response.getBody() != null) {
+                BlockHeader blockHeader = response.getBody();
+                blockHeader.setAuthor(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
+                BlockHeader finalBlock = generateProofOfWork(blockHeader);
+                sendMinedBlock(requestFactory, finalBlock);
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -390,41 +379,36 @@ public class RestClient {
 
     private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-        Transaction reward = new Transaction(SYSTEM,blockHeader.getWhoSigned(),20,currentDate);
-        BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader,reward);
-        String msgToBeHashed = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeaderAndReward).concat(currentSession.getNonce()));
+        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), REWARD, currentDate);
+        BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader, reward);
+        String msgToBeHashed = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeader).concat(gson.toJson(reward)).concat(currentSession.getNonce()));
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
-        SignedBody<BlockHeaderAndReward> signedBody = new SignedBody<>(blockHeaderAndReward,sigBytes,null);
+        SignedBody<BlockHeaderAndReward> signedBody = new SignedBody<>(blockHeaderAndReward, sigBytes, null);
         HttpEntity<SignedBody<BlockHeaderAndReward>> request = new HttpEntity<>(signedBody);
-        ResponseEntity<BlockAndReward> response
+        ResponseEntity<ValidTransaction> response
                 = new RestTemplate(requestFactory).exchange(
-                String.format(SEND_MINED_BLOCK_URL, port), HttpMethod.POST, request, BlockAndReward.class);
-        if (response.getStatusCode().is2xxSuccessful())
-            currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
-        System.out.println(gson.toJson(response.getBody()));
+                String.format(SEND_MINED_BLOCK_URL, port), HttpMethod.POST, request, ValidTransaction.class);
+        processResponseWithTransaction(response);
     }
 
-    private static BlockHeader startProofOfWork(BlockHeader blockHeader) throws NoSuchAlgorithmException {
-        boolean proofOfWorkComplete = false;
+
+    private static BlockHeader generateProofOfWork(BlockHeader blockHeader) throws NoSuchAlgorithmException {
         Random random = new Random();
-        while (!proofOfWorkComplete) {
-            int work = random.nextInt();
-            blockHeader.setWork(work);
-            byte[] hashedResult = hashBlock(blockHeader);
-            String leftMostByte = Integer.toBinaryString(hashedResult[0] & 255 | 256).substring(1);
-            String secondLeftMostByte = Integer.toBinaryString(hashedResult[1] & 255 | 256).substring(1);
-            String mostSignificantBytes = leftMostByte.concat(secondLeftMostByte);
+        while (true) {
+            int proof = random.nextInt();
+            blockHeader.setProof(proof);
+            byte[] PoW = hashBlock(blockHeader);
+            String mostSignificantBytes = Utils.getMostSignificantBytes((PROOF_OF_WORK_CHALLENGE.length() / Byte.SIZE), PoW);
             if (mostSignificantBytes.equals(PROOF_OF_WORK_CHALLENGE)) {
                 System.out.println("Proof of work complete");
-                proofOfWorkComplete = true;
-                String hashedResult1And0s = "";
-                for(byte b: hashedResult)
-                    hashedResult1And0s=hashedResult1And0s.concat(Integer.toBinaryString(b & 255 | 256).substring(1));
-                System.out.println(hashedResult1And0s);
+                String bits = "";
+                for (byte b : PoW)
+                    bits = bits.concat(Integer.toBinaryString(b & 255 | 256).substring(1));
+                System.out.println(bits);
+                return blockHeader;
             } else
                 System.out.println(mostSignificantBytes);
         }
-        return blockHeader;
     }
 
     private static byte[] hashBlock(BlockHeader blockHeader) throws NoSuchAlgorithmException {

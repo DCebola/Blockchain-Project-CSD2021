@@ -200,7 +200,7 @@ public class LedgerController implements CommandLineRunner {
             QuorumResponse quorumResponse = dispatchAsyncRequest(createVerifyRequest(id), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
-            byte[] hash = (byte[]) objIn.readObject();
+            objIn.readObject(); //Hash
             boolean result = objIn.readBoolean();
             ValidTransaction t = (ValidTransaction) objIn.readObject();
             if (!result) {
@@ -225,7 +225,7 @@ public class LedgerController implements CommandLineRunner {
             QuorumResponse quorumResponse = dispatchAsyncRequest(obtainLastBlockRequest(), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
-            byte[] hash = (byte[]) objIn.readObject();
+            objIn.readObject(); //Hash
             boolean result = objIn.readBoolean();
             Block block = (Block) objIn.readObject();
             if(!result) {
@@ -243,21 +243,20 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @GetMapping("/pendingTransactions/{numPending}")
-    public LastBlockWithMiningInfo pickNotMineratedTransactions(@PathVariable int numPending) {
+    public BlockHeader pickNotMineratedTransactions(@PathVariable int numPending) {
         try {
             QuorumResponse quorumResponse = dispatchAsyncRequest(createPickPendingTransactionsRequest(numPending), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
-            byte[] hash = (byte[]) objIn.readObject();
+            objIn.readObject(); // Hash
             boolean result = objIn.readBoolean();
             BlockHeader blockHeader = (BlockHeader) objIn.readObject();
-            Block lastBlock = (Block) objIn.readObject();
             if (!result) {
                 logger.info("BAD REQUEST");
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
             } else {
                 logger.info("Obtained valid block header from a quorum of replicas");
-                return new LastBlockWithMiningInfo(lastBlock,blockHeader);
+                return blockHeader;
             }
         } catch (IOException | ExecutionException | InterruptedException | ClassNotFoundException e) {
             logger.error("Exception in obtainLastBlock. Cause: {}", e.getMessage());
@@ -267,7 +266,7 @@ public class LedgerController implements CommandLineRunner {
     }
 
     @PostMapping("/mine")
-    public BlockAndReward sendMinedBlock(@RequestBody SignedBody<BlockHeaderAndReward> signedBody) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+    public ValidTransaction sendMinedBlock(@RequestBody SignedBody<BlockHeaderAndReward> signedBody) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
         QuorumResponse quorumResponse = dispatchAsyncRequest(createSendMinedBlockRequest(signedBody), ORDERED_REQUEST);
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
         objIn.readInt();
@@ -277,9 +276,9 @@ public class LedgerController implements CommandLineRunner {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
         } else {
             BlockAndReward blockAndReward = (BlockAndReward) objIn.readObject();
-            blockAndReward = commitBlock(blockAndReward, hash, quorumResponse);
+            ValidTransaction reward = commitBlock(blockAndReward, hash, quorumResponse);
             logger.info("OK. Adding block to blockchain");
-            return blockAndReward;
+            return reward;
         }
     }
 
@@ -311,6 +310,7 @@ public class LedgerController implements CommandLineRunner {
                 this.asynchServiceProxy = new AsynchServiceProxy(id);
                 this.base32 = new Base32();
                 this.gson = new Gson();
+                //TODO: Generate genesis block
             } else logger.error("Usage: LedgerController <client ID>");
         } catch (Exception e) {
             e.printStackTrace();
@@ -341,6 +341,16 @@ public class LedgerController implements CommandLineRunner {
     private ValidTransaction commitTransaction(SignedTransaction signedTransaction, byte[] hash, QuorumResponse quorumResponse) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
         Commit<SignedTransaction> commit = new Commit<>(signedTransaction, base32.encodeAsString(hash), quorumResponse.getReplicas());
         quorumResponse = commit(commit, LedgerRequestType.COMMIT_TRANSACTION);
+        return getCommitResponse(quorumResponse);
+    }
+
+    private ValidTransaction commitBlock(BlockAndReward blockAndReward, byte[] hash, QuorumResponse quorumResponse) throws InterruptedException, ExecutionException, IOException, ClassNotFoundException {
+        Commit<BlockAndReward> commit = new Commit<>(blockAndReward, base32.encodeAsString(hash), quorumResponse.getReplicas());
+        quorumResponse = commit(commit, LedgerRequestType.COMMIT_BLOCK);
+        return getCommitResponse(quorumResponse);
+    }
+
+    private ValidTransaction getCommitResponse(QuorumResponse quorumResponse) throws IOException, ClassNotFoundException {
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
         objIn.readInt();
         objIn.readObject(); //Hash
@@ -349,20 +359,6 @@ public class LedgerController implements CommandLineRunner {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tampered request.");
         }
         return (ValidTransaction) objIn.readObject();
-    }
-
-    private BlockAndReward commitBlock(BlockAndReward blockAndReward, byte[] hash, QuorumResponse quorumResponse) throws InterruptedException, ExecutionException, IOException, ClassNotFoundException {
-        Commit<BlockAndReward> commit = new Commit<>(blockAndReward, base32.encodeAsString(hash), quorumResponse.getReplicas());
-        quorumResponse = commit(commit, LedgerRequestType.COMMIT_BLOCK);
-        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-        objIn.readInt();
-        objIn.readObject(); //Hash
-        if (!objIn.readBoolean()) {
-            logger.info("Found tampered request!");
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tampered request.");
-        }
-        return (BlockAndReward) objIn.readObject();
-
     }
 
     private byte[] createGetNonceRequest(String who, SignedBody<String> body) throws IOException {
@@ -480,7 +476,8 @@ public class LedgerController implements CommandLineRunner {
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.SEND_MINED_BLOCK);
         BlockHeaderAndReward blockHeaderAndReward = signedBody.getContent();
-        objOut.writeObject(blockHeaderAndReward);
+        objOut.writeObject(blockHeaderAndReward.getBlockHeader());
+        objOut.writeObject(blockHeaderAndReward.getReward());
         objOut.writeObject(signedBody.getSignature());
         objOut.flush();
         byteOut.flush();
