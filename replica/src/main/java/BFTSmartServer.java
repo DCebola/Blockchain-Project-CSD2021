@@ -32,7 +32,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
     private static final String SYSTEM = "SYSTEM";
     private static final String ERROR_MSG = "ERROR";
-    private static final String GLOBAL_LEDGER = "GLOBAL-LEDGER"; //TODO: Change global ledger to PENDING-TRANSACTIONS
+    private static final String PENDING_TRANSACTIONS = "PENDING-TRANSACTIONS";
+    private static final String PENDING_REWARD = "PENDING-REWARDS";
     private static final String BLOCK_CHAIN = "BLOCK-CHAIN";
     private static final String PROOF_OF_WORK_CHALLENGE = "0000000000000000";
 
@@ -287,7 +288,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
                 if (checkProofOfWork(hashedBlock)) {
                     logger.info("Valid proof of work");
-                    List<ValidTransaction> transactionsVerify = getLedger(blockHeader.getTransactions().size() - 1);
+                    List<ValidTransaction> transactionsVerify = getPendingTransactions(blockHeader.getTransactions().size() - 1);
                     assert transactionsVerify != null;
                     if (verifyBlockContent(blockHeader, transactionsVerify)) {
                         logger.info("Block completely verified.");
@@ -389,7 +390,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 commit.getReplicas(),
                 t.getId());
         logger.info("T {}", t);
-        jedis.rpush(GLOBAL_LEDGER, gson.toJson(validTransaction));
+        jedis.rpush(PENDING_TRANSACTIONS, gson.toJson(validTransaction));
         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(validTransaction)).getBytes());
         writeCommitTransactionResponse(objOut, hash, true, validTransaction);
         logger.info("Transaction ({}, {}, {}) added to global ledger.", origin, destination, amount);
@@ -413,7 +414,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         byte[] lastBlockHash = generateHash(lastBlockHeaderBytes, BLOCK_HASH_ALGORITHM);
 
         if (block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(lastBlockHash))) {
-            jedis.lpop(GLOBAL_LEDGER, block.getSignedTransactions().size());
+            List<String> removedTransactions = jedis.lpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size());
+            cleanPendingRewards(removedTransactions);
             addBlock(publicKey, nonce, block, reward, commit, objOut);
         } else {
             l = jedis.lrange(BLOCK_CHAIN, -2, -2);
@@ -428,7 +430,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         writeCommitBlockResponse(objOut, hash, false, null);
                     } else if (lastBlock.getSignedTransactions().size() == block.getSignedTransactions().size()) {
                         if (compareProofsOfWork(block, lastBlock)) {
-                            cancelReward(lastBlock.getBlockHeader().getAuthor());
+                            cancelReward(lastBlock.getBlockHeader().getPreviousHash());
                             jedis.rpop(BLOCK_CHAIN, 1);
                             addBlock(publicKey, nonce, block, reward, commit, objOut);
                         } else {
@@ -438,8 +440,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         }
                     } else {
                         jedis.rpop(BLOCK_CHAIN, 1);
-                        jedis.rpop(GLOBAL_LEDGER, block.getSignedTransactions().size() - lastBlock.getSignedTransactions().size());
-                        cancelReward(lastBlock.getBlockHeader().getAuthor());
+                        List<String> removedTransactions = jedis.rpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size() - lastBlock.getSignedTransactions().size());
+                        cleanPendingRewards(removedTransactions);
+                        cancelReward(lastBlock.getBlockHeader().getPreviousHash());
                         addBlock(publicKey, nonce, block, reward, commit, objOut);
                     }
                 } else {
@@ -455,6 +458,23 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         }
     }
 
+    private void cleanPendingRewards(List<String> removedTransactions) {
+        List<String> ids = new LinkedList<>();
+        removedTransactions.forEach(t -> ids.add(gson.fromJson(t, ValidTransaction.class).getId()));
+        List<String> pendingRewards = jedis.lrange(PENDING_REWARD, 0, -1);
+        int count = 0;
+        ListIterator<String> reverseIt = pendingRewards.listIterator();
+        PendingReward reward;
+        while (reverseIt.hasPrevious()) {
+            reward = gson.fromJson(reverseIt.previous(), PendingReward.class);
+            assert (reward != null);
+            if (ids.contains(reward.getRewardId()))
+                break;
+            count += 1;
+        }
+        jedis.rpop(PENDING_REWARD, pendingRewards.size() - count);
+    }
+
     private void addBlock(String publicKey, String nonce, Block block, SignedTransaction t, Commit commit, ObjectOutput objOut) throws IOException {
         jedis.lset(publicKey, WALLET_NONCE, nonce);
         jedis.rpush(BLOCK_CHAIN, gson.toJson(block));
@@ -467,20 +487,32 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 commit.getHash(),
                 commit.getReplicas(),
                 t.getId());
-        jedis.rpush(GLOBAL_LEDGER, gson.toJson(validReward));
+        jedis.rpush(PENDING_REWARD, gson.toJson(new PendingReward(block.getBlockHeader().getPreviousHash(), validReward.getId())));
+        jedis.rpush(PENDING_TRANSACTIONS, gson.toJson(validReward));
         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(block)).concat(gson.toJson(validReward)).getBytes());
         writeCommitBlockResponse(objOut, hash, true, validReward);
         logger.info("Block added to global ledger");
     }
 
-    private void cancelReward(String author) {
-        // TODO: Possible bug in reward cancel
-        List<String> transactions = jedis.lrange(GLOBAL_LEDGER, 0, -1);
-        for (String transaction : transactions) {
-            ValidTransaction validTransaction = gson.fromJson(transaction, ValidTransaction.class);
-            if (validTransaction.getDestination().equals(author)) {
-                jedis.lrem(GLOBAL_LEDGER, 1, transaction);
+    private void cancelReward(String previousBlockHash) {
+        List<String> pendingRewards = jedis.lrange(PENDING_REWARD, 0, -1);
+        String rewardId = "";
+        for (String pendingReward : pendingRewards) {
+            PendingReward reward = gson.fromJson(pendingReward, PendingReward.class);
+            if (reward.getPreviousBlockHash().equals(previousBlockHash)) {
+                jedis.lrem(PENDING_TRANSACTIONS, 1, pendingReward);
+                rewardId = reward.getRewardId();
                 break;
+            }
+        }
+        if (!rewardId.equals("")) {
+            List<String> transactions = jedis.lrange(PENDING_TRANSACTIONS, 0, -1);
+            for (String transaction : transactions) {
+                ValidTransaction validTransaction = gson.fromJson(transaction, ValidTransaction.class);
+                if (validTransaction.getId().equals(rewardId)) {
+                    jedis.lrem(PENDING_TRANSACTIONS, 1, transaction);
+                    break;
+                }
             }
         }
     }
@@ -591,7 +623,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private void globalLedgerRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException {
         DateInterval dateInterval = (DateInterval) objIn.readObject();
         logger.debug("New GLOBAL_LEDGER operation.");
-        List<ValidTransaction> globalLedger = getLedger(dateInterval);
+        List<ValidTransaction> globalLedger = getPendingTransactions(dateInterval);
         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(globalLedger)).getBytes());
         objOut.writeInt(id);
         objOut.writeObject(hash);
@@ -608,7 +640,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
             writeClientLedgerResponse(objOut, hash, false, null);
         } else {
-            List<ValidTransaction> clientLedger = getLedger(publicKey, dateInterval);
+            List<ValidTransaction> clientLedger = getPendingTransactions(publicKey, dateInterval);
             logger.info("Found ledger with length {} associated with key {}.", clientLedger.size(), clientLedger);
             byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(clientLedger)).getBytes());
             writeClientLedgerResponse(objOut, hash, true, clientLedger);
@@ -635,7 +667,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private void pickNotMinedTransactionsRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, NoSuchAlgorithmException, EncoderException {
         logger.debug("New PICK_NOT_MINED_TRANSACTIONS operation");
         int numTransactions = objIn.readInt();
-        List<ValidTransaction> notMinedTransactions = getLedger(numTransactions - 1);
+        List<ValidTransaction> notMinedTransactions = getPendingTransactions(numTransactions - 1);
         if (notMinedTransactions != null) {
             logger.info("Building block header");
             List<String> l = jedis.lrange(BLOCK_CHAIN, -1, -1);
@@ -714,22 +746,22 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return null;
     }
 
-    private List<ValidTransaction> getLedger(int numTransactions) {
+    private List<ValidTransaction> getPendingTransactions(int numTransactions) {
         List<ValidTransaction> deserializedLedger = new LinkedList<>();
         List<String> serializedLedger;
-        long globalLedgerSize = jedis.llen(GLOBAL_LEDGER);
+        long globalLedgerSize = jedis.llen(PENDING_TRANSACTIONS);
         if (numTransactions >= 0 && globalLedgerSize > 0) {
             if (numTransactions <= globalLedgerSize)
-                serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, numTransactions);
+                serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, 0, numTransactions);
             else
-                serializedLedger = jedis.lrange(GLOBAL_LEDGER, 0, -1);
+                serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, 0, -1);
             serializedLedger.forEach(t -> deserializedLedger.add(gson.fromJson(t, ValidTransaction.class)));
             return deserializedLedger;
         }
         return null;
     }
 
-    private List<ValidTransaction> getLedger(DateInterval dateInterval) {
+    private List<ValidTransaction> getPendingTransactions(DateInterval dateInterval) {
         long startDate = Timestamp.valueOf(dateInterval.getStartDate()).getTime();
         long endDate = Timestamp.valueOf(dateInterval.getEndDate()).getTime();
 
@@ -748,7 +780,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return deserializedLedger;
     }
 
-    private List<ValidTransaction> getLedger(String publicKey, DateInterval dateInterval) {
+    private List<ValidTransaction> getPendingTransactions(String publicKey, DateInterval dateInterval) {
         long startDate = Timestamp.valueOf(dateInterval.getStartDate()).getTime();
         long endDate = Timestamp.valueOf(dateInterval.getEndDate()).getTime();
 
