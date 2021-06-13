@@ -423,9 +423,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         byte[] lastBlockHeaderBytes = gson.toJson(lastBlockBlockHeader).getBytes();
         byte[] lastBlockHash = generateHash(lastBlockHeaderBytes, BLOCK_HASH_ALGORITHM);
         if (block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(lastBlockHash))) {
-            jedis.lpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size());
-            //logger.info("{}", gson.toJson(removedTransactions));
-            //cleanPendingRewards(removedTransactions);
+            List<String> removedTransactions = jedis.lpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size());
+            logger.info("{}", gson.toJson(removedTransactions));
+            cleanPendingRewards(removedTransactions);
             addBlock(publicKey, nonce, block, reward, commit, objOut);
         } else {
             l = jedis.lrange(BLOCK_CHAIN, -2, -2);
