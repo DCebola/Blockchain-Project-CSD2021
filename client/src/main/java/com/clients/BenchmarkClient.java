@@ -276,7 +276,7 @@ public class BenchmarkClient {
             long start = System.currentTimeMillis();
 
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-            String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(currentSession.getNonce()).concat(currentDate));
+            String msgToBeHashed = LedgerRequestType.OBTAIN_COINS.name().concat(gson.toJson(amount)).concat(currentSession.getNonce()).concat(currentDate);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes, currentDate);
@@ -312,7 +312,7 @@ public class BenchmarkClient {
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
             String destination = obtainClientPubKey(currentSession.getUsername());
             Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
-            String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t).concat(currentSession.getNonce()).concat(currentDate));
+            String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY.name().concat(gson.toJson(t)).concat(currentSession.getNonce()).concat(currentDate);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
             SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes, currentDate);
             HttpEntity<SignedBody<Transaction>> request = new HttpEntity<>(signedBody);
