@@ -17,7 +17,6 @@ public class Block implements Serializable {
     public Block(BlockHeader blockHeader, List<ValidTransaction> signedTransactions) {
         this.blockHeader = blockHeader;
         this.signedTransactions = signedTransactions;
-
     }
 
 
