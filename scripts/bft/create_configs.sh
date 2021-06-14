@@ -14,7 +14,6 @@ mkdir -p ../../proxy/config
 cp hosts.template hosts.config
 cp system.template system.config
 
-echo "redis_port=6379" > redis.config
 echo "system.initial.view = $(seq -s ',' 0 $(( $N - 1 )) )" >> system.config
 echo "system.servers.num = ${N}" >> system.config
 echo "system.servers.f = ${F}" >> system.config
@@ -44,8 +43,9 @@ if [ $# -eq 3 ]; then
     fi
 fi
 
+
 cp system.config ../../replica/config
-mv redis.config ../../replica/config
+cp replica.config ../../replica/config
 cp logback_replica.xml logback.xml
 mv logback.xml ../../replica/config
 

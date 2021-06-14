@@ -29,8 +29,7 @@ import java.util.*;
 public class RestClient {
 
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
-    private static final String GENESIS_DATE = "2021-01-01 01:01:01";
-    private static final String PROOF_OF_WORK_CHALLENGE = "0000000000000000";
+    private static final String FIRST_DATE = "2021-01-01 01:01:01";
     private static final String SYSTEM = "SYSTEM";
 
     private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
@@ -58,23 +57,28 @@ public class RestClient {
     private static final int SEND_MINED_BLOCK = 10;
     private static final int QUIT = 11;
 
-    private static final int REWARD = 20;
 
     private static final int ALL = 0;
     private static final int UP_TO = 1;
     private static final int IN_BETWEEN = 2;
 
-    private static final String HASH_ALGORITHM = "SHA-256";
+    private static String hash_algorithm;
+    private static String challenge;
+    private static int reward;
 
     private static Gson gson;
     private static Base32 base32;
     private static Session currentSession;
-    private static String port = "9001";
+    private static String port;
     private static DateTimeFormatter dateTimeFormatter;
 
     public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, SignatureException, InvalidKeyException {
-        if (args.length > 0)
-            port = args[0];
+        Properties properties = new Properties();
+        properties.load(new FileInputStream("src/main/resources/client.config"));
+        port = args[0];
+        hash_algorithm = properties.getProperty("hash_algorithm");
+        challenge = properties.getProperty("challenge");
+        reward = Integer.parseInt(properties.getProperty("mining_reward"));
 
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
@@ -86,8 +90,8 @@ public class RestClient {
         builder.loadTrustMaterial(ksTrust, new TrustSelfSignedStrategy());
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
                 builder.build(),
-                new String[]{"TLSv1.3"},
-                new String[]{"TLS_AES_256_GCM_SHA384"},
+                properties.getProperty("tls_version").split(","),
+                properties.getProperty("tls_ciphersuite").split(","),
                 SSLConnectionSocketFactory.getDefaultHostnameVerifier());
 
         CloseableHttpClient httpClient
@@ -379,7 +383,7 @@ public class RestClient {
 
     private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), REWARD, currentDate);
+        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), RestClient.reward, currentDate);
         BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader, reward);
         String msgToBeHashed = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(currentSession.getNonce());
         System.out.println(msgToBeHashed);
@@ -400,8 +404,8 @@ public class RestClient {
             int proof = random.nextInt();
             blockHeader.setProof(proof);
             byte[] PoW = hashBlock(blockHeader);
-            String mostSignificantBytes = Utils.getMostSignificantBytes((PROOF_OF_WORK_CHALLENGE.length() / Byte.SIZE), PoW);
-            if (mostSignificantBytes.equals(PROOF_OF_WORK_CHALLENGE)) {
+            String mostSignificantBytes = Utils.getMostSignificantBytes((challenge.length() / Byte.SIZE), PoW);
+            if (mostSignificantBytes.equals(challenge)) {
                 System.out.println("Proof of work complete");
                 String bits = "";
                 for (byte b : PoW)
@@ -428,8 +432,8 @@ public class RestClient {
         System.out.print("> ");
         int rangeOption = in.nextInt();
         in.nextLine();
-        String start = GENESIS_DATE;
-        String end = GENESIS_DATE;
+        String start = FIRST_DATE;
+        String end = FIRST_DATE;
         switch (rangeOption) {
             case ALL:
                 end = LocalDateTime.now().format(dateTimeFormatter);
@@ -539,7 +543,7 @@ public class RestClient {
             this.publicKey = cert.getPublicKey();
             this.privateKey = (PrivateKey) keystore.getKey(username, password);
             this.sigAlg = cert.getSigAlgName();
-            this.hashAlgorithm = HASH_ALGORITHM;
+            this.hashAlgorithm = hash_algorithm;
             this.transactions = new LinkedList<>();
         }
 

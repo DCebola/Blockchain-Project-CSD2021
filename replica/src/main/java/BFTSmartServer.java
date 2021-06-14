@@ -6,7 +6,6 @@ import com.google.gson.Gson;
 import com.proxy.controllers.*;
 import org.apache.commons.codec.EncoderException;
 import org.apache.commons.codec.binary.Base32;
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import org.slf4j.Logger;
@@ -26,7 +25,6 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -39,10 +37,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final String PENDING_TRANSACTIONS = "PENDING-TRANSACTIONS";
     private static final String PENDING_REWARD = "PENDING-REWARDS";
     private static final String BLOCK_CHAIN = "BLOCK-CHAIN";
-    private static final String PROOF_OF_WORK_CHALLENGE = "0000000000000000";
 
-    private static final String BLOCK_HASH_ALGORITHM = "SHA-256";
-    private static final int REWARD = 20;
 
     private static final int KEY_ALGORITHM = 0;
     private static final int SIGNATURE_ALGORITHM = 1;
@@ -60,14 +55,23 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private final int id;
     private final SecureRandom rand;
     private final JedisPool jedisPool;
+    private final String challenge;
+    private final String hash_algorithm;
+    private final int mining_reward;
 
-
-    public BFTSmartServer(int id) throws IOException, InterruptedException {
+    public BFTSmartServer(int id) throws IOException {
         this.id = id;
         this.logger = LoggerFactory.getLogger(this.getClass().getName());
         this.base32 = new Base32();
         this.rand = new SecureRandom();
         this.gson = new Gson();
+
+        Properties properties = new Properties();
+        properties.load(new FileInputStream("config/replica.config"));
+
+        this.challenge = properties.getProperty("challenge");
+        this.hash_algorithm = properties.getProperty("hash_algorithm");
+        this.mining_reward = Integer.parseInt(properties.getProperty("mining_reward"));
 
         int work = -100283092;
         BlockHeader blockHeader = new BlockHeader(
@@ -79,18 +83,14 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 work);
         Block genesisBlock = new Block(blockHeader, null);
 
-        Properties jedis_properties = new Properties();
-
-        //TODO: tls with redis
-
-        jedis_properties.load(new FileInputStream("config/redis.config"));
-        String redisPort = jedis_properties.getProperty("redis_port");
+        String redisPort = properties.getProperty("redis_port");
         String redis_ip = "172.18.30.".concat(Integer.toString(id));
         JedisPoolConfig jedisPoolConfig = new JedisPoolConfig();
-        jedisPoolConfig.setMaxTotal(128);
-        jedisPoolConfig.setMaxIdle(128);
-        jedisPoolConfig.setMinIdle(16);
-        this.jedisPool = new JedisPool(jedisPoolConfig,redis_ip,Integer.parseInt(redisPort));
+        jedisPoolConfig.setMaxTotal(Integer.parseInt(properties.getProperty("max_total")));
+        jedisPoolConfig.setMaxIdle(Integer.parseInt(properties.getProperty("max_idle")));
+        jedisPoolConfig.setMinIdle(Integer.parseInt(properties.getProperty("min_idle")));
+        this.jedisPool = new JedisPool(jedisPoolConfig,redis_ip,Integer.parseInt(redisPort)); //TODO: ENABLE TLS
+
         jedis = jedisPool.getResource();
         //jedis = new Jedis("redis://".concat(redis_ip).concat(":").concat(redisPort));
         jedis.rpush(BLOCK_CHAIN, gson.toJson(genesisBlock));
@@ -99,7 +99,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
     }
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException {
         if (args.length == 1) {
             Security.addProvider(new BouncyCastleProvider()); //Added bouncy castle provider
             new BFTSmartServer(Integer.parseInt(args[0]));
@@ -293,10 +293,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             if (verifySignature(publicKey, msg, sigBytes)
                     && reward.getDestination().equals(publicKey)
                     && reward.getOrigin().equals(SYSTEM)
-                    && reward.getAmount() == REWARD) {
+                    && reward.getAmount() == mining_reward) {
                 logger.info("Signature verified successfully.");
                 byte[] block = gson.toJson(blockHeader).getBytes();
-                byte[] hashedBlock = generateHash(block, BLOCK_HASH_ALGORITHM);
+                byte[] hashedBlock = generateHash(block, hash_algorithm);
 
                 if (checkProofOfWork(hashedBlock)) {
                     logger.info("Valid proof of work");
@@ -338,7 +338,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     }
 
     private boolean checkProofOfWork(byte[] block) {
-        return Utils.getMostSignificantBytes((PROOF_OF_WORK_CHALLENGE.length() / Byte.SIZE), block).equals(PROOF_OF_WORK_CHALLENGE);
+        return Utils.getMostSignificantBytes((challenge.length() / Byte.SIZE), block).equals(challenge);
     }
 
     private boolean verifyBlockContent(BlockHeader blockHeader, List<ValidTransaction> transactionsToVerify) {
@@ -430,7 +430,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         Block lastBlock = gson.fromJson(l.get(0), Block.class);
         BlockHeader lastBlockBlockHeader = lastBlock.getBlockHeader();
         byte[] lastBlockHeaderBytes = gson.toJson(lastBlockBlockHeader).getBytes();
-        byte[] lastBlockHash = generateHash(lastBlockHeaderBytes, BLOCK_HASH_ALGORITHM);
+        byte[] lastBlockHash = generateHash(lastBlockHeaderBytes, hash_algorithm);
         if (block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(lastBlockHash))) {
             List<String> removedTransactions = jedis.lpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size());
             logger.info("{}", gson.toJson(removedTransactions));
@@ -441,7 +441,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             if (l.size() > 0) {
                 BlockHeader secondLastBlockHeader = gson.fromJson(l.get(0), Block.class).getBlockHeader();
                 lastBlockHeaderBytes = gson.toJson(secondLastBlockHeader).getBytes();
-                lastBlockHash = generateHash(lastBlockHeaderBytes, BLOCK_HASH_ALGORITHM);
+                lastBlockHash = generateHash(lastBlockHeaderBytes, hash_algorithm);
                 if (block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(lastBlockHash))) {
                     if (lastBlock.getSignedTransactions().size() > block.getSignedTransactions().size()) {
                         logger.info("Old block has more transactions.");
@@ -541,11 +541,11 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private boolean compareProofsOfWork(Block block, Block lastBlock) throws NoSuchAlgorithmException {
         BlockHeader blockHeader = block.getBlockHeader();
         byte[] blockHeaderBytes = gson.toJson(blockHeader).getBytes();
-        byte[] hashedBlock = generateHash(blockHeaderBytes, BLOCK_HASH_ALGORITHM);
+        byte[] hashedBlock = generateHash(blockHeaderBytes, hash_algorithm);
 
         BlockHeader lastBlockHeader = lastBlock.getBlockHeader();
         byte[] lastBlockHeaderBytes = gson.toJson(lastBlockHeader).getBytes();
-        byte[] hashedLastBlock = generateHash(lastBlockHeaderBytes, BLOCK_HASH_ALGORITHM);
+        byte[] hashedLastBlock = generateHash(lastBlockHeaderBytes, hash_algorithm);
 
         for (int i = 2; i < hashedBlock.length; i++) {
             byte blockByte = hashedBlock[i];
@@ -693,7 +693,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             logger.info("Building block header");
             List<String> l = jedis.lrange(BLOCK_CHAIN, -1, -1);
             byte[] lastBlockHeaderBytes = gson.toJson(gson.fromJson(l.get(0), Block.class).getBlockHeader()).getBytes();
-            byte[] lastBlockHash = generateHash(lastBlockHeaderBytes, BLOCK_HASH_ALGORITHM);
+            byte[] lastBlockHash = generateHash(lastBlockHeaderBytes, hash_algorithm);
             BlockHeader blockHeader = createBlockHeader(notMinedTransactions, base32.encodeAsString(lastBlockHash));
             byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(blockHeader)).getBytes());
             writePickNotMinedTransactionsResponse(objOut, hash, true, blockHeader);

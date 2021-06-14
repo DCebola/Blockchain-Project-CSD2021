@@ -27,7 +27,6 @@ import java.util.*;
 public class BenchmarkClient {
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
     private static final String GENESIS_DATE = "2021-01-01 01:01:01";
-    private static final String PROOF_OF_WORK_CHALLENGE = "0000000000000000";
     private static final String SYSTEM = "SYSTEM";
 
     private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
@@ -64,8 +63,7 @@ public class BenchmarkClient {
     private static final String UP_TO = "UP_TO";
     private static final String IN_BETWEEN = "IN_BETWEEN";
 
-    private static final String HASH_ALGORITHM = "SHA-256";
-    private static final int REWARD = 20;
+
 
 
     /*
@@ -90,6 +88,10 @@ public class BenchmarkClient {
      */
 
 
+    private static String challenge;
+    private static String hash_algorithm;
+    private static int reward;
+
     private static Gson gson;
     private static Base32 base32;
     private static BenchmarkClient.Session currentSession;
@@ -97,6 +99,11 @@ public class BenchmarkClient {
     private static DateTimeFormatter dateTimeFormatter;
 
     public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, SignatureException, InvalidKeyException {
+        Properties properties = new Properties();
+        properties.load(new FileInputStream("src/main/resources/client.config"));
+        hash_algorithm = properties.getProperty("hash_algorithm");
+        challenge = properties.getProperty("challenge");
+        reward = Integer.parseInt(properties.getProperty("mining_reward"));
         port = args[0];
         String client = "";
         char[] clientPassword = null;
@@ -107,9 +114,6 @@ public class BenchmarkClient {
             clientPassword = args[3].toCharArray();
             filename = "src/main/resources/".concat(client).concat("_").concat("_results.csv");
             writer = new BufferedWriter(new FileWriter(filename, true));
-            /*writer.append("Hello\t" + "World\n");
-            writer.append("Hello\t" + "World\n");
-            writer.close();*/
         }
 
         Security.addProvider(new BouncyCastleProvider());
@@ -122,8 +126,8 @@ public class BenchmarkClient {
         builder.loadTrustMaterial(ksTrust, new TrustSelfSignedStrategy());
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
                 builder.build(),
-                new String[]{"TLSv1.3"},
-                new String[]{"TLS_AES_256_GCM_SHA384"},
+                new String[]{properties.getProperty("tls_version")},
+                new String[]{properties.getProperty("tls_ciphersuite")},
                 SSLConnectionSocketFactory.getDefaultHostnameVerifier());
 
         CloseableHttpClient httpClient
@@ -401,7 +405,7 @@ public class BenchmarkClient {
     private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader, BufferedWriter writer) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException, IOException {
         long start = System.currentTimeMillis();
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), REWARD, currentDate);
+        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), BenchmarkClient.reward, currentDate);
         BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader, reward);
         String msgToBeHashed = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(currentSession.getNonce());
         System.out.println(msgToBeHashed);
@@ -420,8 +424,8 @@ public class BenchmarkClient {
             int proof = random.nextInt();
             blockHeader.setProof(proof);
             byte[] PoW = hashBlock(blockHeader);
-            String mostSignificantBytes = Utils.getMostSignificantBytes((PROOF_OF_WORK_CHALLENGE.length() / Byte.SIZE), PoW);
-            if (mostSignificantBytes.equals(PROOF_OF_WORK_CHALLENGE)) {
+            String mostSignificantBytes = Utils.getMostSignificantBytes((challenge.length() / Byte.SIZE), PoW);
+            if (mostSignificantBytes.equals(challenge)) {
                 System.out.println("Proof of work complete");
                 String bits = "";
                 for (byte b : PoW)
@@ -549,7 +553,7 @@ public class BenchmarkClient {
             this.publicKey = cert.getPublicKey();
             this.privateKey = (PrivateKey) keystore.getKey(username, password);
             this.sigAlg = cert.getSigAlgName();
-            this.hashAlgorithm = HASH_ALGORITHM;
+            this.hashAlgorithm = hash_algorithm;
             this.transactions = new LinkedList<>();
         }
 
