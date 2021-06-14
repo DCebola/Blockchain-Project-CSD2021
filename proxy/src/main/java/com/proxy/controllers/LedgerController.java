@@ -216,7 +216,6 @@ public class LedgerController implements CommandLineRunner {
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
         }
-
     }
 
     @GetMapping("/lastBlock")
@@ -245,7 +244,9 @@ public class LedgerController implements CommandLineRunner {
     @GetMapping("/pendingTransactions/{numPending}")
     public LastBlockWithMiningInfo pickNotMineratedTransactions(@PathVariable int numPending) {
         try {
+            logger.info("hello");
             QuorumResponse quorumResponse = dispatchAsyncRequest(createPickPendingTransactionsRequest(numPending), UNORDERED_REQUEST);
+            logger.info("goodbye");
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
             objIn.readInt();
             byte[] hash = (byte[]) objIn.readObject();
