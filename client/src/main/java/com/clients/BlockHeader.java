@@ -9,41 +9,41 @@ public class BlockHeader implements Serializable {
 
     private final String previousHash;
     private String timeStamp;
-    private int work;
+    private int proof;
     private final String integrityHash;
     private final List<String> transactions;
-    private String whoSigned;
+    private String author;
 
 
-    public BlockHeader(String whoSigned, String previousHash, List<String> transactions, String integrityHash, String timeStamp) {
-        this.whoSigned = whoSigned;
+    public BlockHeader(String author, String previousHash, List<String> transactions, String integrityHash, String timeStamp) {
+        this.author = author;
         this.previousHash = previousHash;
         this.transactions = transactions;
         this.integrityHash = integrityHash;
         this.timeStamp = timeStamp;
-        this.work = -1;
+        this.proof = -1;
     }
 
-    public BlockHeader(String whoSigned, String previousHash, List<String> transactions, String integrityHash, String timeStamp, int work) {
-        this.whoSigned = whoSigned;
+    public BlockHeader(String author, String previousHash, List<String> transactions, String integrityHash, String timeStamp, int proof) {
+        this.author = author;
         this.previousHash = previousHash;
         this.transactions = transactions;
         this.integrityHash = integrityHash;
         this.timeStamp = timeStamp;
-        this.work = work;
+        this.proof = proof;
     }
 
     public BlockHeader() {
-        this.whoSigned = null;
+        this.author = null;
         this.previousHash = null;
         this.transactions = null;
         this.integrityHash = null;
         this.timeStamp = null;
-        this.work = -1;
+        this.proof = -1;
     }
 
-    public String getWhoSigned() {
-        return whoSigned;
+    public String getAuthor() {
+        return author;
     }
 
     public String getPreviousHash() {
@@ -54,8 +54,8 @@ public class BlockHeader implements Serializable {
         return timeStamp;
     }
 
-    public int getWork() {
-        return work;
+    public int getProof() {
+        return proof;
     }
 
     public String getIntegrityHash() {
@@ -66,11 +66,11 @@ public class BlockHeader implements Serializable {
         return transactions;
     }
 
-    public void setWork(int work) {
-        this.work = work;
+    public void setProof(int proof) {
+        this.proof = proof;
     }
 
-    public void setWhoSigned(String whoSigned) {
-        this.whoSigned = whoSigned;
+    public void setAuthor(String author) {
+        this.author = author;
     }
 }

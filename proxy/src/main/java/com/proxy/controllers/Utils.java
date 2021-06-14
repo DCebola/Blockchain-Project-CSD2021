@@ -40,4 +40,19 @@ public class Utils {
 
         return bytes;
     }
+
+    /**
+     * Returns the n leftmost significant bytes from a an array of bytes as a String.
+     *
+     * @param data : bytes from where the most significant bytes will be extracted
+     * @param n : the number of leftmost significant bytes to extract.
+     * @return : n leftmost significant bytes from a an array of bytes as a String.
+     */
+    private static String getMostSignificantBytes(int n, byte[] data) {
+        String mostSignificantBytes = "";
+        for (int i = 0; i < n; i++)
+            mostSignificantBytes = mostSignificantBytes.concat(Integer.toBinaryString(data[i] & 255 | 256).substring(1));
+        return mostSignificantBytes;
+
+    }
 }

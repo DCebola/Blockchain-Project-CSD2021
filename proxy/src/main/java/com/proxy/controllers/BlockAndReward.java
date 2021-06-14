@@ -5,7 +5,7 @@ import java.io.Serializable;
 public class BlockAndReward implements Serializable {
 
     private final Block block;
-    private final Transaction transaction;
+    private final SignedTransaction transaction;
 
     private static final long serialVersionUID = 6345655033367727690L;
 
@@ -14,7 +14,7 @@ public class BlockAndReward implements Serializable {
         this.transaction = null;
     }
 
-    public BlockAndReward(Block block, Transaction transaction) {
+    public BlockAndReward(Block block, SignedTransaction transaction) {
         this.block = block;
         this.transaction = transaction;
     }
@@ -23,7 +23,7 @@ public class BlockAndReward implements Serializable {
         return block;
     }
 
-    public Transaction getTransaction() {
+    public SignedTransaction getTransaction() {
         return transaction;
     }
 }
