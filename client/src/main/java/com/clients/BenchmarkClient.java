@@ -65,6 +65,8 @@ public class BenchmarkClient {
     private static final String IN_BETWEEN = "IN_BETWEEN";
 
     private static final String HASH_ALGORITHM = "SHA-256";
+    private static final int REWARD = 20;
+
 
     /*
     REQUEST_NONCE
@@ -100,7 +102,7 @@ public class BenchmarkClient {
         char[] clientPassword = null;
         String filename = "";
         BufferedWriter writer = null;
-        if(args.length > 2) {
+        if (args.length > 2) {
             client = args[2];
             clientPassword = args[3].toCharArray();
             filename = "src/main/resources/".concat(client).concat("_").concat("_results.csv");
@@ -137,43 +139,43 @@ public class BenchmarkClient {
         BufferedReader buf = new BufferedReader(new FileReader("src/main/resources/".concat(args[1])));
 
         String line = buf.readLine();
-        while(line != null) {
+        while (line != null) {
             String[] opInfo = line.split(" ");
             switch (opInfo[0]) {
                 case REGISTER:
-                    register(requestFactory,opInfo[1], opInfo[2].toCharArray());
+                    register(requestFactory, opInfo[1], opInfo[2].toCharArray());
                     break;
                 case REQUEST_NONCE:
-                    requestNonce(requestFactory,client, clientPassword);
+                    requestNonce(requestFactory, client, clientPassword);
                     break;
                 case OBTAIN_COINS:
-                    callObtainCoins(requestFactory, Double.parseDouble(opInfo[1]),writer);
+                    callObtainCoins(requestFactory, Double.parseDouble(opInfo[1]), writer);
                     break;
                 case TRANSFER_MONEY:
-                    transferMoney(requestFactory, Double.parseDouble(opInfo[1]),writer);
+                    transferMoney(requestFactory, Double.parseDouble(opInfo[1]), writer);
                     break;
                 case CURRENT_AMOUNT:
-                    balance(requestFactory,writer);
+                    balance(requestFactory, writer);
                     break;
                 case GLOBAL_LEDGER:
-                    ledgerOfGlobalTransactions(requestFactory, opInfo,writer);
+                    ledgerOfGlobalTransactions(requestFactory, opInfo, writer);
                     break;
                 case CLIENT_LEDGER:
-                    ledgerOfClientTransactions(requestFactory, opInfo,writer);
+                    ledgerOfClientTransactions(requestFactory, opInfo, writer);
                     break;
                 case VERIFY_OP:
-                    verify(requestFactory, in,writer);
+                    verify(requestFactory, in, writer);
                     break;
                 case OBTAIN_LAST_BLOCK:
-                    obtainLastBlock(requestFactory,writer);
+                    obtainLastBlock(requestFactory, writer);
                     break;
                 case MINE_TRANSACTIONS:
-                    mineTransactions(requestFactory, Integer.parseInt(opInfo[1]),writer);
+                    mineTransactions(requestFactory, Integer.parseInt(opInfo[1]), writer);
                     break;
             }
             line = buf.readLine();
         }
-        if(writer != null)
+        if (writer != null)
             writer.close();
     }
 
@@ -193,7 +195,6 @@ public class BenchmarkClient {
     }
 
     private static String obtainClientPubKey(String client) throws CertificateException, NoSuchAlgorithmException, KeyStoreException, IOException {
-        String publicKey;
         String clientNum = client.substring(client.length() - 1);
         if (Integer.parseInt(clientNum) == 5)
             return getPublicKey(CLIENT_1, CLIENT_1_PASS.toCharArray());
@@ -213,7 +214,7 @@ public class BenchmarkClient {
 
     private static void register(HttpComponentsClientHttpRequestFactory requestFactory, String client, char[] password) {
         try {
-            setSession(client,password);
+            setSession(client, password);
             HttpEntity<RegisterKeyMsgBody> request = new HttpEntity<>(
                     new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
             ResponseEntity<String> response
@@ -230,8 +231,8 @@ public class BenchmarkClient {
 
     private static void requestNonce(HttpComponentsClientHttpRequestFactory requestFactory, String client, char[] password) {
         try {
-            setSession(client,password);
-            String msgToBeHashed = gson.toJson(LedgerRequestType.GET_NONCE.name().concat(base32.encodeAsString(currentSession.getPublicKey().getEncoded())));
+            setSession(client, password);
+            String msgToBeHashed = LedgerRequestType.GET_NONCE.name().concat(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<String> signedBody = new SignedBody<>("", sigBytes, null);
@@ -269,6 +270,7 @@ public class BenchmarkClient {
     private static void callObtainCoins(HttpComponentsClientHttpRequestFactory requestFactory, double amount, BufferedWriter writer) {
         try {
             long start = System.currentTimeMillis();
+
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
             String msgToBeHashed = gson.toJson(LedgerRequestType.OBTAIN_COINS.name()).concat(gson.toJson(amount).concat(currentSession.getNonce()).concat(currentDate));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
@@ -279,20 +281,26 @@ public class BenchmarkClient {
             ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(OBTAIN_COINS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, ValidTransaction.class);
-            System.out.println(response.getStatusCode());
-            if (response.getStatusCode().is2xxSuccessful()) {
-                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
-                System.out.println("New Nonce: " + currentSession.getNonce());
-                System.out.printf("[ %s ]\n", response.getBody());
-                currentSession.saveTransaction(response.getBody());
-                long duration = System.currentTimeMillis() - start;
-                writer.append(OBTAIN_COINS.concat("\t").concat(Long.toString(duration)).concat("\n"));
-            }
+            processResponseWithTransaction(response, start, writer, OBTAIN_COINS);
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
+
+    private static void processResponseWithTransaction(ResponseEntity<ValidTransaction> response, long start, BufferedWriter writer, String opType) throws IOException {
+        System.out.println(response.getStatusCodeValue());
+        if (response.getStatusCode().is2xxSuccessful()) {
+            currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
+            System.out.println(currentSession.getNonce());
+            System.out.printf("[ %s ]\n", response.getBody());
+            currentSession.saveTransaction(response.getBody());
+
+            long duration = System.currentTimeMillis() - start;
+            writer.append(opType.concat("\t").concat(Long.toString(duration)).concat("\n"));
+        }
+
+    }
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, double amount, BufferedWriter writer) {
         try {
@@ -302,23 +310,12 @@ public class BenchmarkClient {
             Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
             String msgToBeHashed = gson.toJson(LedgerRequestType.TRANSFER_MONEY.name()).concat(gson.toJson(t).concat(currentSession.getNonce()).concat(currentDate));
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
-
             SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes, currentDate);
             HttpEntity<SignedBody<Transaction>> request = new HttpEntity<>(signedBody);
-
-
             ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(TRANSFER_MONEY_URL, port), HttpMethod.POST, request, ValidTransaction.class);
-            System.out.println(response.getStatusCodeValue());
-            if (response.getStatusCode().is2xxSuccessful()) {
-                currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce()) + 1));
-                System.out.println(currentSession.getNonce());
-                System.out.printf("[ %s ]\n", response.getBody());
-                currentSession.saveTransaction(response.getBody());
-                long duration = System.currentTimeMillis() - start;
-                writer.append(TRANSFER_MONEY.concat("\t").concat(Long.toString(duration)).concat("\n"));
-            }
+            processResponseWithTransaction(response, start, writer, TRANSFER_MONEY);
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
@@ -343,7 +340,7 @@ public class BenchmarkClient {
         }
     }
 
-    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, String[] opInfo, BufferedWriter writer ) {
+    private static void ledgerOfClientTransactions(HttpComponentsClientHttpRequestFactory requestFactory, String[] opInfo, BufferedWriter writer) {
         try {
             long start = System.currentTimeMillis();
             DateInterval dateInterval = getDateInterval(opInfo);
@@ -366,9 +363,9 @@ public class BenchmarkClient {
             long start = System.currentTimeMillis();
             ResponseEntity<Block> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(OBTAIN_LAST_BLOCK_URL,port),
+                    String.format(OBTAIN_LAST_BLOCK_URL, port),
                     HttpMethod.GET, null, Block.class);
-            if(response.getStatusCode().is2xxSuccessful()) {
+            if (response.getStatusCode().is2xxSuccessful()) {
                 Block block = response.getBody();
                 System.out.println(gson.toJson(block));
                 long duration = System.currentTimeMillis() - start;
@@ -384,69 +381,58 @@ public class BenchmarkClient {
     private static void mineTransactions(HttpComponentsClientHttpRequestFactory requestFactory, int numberTransactions, BufferedWriter writer) {
         try {
             long start = System.currentTimeMillis();
-            ResponseEntity<LastBlockWithMiningInfo> response
+            ResponseEntity<BlockHeader> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(MINE_TRANSACTIONS_URL, port, numberTransactions),
-                    HttpMethod.GET, null, LastBlockWithMiningInfo.class);
-            if(response.getBody() != null) {
-                Block lastMinedBlock = response.getBody().getLastMinedBlock();
-                byte[] hashedResult = hashBlock(lastMinedBlock.getBlockHeader());
-                String leftMostByte = Integer.toBinaryString(hashedResult[0] & 255 | 256).substring(1);
-                String secondLeftMostByte = Integer.toBinaryString(hashedResult[1] & 255 | 256).substring(1);
-                String mostSignificantBytes = leftMostByte.concat(secondLeftMostByte);
-                BlockHeader blockHeader = response.getBody().getBlockHeader();
-                if(mostSignificantBytes.equals(PROOF_OF_WORK_CHALLENGE) && base32.encodeAsString(hashedResult).equals(blockHeader.getPreviousHash())) {
-                    System.out.println("The mined block received is valid");
-                    blockHeader.setWhoSigned(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
-                    BlockHeader finalBlock = startProofOfWork(blockHeader);
-                    sendMinedBlock(requestFactory,finalBlock);
-                    long duration = System.currentTimeMillis() - start;
-                    writer.append(MINE_TRANSACTIONS.concat("\t").concat(Long.toString(duration).concat("\n")));
-                }
+                    HttpMethod.GET, null, BlockHeader.class);
+            if (response.getBody() != null) {
+                BlockHeader blockHeader = response.getBody();
+                blockHeader.setAuthor(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
+                BlockHeader finalBlock = generateProofOfWork(blockHeader);
+                long duration = System.currentTimeMillis() - start;
+                writer.append(MINE_TRANSACTIONS.concat("\t").concat(Long.toString(duration).concat("\n")));
+                sendMinedBlock(requestFactory, finalBlock, writer);
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 
-    private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
+    private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader, BufferedWriter writer) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException, IOException {
+        long start = System.currentTimeMillis();
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-        Transaction reward = new Transaction(SYSTEM,blockHeader.getWhoSigned(),20,currentDate);
-        BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader,reward);
-        String msgToBeHashed = gson.toJson(LedgerRequestType.SEND_MINED_BLOCK.name()).concat(gson.toJson(blockHeaderAndReward).concat(currentSession.getNonce()));
+        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), REWARD, currentDate);
+        BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader, reward);
+        String msgToBeHashed = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(currentSession.getNonce());
+        System.out.println(msgToBeHashed);
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
-        SignedBody<BlockHeaderAndReward> signedBody = new SignedBody<>(blockHeaderAndReward,sigBytes,null);
+        SignedBody<BlockHeaderAndReward> signedBody = new SignedBody<>(blockHeaderAndReward, sigBytes, null);
+        System.out.println(gson.toJson(signedBody.getContent()));
         HttpEntity<SignedBody<BlockHeaderAndReward>> request = new HttpEntity<>(signedBody);
-        ResponseEntity<BlockAndReward> response
-                = new RestTemplate(requestFactory).exchange(
-                String.format(SEND_MINED_BLOCK_URL, port), HttpMethod.POST, request, BlockAndReward.class);
-        if (response.getStatusCode().is2xxSuccessful())
-            currentSession.setNonce(Integer.toString(Integer.parseInt(currentSession.getNonce())+1));
-        System.out.println(gson.toJson(response.getBody()));
+        ResponseEntity<ValidTransaction> response = new RestTemplate(requestFactory).exchange(
+                String.format(SEND_MINED_BLOCK_URL, port), HttpMethod.POST, request, ValidTransaction.class);
+        processResponseWithTransaction(response, start, writer, SEND_MINED_BLOCK);
     }
 
-    private static BlockHeader startProofOfWork(BlockHeader blockHeader) throws NoSuchAlgorithmException {
-        boolean proofOfWorkComplete = false;
+    private static BlockHeader generateProofOfWork(BlockHeader blockHeader) throws NoSuchAlgorithmException {
         Random random = new Random();
-        while (!proofOfWorkComplete) {
-            int work = random.nextInt();
-            blockHeader.setWork(work);
-            byte[] hashedResult = hashBlock(blockHeader);
-            String leftMostByte = Integer.toBinaryString(hashedResult[0] & 255 | 256).substring(1);
-            String secondLeftMostByte = Integer.toBinaryString(hashedResult[1] & 255 | 256).substring(1);
-            String mostSignificantBytes = leftMostByte.concat(secondLeftMostByte);
+        while (true) {
+            int proof = random.nextInt();
+            blockHeader.setProof(proof);
+            byte[] PoW = hashBlock(blockHeader);
+            String mostSignificantBytes = Utils.getMostSignificantBytes((PROOF_OF_WORK_CHALLENGE.length() / Byte.SIZE), PoW);
             if (mostSignificantBytes.equals(PROOF_OF_WORK_CHALLENGE)) {
                 System.out.println("Proof of work complete");
-                proofOfWorkComplete = true;
-                String hashedResult1And0s = "";
-                for(byte b: hashedResult)
-                    hashedResult1And0s=hashedResult1And0s.concat(Integer.toBinaryString(b & 255 | 256).substring(1));
-                System.out.println(hashedResult1And0s);
+                String bits = "";
+                for (byte b : PoW)
+                    bits = bits.concat(Integer.toBinaryString(b & 255 | 256).substring(1));
+                System.out.println(bits);
+                return blockHeader;
             } else
                 System.out.println(mostSignificantBytes);
         }
-        return blockHeader;
     }
+
 
     private static byte[] hashBlock(BlockHeader blockHeader) throws NoSuchAlgorithmException {
         byte[] block = gson.toJson(blockHeader).getBytes();
