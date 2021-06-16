@@ -1,5 +1,6 @@
 package com.clients;
 
+import com.clients.mlib.PaillierKey;
 import com.google.gson.Gson;
 import org.apache.commons.codec.binary.Base32;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
