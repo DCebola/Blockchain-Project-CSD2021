@@ -220,7 +220,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         amount,
                         base32.encodeAsString(msgSignature),
                         date,
-                        NORMAL_TRANSACTION_ID_PREFIX
+                        NORMAL_TRANSACTION_ID_PREFIX,
+                        null,
+                        null,
+                        null
                 );
                 writeObtainAmountResponse(objOut, hash, true, signedTransaction, amount, date);
             } else {
@@ -230,7 +233,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         }
     }
 
-    private SignedTransaction createSignedTransaction(String origin, String destination, BigInteger amount, String signature, String date, String prefix) {
+    private SignedTransaction createSignedTransaction(String origin, String destination, BigInteger amount, String signature, String date, String prefix,BigInteger encryptedAmount,String whoEncrypted, String transactionPointer) {
         byte[] idBytes = new byte[TRANSACTION_ID_SIZE];
         rand.nextBytes(idBytes);
         SignedTransaction signedTransaction = new SignedTransaction(
@@ -239,7 +242,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 amount,
                 signature,
                 date,
-                prefix + base32.encodeAsString(idBytes)
+                prefix + base32.encodeAsString(idBytes),
+                encryptedAmount,
+                whoEncrypted,
+                transactionPointer
         );
         logger.info("T {}", gson.toJson(signedTransaction));
         return signedTransaction;
@@ -278,7 +284,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             amount,
                             base32.encodeAsString(msgSignature),
                             date,
-                            NORMAL_TRANSACTION_ID_PREFIX
+                            NORMAL_TRANSACTION_ID_PREFIX,
+                            null,
+                            null,
+                            null
                     );
                     logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
                     writeTransferMoneyResponse(objOut, hash, true, signedTransaction);
@@ -341,7 +350,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                 reward.getAmount(),
                                 base32.encodeAsString(sigBytes),
                                 reward.getDate(),
-                                REWARD_TRANSACTION_ID_PREFIX
+                                REWARD_TRANSACTION_ID_PREFIX,
+                                null,
+                                null,
+                                null
                         );
                         BlockAndReward blockAndReward = new BlockAndReward(finalBlock, signedReward);
                         logger.info("{}", gson.toJson(blockAndReward));
@@ -465,7 +477,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 t.getDate(),
                 commit.getHash(),
                 commit.getReplicas(),
-                t.getId());
+                t.getId(),
+                null,
+                null,
+                null);
         logger.info("T {}", t);
         jedis = jedisPool.getResource();
         jedis.rpush(PENDING_TRANSACTIONS, gson.toJson(validTransaction));
@@ -619,7 +634,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 t.getDate(),
                 commit.getHash(),
                 commit.getReplicas(),
-                t.getId());
+                t.getId(),
+                null,
+                null,
+                null);
         jedis = jedisPool.getResource();
         jedis.rpush(PENDING_REWARD, gson.toJson(new PendingReward(block.getBlockHeader().getPreviousHash(), validReward.getId())));
         jedis.close();

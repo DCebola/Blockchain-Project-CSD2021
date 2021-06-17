@@ -17,12 +17,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -78,7 +85,8 @@ public class RestClient {
     private static String port;
     private static DateTimeFormatter dateTimeFormatter;
 
-    public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, SignatureException, InvalidKeyException {
+    public static void main(String[] args) throws Exception {
+
         Properties properties = new Properties();
         properties.load(new FileInputStream("src/main/resources/client.config"));
         port = args[0];
@@ -302,15 +310,19 @@ public class RestClient {
         }
     }
 
-    private static void transferMoneyWithPrivacy(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+    private static void transferMoneyWithPrivacy(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws Exception {
         if(currentSession == null)
             requestNonce(requestFactory,in);
+
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
         System.out.print("Insert destination: ");
         String destination = in.next();
         in.nextLine();
         System.out.print("Insert amount: ");
         BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
+        BigInteger homomorphicEncryptedAmount = HomoAdd.encrypt(amount,currentSession.getPk());
+        String encryptedWithDestinationPublicKey = encryptWithDestinationPublicKey(destination,amount);
+        //Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()),destination,amount,)
     }
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
@@ -324,7 +336,7 @@ public class RestClient {
             System.out.print("Insert amount: ");
             BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
 
-            Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
+            Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate,null,null,null);
             String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY.name().concat(gson.toJson(t)).concat(currentSession.getNonce()).concat(currentDate);
             System.out.println(msgToBeHashed);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
@@ -413,7 +425,7 @@ public class RestClient {
 
     private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), RestClient.reward, currentDate);
+        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), RestClient.reward, currentDate,null,null,null);
         BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader, reward);
         String msgToBeHashed = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(currentSession.getNonce());
         System.out.println(msgToBeHashed);
@@ -539,6 +551,14 @@ public class RestClient {
             }
             System.out.print("Invalid option.\n> ");
         }
+    }
+
+    private static String encryptWithDestinationPublicKey(String pubKey, BigInteger amount) throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException {
+        PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(base32.decode(pubKey)));
+        Cipher encryptCipher = Cipher.getInstance("RSA");
+        encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey);
+        byte[] cipheredText = encryptCipher.doFinal(amount.toString().getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(cipheredText);
     }
 
     private static byte[] generateSignature(byte[] msg) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
