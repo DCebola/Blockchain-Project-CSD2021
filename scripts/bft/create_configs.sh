@@ -10,7 +10,9 @@ KEY_TYPE=$3
 
 cd ./bft
 mkdir -p ../../replica/config
+mkdir -p ../../sandbox/config
 mkdir -p ../../proxy/config
+
 cp hosts.template hosts.config
 cp system.template system.config
 
@@ -23,20 +25,24 @@ for i in `seq 0 $(( $N * 2 - 1 ))`; do
 done
 
 cp hosts.config ../../replica/config
+cp hosts.config ../../sandbox/config
 mv hosts.config ../../proxy/config
 
 if [ $# -eq 3 ]; then
     echo "system.ssltls = true" >> system.config
     echo "system.ssltls.protocol_version = TLSv1.2" >> system.config
     mkdir -p ../../replica/config/keysSSL_TLS
+    mkdir -p ../../sandbox/config/keysSSL_TLS
     mkdir -p ../../proxy/config/keysSSL_TLS
     if [ "$KEY_TYPE" = "RSA" ]; then
         cp keysSSL_TLS/RSA* ../../replica/config/keysSSL_TLS
+        cp keysSSL_TLS/RSA* ../../sandbox/config/keysSSL_TLS
         cp keysSSL_TLS/RSA* ../../proxy/config/keysSSL_TLS
         echo "system.ssltls.key_store_file=RSA_KeyPair_2048.pkcs12" >> system.config
         echo "system.ssltls.enabled_ciphers = TLS_RSA_WITH_AES_128_GCM_SHA256," >> system.config
     elif [ "$KEY_TYPE" = "ECDSA" ]; then
         cp keysSSL_TLS/EC* ../../replica/config/keysSSL_TLS
+        cp keysSSL_TLS/EC* ../../sandbox/config/keysSSL_TLS
         cp keysSSL_TLS/EC* ../../proxy/config/keysSSL_TLS
         echo "system.ssltls.key_store_file = EC_KeyPair_384.pkcs12" >> system.config
         echo "system.ssltls.enabled_ciphers = TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256," >> system.config
@@ -45,11 +51,15 @@ fi
 
 
 cp system.config ../../replica/config
-cp privileged.policy ../../replica/config
-cp limited.policy ../../replica/config
 cp replica.config ../../replica/config
 cp logback_replica.xml logback.xml
 mv logback.xml ../../replica/config
+
+cp system.config ../../sandbox/config
+cp sandbox.config ../../sandbox/config
+cp import-control.xml ../../sandbox/config
+cp logback_sandbox.xml logback.xml
+mv logback.xml ../../sandbox/config
 
 mv system.config ../../proxy/config
 cp logback_proxy.xml logback.xml

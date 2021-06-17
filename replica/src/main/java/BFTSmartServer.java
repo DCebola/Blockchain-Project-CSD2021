@@ -29,15 +29,15 @@ import java.util.*;
 public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private static final String ERROR_MSG = "ERROR";
+    private static final String IGNORE_MSG = "IGNORE_MSG";
+
     private static final String INITIAL_NONCE = "0";
     private static final String NO_NONCE = "-1";
-
     private static final String SYSTEM = "SYSTEM";
-    private static final String ERROR_MSG = "ERROR";
     private static final String PENDING_TRANSACTIONS = "PENDING-TRANSACTIONS";
     private static final String PENDING_REWARD = "PENDING-REWARDS";
     private static final String BLOCK_CHAIN = "BLOCK-CHAIN";
-
 
     private static final int KEY_ALGORITHM = 0;
     private static final int SIGNATURE_ALGORITHM = 1;
@@ -89,10 +89,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedisPoolConfig.setMaxTotal(Integer.parseInt(properties.getProperty("max_total")));
         jedisPoolConfig.setMaxIdle(Integer.parseInt(properties.getProperty("max_idle")));
         jedisPoolConfig.setMinIdle(Integer.parseInt(properties.getProperty("min_idle")));
-        this.jedisPool = new JedisPool(jedisPoolConfig,redis_ip,Integer.parseInt(redisPort)); //TODO: ENABLE TLS
+        this.jedisPool = new JedisPool(jedisPoolConfig, redis_ip, Integer.parseInt(redisPort)); //TODO: ENABLE TLS
 
         jedis = jedisPool.getResource();
-        //jedis = new Jedis("redis://".concat(redis_ip).concat(":").concat(redisPort));
         jedis.rpush(BLOCK_CHAIN, gson.toJson(genesisBlock));
         jedis.close();
         new ServiceReplica(id, this, this);
@@ -138,6 +137,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     break;
                 case COMMIT_BLOCK:
                     commitBlockRequest(objIn, objOut);
+                    break;
+                case VALIDATE_SMART_CONTRACT:
+                    logger.info("Ignored VALIDATE_SMART_CONTRACT operation.");
+                    return IGNORE_MSG.getBytes();
             }
             objOut.flush();
             byteOut.flush();
@@ -824,8 +827,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         List<String> walletData = jedis.lrange(publicKey, 0, -1);
         jedis.close();
         Signature sign = Signature.getInstance(walletData.get(SIGNATURE_ALGORITHM));
-        sign.initVerify(KeyFactory.getInstance(walletData.get(KEY_ALGORITHM)).
-                generatePublic(new X509EncodedKeySpec(base32.decode(publicKey))));
+        sign.initVerify(KeyFactory.getInstance(walletData.get(KEY_ALGORITHM)).generatePublic(new X509EncodedKeySpec(base32.decode(publicKey))));
         sign.update(generateHash(msg.getBytes(), walletData.get(HASH_ALGORITHM)));
         return sign.verify(signature);
     }

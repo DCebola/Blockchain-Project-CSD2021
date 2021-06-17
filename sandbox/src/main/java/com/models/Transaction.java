@@ -1,4 +1,4 @@
-package com.proxy.controllers;
+package com.models;
 
 
 import java.io.Serializable;
@@ -39,10 +39,6 @@ public class Transaction implements Serializable {
     }
 
     public String getDate() {
-        return date;
-    }
-
-    public String error() {
         return date;
     }
 }

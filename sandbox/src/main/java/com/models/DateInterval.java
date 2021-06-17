@@ -1,4 +1,4 @@
-package com.proxy.controllers;
+package com.models;
 
 import java.io.Serializable;
 
@@ -25,5 +25,4 @@ public class DateInterval implements Serializable {
     public String getEndDate() {
         return endDate;
     }
-
 }

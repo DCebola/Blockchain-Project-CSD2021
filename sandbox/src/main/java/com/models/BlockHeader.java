@@ -1,4 +1,4 @@
-package com.proxy.controllers;
+package com.models;
 
 import java.io.Serializable;
 import java.util.List;
