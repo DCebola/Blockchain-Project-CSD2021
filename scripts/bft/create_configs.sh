@@ -45,6 +45,8 @@ fi
 
 
 cp system.config ../../replica/config
+cp privileged.policy ../../replica/config
+cp limited.policy ../../replica/config
 cp replica.config ../../replica/config
 cp logback_replica.xml logback.xml
 mv logback.xml ../../replica/config
