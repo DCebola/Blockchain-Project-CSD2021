@@ -1,5 +1,6 @@
 package com.clients;
 
+import java.math.BigInteger;
 import java.util.List;
 
 public class ValidTransaction extends SignedTransaction {
@@ -8,7 +9,7 @@ public class ValidTransaction extends SignedTransaction {
     private final String hash;
     private final List<Integer> replicas;
 
-    public ValidTransaction(String origin, String destination, double amount, String signature, String date, String hash, List<Integer> replicas, String id) {
+    public ValidTransaction(String origin, String destination, BigInteger amount, String signature, String date, String hash, List<Integer> replicas, String id) {
         super(origin, destination, amount, signature, date, id);
         this.hash = hash;
         this.replicas = replicas;

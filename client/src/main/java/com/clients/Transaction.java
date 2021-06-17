@@ -2,7 +2,7 @@ package com.clients;
 
 
 import java.io.Serializable;
-import java.security.PublicKey;
+import java.math.BigInteger;
 
 public class Transaction implements Serializable {
 
@@ -11,17 +11,17 @@ public class Transaction implements Serializable {
 
     private final String origin;
     private final String destination;
-    private final double amount;
+    private final BigInteger amount;
     private final String date;
 
     public Transaction() {
-        this.amount = -1;
+        this.amount = null;
         this.origin = "";
         this.destination = "";
         this.date = "";
     }
 
-    public Transaction(String origin, String destination, double amount, String date) {
+    public Transaction(String origin, String destination, BigInteger amount, String date) {
         this.origin = origin;
         this.destination = destination;
         this.amount = amount;
@@ -36,7 +36,7 @@ public class Transaction implements Serializable {
         return destination;
     }
 
-    public double getAmount() {
+    public BigInteger getAmount() {
         return amount;
     }
 

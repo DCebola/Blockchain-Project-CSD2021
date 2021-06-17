@@ -1,7 +1,6 @@
 package com.clients;
 
 import com.clients.mlib.HomoAdd;
-import com.clients.mlib.HomoOpeInt;
 import com.clients.mlib.PaillierKey;
 import com.google.gson.Gson;
 import org.apache.commons.codec.binary.Base32;
@@ -19,11 +18,8 @@ import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.ByteBuffer;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -52,6 +48,7 @@ public class RestClient {
     private static final String OBTAIN_LAST_BLOCK_URL = "https://127.0.0.1:%s/lastBlock";
     private static final String MINE_TRANSACTIONS_URL = "https://127.0.0.1:%s/pendingTransactions/%s";
     private static final String SEND_MINED_BLOCK_URL = "https://127.0.0.1:%s/mine";
+    private static final String TRANSFER_MONEY_WITH_PRIVACY_URL = "https://127.0.0.1:%s/privacyTransfer";
 
     private static final int REGISTER = 0;
     private static final int REQUEST_NONCE = 1;
@@ -63,7 +60,7 @@ public class RestClient {
     private static final int VERIFY_OP = 7;
     private static final int OBTAIN_LAST_BLOCK = 8;
     private static final int MINE_TRANSACTIONS = 9;
-    private static final int SEND_MINED_BLOCK = 10;
+    private static final int TRANSFER_MONEY_WITH_PRIVACY = 10;
     private static final int QUIT = 11;
 
 
@@ -73,7 +70,7 @@ public class RestClient {
 
     private static String hash_algorithm;
     private static String challenge;
-    private static int reward;
+    private static BigInteger reward;
 
     private static Gson gson;
     private static Base32 base32;
@@ -87,7 +84,7 @@ public class RestClient {
         port = args[0];
         hash_algorithm = properties.getProperty("hash_algorithm");
         challenge = properties.getProperty("challenge");
-        reward = Integer.parseInt(properties.getProperty("mining_reward"));
+        reward = new BigInteger(properties.getProperty("mining_reward"));
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         base32 = new Base32();
@@ -148,6 +145,9 @@ public class RestClient {
                 case MINE_TRANSACTIONS:
                     mineTransactions(requestFactory, in);
                     break;
+                case TRANSFER_MONEY_WITH_PRIVACY:
+                    transferMoneyWithPrivacy(requestFactory,in);
+                    break;
                 case QUIT:
                     in.close();
                     break;
@@ -188,7 +188,7 @@ public class RestClient {
         if (currentSession == null)
             System.out.println("[No session active]");
         else
-            System.out.println("[Current session: " + currentSession.getUsername() + "]");
+            System.out.println("[Current session: " + base32.encodeAsString(currentSession.getPublicKey().getEncoded()) + "]\n" + currentSession.getNonce());
     }
 
     private static void printOps() {
@@ -202,7 +202,7 @@ public class RestClient {
         System.out.println("7 - Verify transaction");
         System.out.println("8 - Obtain last block");
         System.out.println("9 - Mine transactions");
-        System.out.println("10 - Send mined block");
+        System.out.println("10 - Transfer money with privacy");
         System.out.println("11 - Quit");
         System.out.print("> ");
     }
@@ -258,9 +258,9 @@ public class RestClient {
         try {
             if (currentSession == null)
                 requestNonce(requestFactory, in);
-            ResponseEntity<Double> response
+            ResponseEntity<BigInteger> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, Double.class);
+                    String.format(BALANCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, BigInteger.class);
 
             if (response.getStatusCode().is2xxSuccessful())
                 System.out.println("Balance: " + response.getBody());
@@ -276,12 +276,12 @@ public class RestClient {
                 requestNonce(requestFactory, in);
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
             System.out.print("Insert amount: ");
-            double amount = in.nextDouble();
+            BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
             String msgToBeHashed = LedgerRequestType.OBTAIN_COINS.name().concat(gson.toJson(amount)).concat(currentSession.getNonce()).concat(currentDate);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-            SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes, currentDate);
-            HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
+            SignedBody<BigInteger> signedBody = new SignedBody<>(amount, sigBytes, currentDate);
+            HttpEntity<SignedBody<BigInteger>> request = new HttpEntity<>(signedBody);
 
             ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
@@ -300,7 +300,17 @@ public class RestClient {
             System.out.printf("[ %s ]\n", response.getBody());
             currentSession.saveTransaction(response.getBody());
         }
+    }
 
+    private static void transferMoneyWithPrivacy(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
+        if(currentSession == null)
+            requestNonce(requestFactory,in);
+        String currentDate = LocalDateTime.now().format(dateTimeFormatter);
+        System.out.print("Insert destination: ");
+        String destination = in.next();
+        in.nextLine();
+        System.out.print("Insert amount: ");
+        BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
     }
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
@@ -312,10 +322,11 @@ public class RestClient {
             String destination = in.next();
             in.nextLine();
             System.out.print("Insert amount: ");
-            double amount = in.nextDouble();
+            BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
 
             Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
             String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY.name().concat(gson.toJson(t)).concat(currentSession.getNonce()).concat(currentDate);
+            System.out.println(msgToBeHashed);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes, currentDate);
@@ -363,7 +374,7 @@ public class RestClient {
         }
     }
 
-    private static Block obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory) {
+    private static void obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
             ResponseEntity<Block> response
                     = new RestTemplate(requestFactory).exchange(
@@ -372,12 +383,10 @@ public class RestClient {
             if (response.getStatusCode().is2xxSuccessful()) {
                 Block block = response.getBody();
                 System.out.println(gson.toJson(block));
-                return block;
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
-        return null;
     }
 
     private static void mineTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {

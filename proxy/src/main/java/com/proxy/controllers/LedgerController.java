@@ -15,6 +15,7 @@ import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
 import static bftsmart.tom.core.messages.TOMMessageType.UNORDERED_REQUEST;
 
 import java.io.*;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -82,7 +83,7 @@ public class LedgerController implements CommandLineRunner {
 
 
     @PostMapping("/{who}/obtainCoins")
-    public ValidTransaction obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
+    public ValidTransaction obtainAmount(@PathVariable String who, @RequestBody SignedBody<BigInteger> signedBody) {
         try {
             QuorumResponse quorumResponse = dispatchAsyncRequest(createObtainCoinsRequest(who, signedBody), ORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
@@ -128,7 +129,7 @@ public class LedgerController implements CommandLineRunner {
 
 
     @GetMapping("/{who}/balance")
-    public double currentAmount(@PathVariable String who) {
+    public BigInteger currentAmount(@PathVariable String who) {
         try {
             QuorumResponse quorumResponse = dispatchAsyncRequest(createCurrentAmountRequest(who), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
@@ -138,7 +139,7 @@ public class LedgerController implements CommandLineRunner {
                 logger.info("BAD REQUEST");
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
             } else {
-                double balance = objIn.readDouble();
+                BigInteger balance = (BigInteger) objIn.readObject();
                 logger.info("OK. {} coins associated with key {}.", balance, who);
                 return balance;
             }
@@ -292,7 +293,7 @@ public class LedgerController implements CommandLineRunner {
 
     @PostMapping("/privacyTransfer")
     @ResponseStatus(HttpStatus.OK)
-    public void transferMoneyWithPrivacy(@RequestBody SignedBody<BlockHeader> signedBody) {
+    public void transferMoneyWithPrivacy(@RequestBody SignedBody<Transaction> signedBody) {
 
     }
 
@@ -389,12 +390,12 @@ public class LedgerController implements CommandLineRunner {
         return byteOut.toByteArray();
     }
 
-    private byte[] createObtainCoinsRequest(String who, SignedBody<Double> signedBody) throws IOException {
+    private byte[] createObtainCoinsRequest(String who, SignedBody<BigInteger> signedBody) throws IOException {
         ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.OBTAIN_COINS);
         objOut.writeObject(who);
-        objOut.writeDouble(signedBody.getContent());
+        objOut.writeObject(signedBody.getContent());
         objOut.writeObject(signedBody.getSignature());
         objOut.writeObject(signedBody.getDate());
         objOut.flush();

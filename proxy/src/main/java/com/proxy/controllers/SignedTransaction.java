@@ -1,5 +1,7 @@
 package com.proxy.controllers;
 
+import java.math.BigInteger;
+
 public class SignedTransaction extends Transaction {
 
     private final String signature;
@@ -7,7 +9,7 @@ public class SignedTransaction extends Transaction {
     private final String id;
 
 
-    public SignedTransaction(String origin, String destination, double amount, String signature, String date, String id){
+    public SignedTransaction(String origin, String destination, BigInteger amount, String signature, String date, String id){
         super(origin, destination, amount, date);
         this.signature = signature;
         this.id = id;
