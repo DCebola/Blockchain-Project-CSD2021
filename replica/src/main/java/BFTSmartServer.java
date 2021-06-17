@@ -16,6 +16,7 @@ import redis.clients.jedis.JedisPoolConfig;
 
 
 import java.io.*;
+import java.math.BigInteger;
 import java.security.*;
 
 import java.security.spec.InvalidKeySpecException;
@@ -154,6 +155,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String signatureAlgorithm = (String) objIn.readObject();
         String publicKeyAlgorithm = (String) objIn.readObject();
         String hashAlgorithm = (String) objIn.readObject();
+        BigInteger encryptedZero = (BigInteger) objIn.readObject();
+        BigInteger pkNSquare = (BigInteger) objIn.readObject();
+
         byte[] hash;
         jedis = jedisPool.getResource();
         if (jedis.exists(publicKey)) {
@@ -165,6 +169,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             .concat(signatureAlgorithm)
                             .concat(publicKeyAlgorithm)
                             .concat(hashAlgorithm)
+                            .concat(encryptedZero.toString())
+                            .concat(pkNSquare.toString())
                             .getBytes());
             writeRegisterKeyResponse(objOut, hash, false, null);
         } else {
@@ -175,8 +181,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             .concat(signatureAlgorithm)
                             .concat(publicKeyAlgorithm)
                             .concat(hashAlgorithm)
+                            .concat(encryptedZero.toString())
+                            .concat(pkNSquare.toString())
                             .getBytes());
-            writeRegisterKeyResponse(objOut, hash, true, new Wallet(publicKey, publicKeyAlgorithm, signatureAlgorithm, hashAlgorithm));
+            writeRegisterKeyResponse(objOut, hash, true, new Wallet(publicKey, publicKeyAlgorithm, signatureAlgorithm, hashAlgorithm,encryptedZero,pkNSquare));
         }
     }
 
@@ -396,6 +404,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String publicKeyAlgorithm = wallet.getPublicKeyAlgorithm();
         String signatureAlgorithm = wallet.getSignatureAlgorithm();
         String hashAlgorithm = wallet.getHashAlgorithm();
+        BigInteger encryptedZero = wallet.getEncryptedZero();
+        BigInteger pkNSquare = wallet.getPkNSquare();
         jedis = jedisPool.getResource();
         jedis.rpush(publicKey, publicKeyAlgorithm);
         jedis.close();
@@ -408,6 +418,12 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis = jedisPool.getResource();
         jedis.rpush(publicKey, INITIAL_NONCE);
         jedis.close();
+        jedis = jedisPool.getResource();
+        jedis.rpush(publicKey, encryptedZero.toString());
+        jedis.close();
+        jedis = jedisPool.getResource();
+        jedis.rpush(publicKey, pkNSquare.toString());
+        jedis.close();
 
         byte[] hash = TOMUtil.computeHash(
                 Boolean.toString(true)
@@ -417,7 +433,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         .concat(hashAlgorithm)
                         .getBytes());
         writeCommitWalletResponse(objOut, hash, true);
-        logger.debug("Registered key {} with hash algorithm {}, signature algorithm {} and nonce {}", publicKey, hashAlgorithm, signatureAlgorithm, INITIAL_NONCE);
+        logger.debug("Registered key {} with hash algorithm {}, signature algorithm {} and nonce {} and homomorphic square of key {}", publicKey, hashAlgorithm, signatureAlgorithm, INITIAL_NONCE, pkNSquare.toString());
         logger.info("Registered key {}", publicKey);
     }
 

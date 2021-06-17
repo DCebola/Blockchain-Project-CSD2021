@@ -1,5 +1,7 @@
 package com.clients;
 
+import com.clients.mlib.HomoAdd;
+import com.clients.mlib.HomoOpeInt;
 import com.clients.mlib.PaillierKey;
 import com.google.gson.Gson;
 import org.apache.commons.codec.binary.Base32;
@@ -17,7 +19,11 @@ import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -32,6 +38,8 @@ public class RestClient {
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
     private static final String FIRST_DATE = "2021-01-01 01:01:01";
     private static final String SYSTEM = "SYSTEM";
+    private static final String HOMOMORPHIC_INFO_CONFIG = "_homomorphic_info.config";
+    private static final String CONFIGS_DIRECTORY = "src/main/resources/";
 
     private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
     private static final String OBTAIN_COINS_URL = "https://127.0.0.1:%s/%s/obtainCoins";
@@ -80,7 +88,6 @@ public class RestClient {
         hash_algorithm = properties.getProperty("hash_algorithm");
         challenge = properties.getProperty("challenge");
         reward = Integer.parseInt(properties.getProperty("mining_reward"));
-
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         base32 = new Base32();
@@ -152,19 +159,29 @@ public class RestClient {
         }
     }
 
-    private static void setSession(Scanner in) {
+    private static void setSession(Scanner in) throws IOException {
         System.out.print("Insert username: ");
         String user = in.next();
         in.nextLine();
         System.out.print("Insert password: ");
         char[] password = in.next().toCharArray();
         in.nextLine();
-
         try {
             currentSession = new Session(user, password);
         } catch (UnrecoverableKeyException | CertificateException | IOException | KeyStoreException | NoSuchAlgorithmException e) {
             e.printStackTrace();
         }
+    }
+
+    private static PaillierKey createHomomorphicKey(Properties properties) {
+        BigInteger p = new BigInteger(properties.getProperty("p"));
+        BigInteger q = new BigInteger(properties.getProperty("q"));
+        BigInteger lambda = new BigInteger(properties.getProperty("lambda"));
+        BigInteger n = new BigInteger(properties.getProperty("n"));
+        BigInteger nsquare = new BigInteger(properties.getProperty("nsquare"));
+        BigInteger g = new BigInteger(properties.getProperty("g"));
+        BigInteger mu = new BigInteger(properties.getProperty("mu"));
+        return new PaillierKey(p,q,lambda,n,nsquare,g,mu);
     }
 
     private static void printSession() {
@@ -200,8 +217,11 @@ public class RestClient {
     private static void register(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             setSession(in);
+            PaillierKey pk = currentSession.getPk();
+            BigInteger encryptedZero = HomoAdd.encrypt(new BigInteger("0"),pk);
+            BigInteger pkNSquare = pk.getNsquare();
             HttpEntity<RegisterKeyMsgBody> request = new HttpEntity<>(
-                    new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
+                    new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm(),encryptedZero,pkNSquare));
             ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(REGISTER_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
@@ -534,8 +554,12 @@ public class RestClient {
         private final char[] password;
         private String nonce;
         private List<ValidTransaction> transactions;
+        private PaillierKey pk;
 
         public Session(String username, char[] password) throws UnrecoverableKeyException, CertificateException, IOException, KeyStoreException, NoSuchAlgorithmException {
+            Properties properties = new Properties();
+            properties.load(new FileInputStream(CONFIGS_DIRECTORY.concat(username).concat(HOMOMORPHIC_INFO_CONFIG)));
+            this.pk = createHomomorphicKey(properties);
             this.nonce = "";
             this.username = username;
             this.password = password;
@@ -586,6 +610,10 @@ public class RestClient {
 
         public void saveTransaction(ValidTransaction t) {
             this.transactions.add(t);
+        }
+
+        public PaillierKey getPk() {
+            return pk;
         }
 
     }

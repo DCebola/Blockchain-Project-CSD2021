@@ -382,6 +382,8 @@ public class LedgerController implements CommandLineRunner {
         objOut.writeObject(body.getSignatureAlgorithm());
         objOut.writeObject(body.getPublicKeyAlgorithm());
         objOut.writeObject(body.getHashAlgorithm());
+        objOut.writeObject(body.getEncryptedZero());
+        objOut.writeObject(body.getPkNSquare());
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();

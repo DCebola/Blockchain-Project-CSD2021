@@ -1,6 +1,7 @@
 package com.proxy.controllers;
 
 import java.io.Serializable;
+import java.math.BigInteger;
 
 public class RegisterKeyMsgBody implements Serializable {
 
@@ -8,11 +9,15 @@ public class RegisterKeyMsgBody implements Serializable {
     private static final long serialVersionUID = 7529685098267757690L;
     private final String publicKeyAlgorithm;
     private final String hashAlgorithm;
+    private final BigInteger encryptedZero;
+    private final BigInteger pkNSquare;
 
-    public RegisterKeyMsgBody(String signatureAlgorithm, String publicKeyAlgorithm, String hashAlgorithm) {
+    public RegisterKeyMsgBody(String signatureAlgorithm, String publicKeyAlgorithm, String hashAlgorithm, BigInteger encryptedZero, BigInteger pkNSquare) {
         this.signatureAlgorithm = signatureAlgorithm;
         this.publicKeyAlgorithm = publicKeyAlgorithm;
         this.hashAlgorithm = hashAlgorithm;
+        this.encryptedZero = encryptedZero;
+        this.pkNSquare = pkNSquare;
     }
 
     public String getSignatureAlgorithm() {
@@ -25,5 +30,14 @@ public class RegisterKeyMsgBody implements Serializable {
 
     public String getHashAlgorithm() {
         return hashAlgorithm;
+    }
+
+
+    public BigInteger getEncryptedZero() {
+        return encryptedZero;
+    }
+
+    public BigInteger getPkNSquare() {
+        return pkNSquare;
     }
 }
