@@ -7,15 +7,14 @@ import com.google.gson.Gson;
 import com.libs.Utils;
 import com.models.*;
 import com.libs.mlib.HomoAdd;
+import com.models.Transaction;
 import org.apache.commons.codec.EncoderException;
 import org.apache.commons.codec.binary.Base32;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPoolConfig;
+import redis.clients.jedis.*;
 
 
 import java.io.*;
@@ -825,6 +824,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS:
                     obtainUserNotSubmittedTransactionsRequest(objIn, objOut);
                     break;
+                case GET_SYSTEM_SNAPSHOT:
+                    getSystemSnapshot(objOut);
+                    break;
             }
             objOut.flush();
             byteOut.flush();
@@ -833,6 +835,41 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             e.printStackTrace();
             return ERROR_MSG.getBytes();
         }
+    }
+
+    private void getSystemSnapshot(ObjectOutput objOut) throws IOException {
+        logger.debug("New GET_SYSTEM_SNAPSHOT operation");
+
+        jedis = jedisPool.getResource();
+        List<String> serializedChain = jedis.lrange(BLOCK_CHAIN, 1, -1);
+        jedis.close();
+
+        Map<String, List<String>> wallets = getWallets();
+
+        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(NO_NONCE).getBytes());
+        writeReplicaDecision(objOut, hash, true);
+        objOut.writeObject(serializedChain);
+        objOut.writeObject(wallets);
+    }
+
+    private Map<String, List<String>> getWallets() {
+        Map<String, List<String>> wallets = new HashMap<>();
+        ScanParams scanParams = new ScanParams().count(100).match("*");
+        String cur = ScanParams.SCAN_POINTER_START;
+        do {
+            jedis = jedisPool.getResource();
+            ScanResult<String> scanResult = jedis.scan(cur, scanParams);
+            jedis.close();
+            for (String key : scanResult.getResult()) {
+                if (!key.equals(PENDING_TRANSACTIONS) && !key.equals(PENDING_REWARD) && !key.equals(BLOCK_CHAIN) && !wallets.containsKey(key)) {
+                    jedis = jedisPool.getResource();
+                    wallets.put(key, jedis.lrange(key, 1, -1));
+                    jedis.close();
+                }
+            }
+            cur = scanResult.getCursor();
+        } while (!cur.equals(ScanParams.SCAN_POINTER_START));
+        return wallets;
     }
 
     private void getNonceRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException, NoSuchAlgorithmException, InvalidKeySpecException, SignatureException, InvalidKeyException {
@@ -1065,6 +1102,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         }
         return null;
     }
+
 
     private List<ValidTransaction> getPendingTransactions(DateInterval dateInterval) {
         long startDate = Timestamp.valueOf(dateInterval.getStartDate()).getTime();

@@ -1,20 +1,18 @@
-package com.untrusted;
+package com.models;
 
-import com.google.gson.Gson;
 import com.enums.SmartContractEvent;
-import com.models.Transaction;
+import com.google.gson.Gson;
 
 import java.io.Serializable;
+import java.math.BigInteger;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.math.*;
+import java.util.LinkedList;
+import java.util.List;
 
-public class SmartContract implements Serializable {
-    private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
+public class SmartContractTemplate implements Serializable {
     private static final long serialVersionUID = 562968899267729629L;
+    private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
 
-
-    private final int outputNumber;
     private final String author;
     private final String date;
     private final List<Transaction> output;
@@ -32,13 +30,12 @@ public class SmartContract implements Serializable {
     private String hash;
 
 
-    public SmartContract(int outputNumber, String author, String date, Gson gson) {
+    public SmartContractTemplate(String author, String date, Gson gson) {
         this.gson = gson;
         this.dateTimeFormatter = DateTimeFormatter.ofPattern(DATE_FORMATTER);
-        this.outputNumber = outputNumber;
         this.author = author;
         this.date = date;
-        this.output = new ArrayList<>(outputNumber);
+        this.output = null;
         this.signature = null;
         this.validatorIDs = null;
         this.hash = null;
@@ -49,10 +46,9 @@ public class SmartContract implements Serializable {
         this.done = false;
     }
 
-    public SmartContract() {
+    public SmartContractTemplate() {
         this.gson = null;
         this.dateTimeFormatter = null;
-        this.outputNumber = -1;
         this.author = null;
         this.date = null;
         this.output = null;
@@ -65,10 +61,6 @@ public class SmartContract implements Serializable {
         this.readTarget = null;
         this.done = false;
 
-    }
-
-    public int getOutputNumber() {
-        return outputNumber;
     }
 
     public String getAuthor() {

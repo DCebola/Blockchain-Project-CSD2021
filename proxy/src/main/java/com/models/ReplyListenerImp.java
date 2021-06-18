@@ -53,7 +53,6 @@ public class ReplyListenerImp<T> implements ReplyListener {
                     }
                 }
                 if (validTarget) {
-                    System.out.println("Valid target: " + id);
                     byte[] hash = (byte[]) objectInput.readObject();
                     String hashOperation = Utils.toHex(hash);
                     List<Integer> replicas = hashes.get(hashOperation);
@@ -67,8 +66,6 @@ public class ReplyListenerImp<T> implements ReplyListener {
                         QuorumResponse op = new QuorumResponse(tomMessage.getContent(), replicas);
                         reply.complete((T) op);
                     }
-                }else{
-                    System.out.println("Invalid target: " + id);
                 }
             } catch (IOException | ClassNotFoundException e) {
                 e.printStackTrace();

@@ -1,18 +1,17 @@
-package com.untrusted;
+package com.models;
 
 import com.enums.SmartContractEvent;
 import com.google.gson.Gson;
 import com.models.Transaction;
 
-import java.io.Serializable;
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-public class SmartContract implements Serializable {
+public class SmartContract implements ISmartContract {
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
-    private static final long serialVersionUID = 562968899267729629L;
+    private static final long serialVersionUID = 562968892267729629L;
 
 
     private final int outputNumber;

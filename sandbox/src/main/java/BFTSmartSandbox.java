@@ -101,18 +101,18 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
     private void testContract(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException, NoSuchAlgorithmException, InvalidKeySpecException, SignatureException, InvalidKeyException, ExecutionException, InterruptedException {
         logger.debug("New TEST_CONTRACT operation.");
         String pubKey = (String) objIn.readObject();
-        int amount = objIn.readInt();
-        byte[] byteCode = (byte[]) objIn.readObject(); //TODO: Define loader
+        String date = (String) objIn.readObject();
+        byte[] byteCode = base32.decode((String) objIn.readObject());
         byte[] sigBytes = (byte[]) objIn.readObject();
         List<String> wallet = wallets.get(pubKey);
-        String msg = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(gson.toJson(amount)).concat(wallet.get(WALLET_NONCE));
-        if (wallet != null && amount > 0) {
+        String msg = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(gson.toJson(byteCode)).concat(wallet.get(WALLET_NONCE));
+        if (wallet != null) {
             if (verifySignature(pubKey, msg, sigBytes)) {
                 SmartContractLoader scLoader = new SmartContractLoader(byteCode, smartContractClassName);
                 if (scLoader.loadSmartContract()) {
                     ISmartContract smartContract;
                     try {
-                        smartContract = scLoader.getNewSmartContractInstance(pubKey, "", gson);
+                        smartContract = scLoader.getNewSmartContractInstance(pubKey, date, gson);
                         List<String> destinations = new ArrayList<>(2);
                         if (wallets.keySet().size() < 2) {
                             destinations.add(DUMMY_DESTINATION_1);
@@ -294,7 +294,6 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
 
     @Override
     public void installSnapshot(byte[] bytes) {
-
     }
 
     @Override
@@ -305,7 +304,6 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
     /************************************************* Execution thread ***********************************************/
 
     private class sandboxThread implements Callable<List<Transaction>> {
-
         private final ISmartContract sc;
         private final String origin;
         private final BigInteger amount;

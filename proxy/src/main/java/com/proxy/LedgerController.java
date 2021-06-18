@@ -3,9 +3,9 @@ package com.proxy;
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessageType;
 import com.enums.LedgerRequestType;
+import com.enums.SmartContractEvent;
 import com.google.gson.Gson;
 import com.models.*;
-import com.untrusted.SmartContract;
 import org.apache.commons.codec.binary.Base32;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -325,15 +325,27 @@ public class LedgerController implements CommandLineRunner {
 
     @PostMapping("/smartTransfer/{id}")
     @ResponseStatus(HttpStatus.OK)
-    public Ledger transferMoneyWithSmartContract(@RequestBody SignedBody<SmartContractArgs> signedBody) {
-        return new Ledger();
+    public Ledger transferMoneyWithSmartContract(@PathVariable String id, @RequestBody SignedBody<SmartContractArgs> signedBody) throws IOException, ClassNotFoundException, ExecutionException, InterruptedException {
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createTransferMoneyWithSmartContractRequest(id, signedBody), UNORDERED_REQUEST, REPLICA_TYPE);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readInt(); //ID
+        byte[] hash = (byte[]) objIn.readObject();
+        if (!objIn.readBoolean()) {
+            logger.info("BAD REQUEST");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
+        } else {
+            List<SignedTransaction> scOutput = (List<SignedTransaction>) objIn.readObject();
+            Ledger validTransactions = commitSmartContractOutput(scOutput, hash, quorumResponse);
+            logger.info("OK. Executed smart contract transaction. {}", validTransactions);
+            return validTransactions;
+        }
     }
+
 
     @PostMapping("/{who}/installSmartContract")
     @ResponseStatus(HttpStatus.OK)
-    public String installSmartContract(@PathVariable String who, @RequestBody SignedBody<SmartContract> signedBody) throws IOException, ClassNotFoundException, ExecutionException, InterruptedException {
-
-        QuorumResponse quorumResponse = dispatchAsyncRequest(createGetSystemSnapshot(), UNORDERED_REQUEST, REPLICA_TYPE);
+    public String installSmartContract(@PathVariable String who, @RequestBody SignedBody<String> signedBody) throws IOException, ClassNotFoundException, ExecutionException, InterruptedException {
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createGetSystemSnapshotRequest(), UNORDERED_REQUEST, REPLICA_TYPE);
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
         objIn.readInt(); //ID
         objIn.readObject(); //Hash
@@ -348,9 +360,8 @@ public class LedgerController implements CommandLineRunner {
             logger.info("BAD REQUEST");
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
         } else {
-            SmartContract smartContract = (SmartContract) objIn.readObject();
-            logger.info(gson.toJson(smartContract));
-            String id = commitSmartContract(smartContract, hash, quorumResponse);
+            String encodedByteCode = (String) objIn.readObject();
+            String id = commitSmartContract(encodedByteCode, hash, quorumResponse);
             logger.info("OK. Installing smart contract.");
             return id;
         }
@@ -386,7 +397,6 @@ public class LedgerController implements CommandLineRunner {
             targets = getAvailableReplicas();
         else
             targets = getAvailableSandboxes();
-        System.out.println("QUORUM: " + getQuorumSize(targets.length));
         asynchServiceProxy.invokeAsynchRequest(request, targets, new ReplyListenerImp<>(reply, getQuorumSize(targets.length), targets), messageType);
         return reply.get();
     }
@@ -400,7 +410,6 @@ public class LedgerController implements CommandLineRunner {
         int[] found = new int[sandboxes.size()];
         for (int i = 0; i < sandboxes.size(); i++)
             found[i] = sandboxes.get(i);
-        System.out.println("TARGETS: " + Arrays.toString(found));
         return found;
     }
 
@@ -413,7 +422,6 @@ public class LedgerController implements CommandLineRunner {
         int[] found = new int[replicas.size()];
         for (int i = 0; i < replicas.size(); i++)
             found[i] = replicas.get(i);
-        System.out.println("TARGETS: " + Arrays.toString(found));
         return found;
     }
 
@@ -446,8 +454,8 @@ public class LedgerController implements CommandLineRunner {
         return getCommitResponse(quorumResponse);
     }
 
-    private String commitSmartContract(SmartContract smartContract, byte[] hash, QuorumResponse quorumResponse) throws InterruptedException, ExecutionException, IOException, ClassNotFoundException {
-        Commit<SmartContract> commit = new Commit<>(smartContract, base32.encodeAsString(hash), quorumResponse.getReplicas());
+    private String commitSmartContract(String encodedByteCode, byte[] hash, QuorumResponse quorumResponse) throws InterruptedException, ExecutionException, IOException, ClassNotFoundException {
+        Commit<String> commit = new Commit<>(encodedByteCode, base32.encodeAsString(hash), quorumResponse.getReplicas());
         quorumResponse = commit(commit, LedgerRequestType.INSTALL_SMART_CONTRACT);
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
         objIn.readInt(); //ID
@@ -457,6 +465,20 @@ public class LedgerController implements CommandLineRunner {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tampered request.");
         }
         return (String) objIn.readObject();
+    }
+
+
+    private Ledger commitSmartContractOutput(List<SignedTransaction> scOutput, byte[] hash, QuorumResponse quorumResponse) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+        Commit<List<SignedTransaction>> commit = new Commit<>(scOutput, base32.encodeAsString(hash), quorumResponse.getReplicas());
+        quorumResponse = commit(commit, LedgerRequestType.SMART_TRANSFER);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readInt(); //ID
+        objIn.readObject(); //Hash
+        if (!objIn.readBoolean()) {
+            logger.info("Found tampered request!");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tampered request.");
+        }
+        return (Ledger) objIn.readObject();
     }
 
     private ValidTransaction getCommitResponse(QuorumResponse quorumResponse) throws IOException, ClassNotFoundException {
@@ -621,7 +643,7 @@ public class LedgerController implements CommandLineRunner {
     }
 
 
-    private byte[] createGetSystemSnapshot() throws IOException {
+    private byte[] createGetSystemSnapshotRequest() throws IOException {
         ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.GET_SYSTEM_SNAPSHOT);
@@ -631,7 +653,7 @@ public class LedgerController implements CommandLineRunner {
     }
 
 
-    private byte[] createValidateSmartContractRequest(String who, SignedBody<SmartContract> signedBody, Map<String, List<String>> wallets, List<Block> blockchain) throws IOException {
+    private byte[] createValidateSmartContractRequest(String who, SignedBody<String> signedBody, Map<String, List<String>> wallets, List<Block> blockchain) throws IOException {
         ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.VALIDATE_SMART_CONTRACT);
@@ -639,11 +661,29 @@ public class LedgerController implements CommandLineRunner {
         objOut.writeObject(blockchain);
         logger.info("{}", gson.toJson(signedBody.getContent()));
         objOut.writeObject(who);
+        objOut.writeObject(signedBody.getDate());
         objOut.writeObject(signedBody.getContent());
         objOut.writeObject(signedBody.getSignature());
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();
+    }
+
+    private byte[] createTransferMoneyWithSmartContractRequest(String id, SignedBody<SmartContractArgs> signedBody) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.SMART_TRANSFER);
+        logger.info("{}", gson.toJson(signedBody.getContent()));
+        SmartContractArgs  scArgs= signedBody.getContent();
+        objOut.writeObject(id);
+        objOut.writeObject(scArgs.getOrigin());
+        objOut.writeObject(scArgs.getAmount());
+        objOut.writeObject(scArgs.getDestinations());
+        objOut.writeObject(signedBody.getSignature());
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+
     }
 
 }

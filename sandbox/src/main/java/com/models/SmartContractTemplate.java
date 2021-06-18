@@ -10,11 +10,9 @@ import java.util.*;
 import java.math.*;
 
 public class SmartContractTemplate implements Serializable {
-    private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
     private static final long serialVersionUID = 562968899267729629L;
+    private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
 
-
-    private final int outputNumber;
     private final String author;
     private final String date;
     private final List<Transaction> output;
@@ -32,13 +30,12 @@ public class SmartContractTemplate implements Serializable {
     private String hash;
 
 
-    public SmartContractTemplate(int outputNumber, String author, String date, Gson gson) {
+    public SmartContractTemplate(String author, String date, Gson gson) {
         this.gson = gson;
         this.dateTimeFormatter = DateTimeFormatter.ofPattern(DATE_FORMATTER);
-        this.outputNumber = outputNumber;
         this.author = author;
         this.date = date;
-        this.output = new ArrayList<>(outputNumber);
+        this.output = null;
         this.signature = null;
         this.validatorIDs = null;
         this.hash = null;
@@ -52,7 +49,6 @@ public class SmartContractTemplate implements Serializable {
     public SmartContractTemplate() {
         this.gson = null;
         this.dateTimeFormatter = null;
-        this.outputNumber = -1;
         this.author = null;
         this.date = null;
         this.output = null;
@@ -65,10 +61,6 @@ public class SmartContractTemplate implements Serializable {
         this.readTarget = null;
         this.done = false;
 
-    }
-
-    public int getOutputNumber() {
-        return outputNumber;
     }
 
     public String getAuthor() {
