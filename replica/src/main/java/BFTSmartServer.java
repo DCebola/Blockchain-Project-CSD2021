@@ -34,7 +34,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final String ERROR_MSG = "ERROR";
     private static final String IGNORE_MSG = "IGNORE_MSG";
     private static final String REPLICA_TYPE = "REPLICA";
-
+    private static final String SANDBOX_TYPE = "REPLICA";
 
     private static final String INITIAL_NONCE = "0";
     private static final String NO_NONCE = "-1";
@@ -142,15 +142,15 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case COMMIT_BLOCK:
                     commitBlockRequest(objIn, objOut);
                     break;
-                case VALIDATE_SMART_CONTRACT:
-                    logger.info("Ignored VALIDATE_SMART_CONTRACT operation.");
-                    return IGNORE_MSG.getBytes();
-                    break;
                 case TRANSFER_MONEY_WITH_PRIVACY:
                     transferMoneyWithPrivacyRequest(objIn, objOut);
                     break;
                 case COMMIT_TRANSFER_WITH_PRIVACY:
                     commitTransferMoneyWithPrivacy(objIn, objOut);
+                    break;
+                case VALIDATE_SMART_CONTRACT:
+                    logger.info("Ignored VALIDATE_SMART_CONTRACT operation.");
+                    writeReplicaDecision(objOut, IGNORE_MSG.getBytes(), false);
                     break;
             }
             objOut.flush();
@@ -1160,6 +1160,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     /************************************************ Auxiliary Response methods **************************************/
 
     private void writeReplicaDecision(ObjectOutput objOut, byte[] hash, boolean decision) throws IOException {
+        objOut.writeObject(REPLICA_TYPE);
         objOut.writeInt(id);
         objOut.writeObject(hash);
         objOut.writeBoolean(decision);

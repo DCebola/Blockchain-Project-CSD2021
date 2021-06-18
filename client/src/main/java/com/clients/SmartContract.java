@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import java.io.Serializable;
+import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -18,7 +19,7 @@ public class SmartContract implements Serializable {
     private final String date;
     private final List<Transaction> output;
     private String currentOrigin;
-    private int availableFunds;
+    private BigInteger availableFunds;
     private List<String> currentDestinations;
     private List<String> tempMemory;
     private String readTarget;
@@ -42,7 +43,7 @@ public class SmartContract implements Serializable {
         this.validatorIDs = null;
         this.hash = null;
         this.currentOrigin = null;
-        this.availableFunds = -1;
+        this.availableFunds = null;
         this.currentDestinations = null;
         this.readTarget = null;
         this.done = false;
@@ -59,7 +60,7 @@ public class SmartContract implements Serializable {
         this.validatorIDs = null;
         this.hash = null;
         this.currentOrigin = null;
-        this.availableFunds = -1;
+        this.availableFunds = null;
         this.currentDestinations = null;
         this.readTarget = null;
         this.done = false;
@@ -78,7 +79,7 @@ public class SmartContract implements Serializable {
         return date;
     }
 
-    public SmartContractEvent init(String origin, int amount, List<String> destinations) {
+    public SmartContractEvent init(String origin, BigInteger amount, List<String> destinations) {
         this.currentOrigin = origin;
         this.availableFunds = amount;
         this.currentDestinations = destinations;
@@ -98,21 +99,21 @@ public class SmartContract implements Serializable {
                 return SmartContractEvent.READ_BALANCE;
             } else {
                 assert gson != null;
-                int balance1 = gson.fromJson(tempMemory.get(0), Integer.class);
-                int balance2 = gson.fromJson(tempMemory.get(1), Integer.class);
+                BigInteger balance1 = gson.fromJson(tempMemory.get(0), BigInteger.class);
+                BigInteger balance2 = gson.fromJson(tempMemory.get(1), BigInteger.class);
                 String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-                if (balance1 > balance2) {
-                    double smallerFraction = availableFunds * 0.4;
-                    output.add(new Transaction(currentOrigin, currentDestinations.get(0), smallerFraction, currentDate));
-                    output.add(new Transaction(currentOrigin, currentDestinations.get(1), availableFunds - smallerFraction, currentDate));
-                } else if (balance1 < balance2) {
-                    double smallerFraction = availableFunds * 0.6;
-                    output.add(new Transaction(currentOrigin, currentDestinations.get(0), availableFunds - smallerFraction, currentDate));
-                    output.add(new Transaction(currentOrigin, currentDestinations.get(1), smallerFraction, currentDate));
+                if (balance1.compareTo(balance2) > 0) {
+                    BigInteger smallerFraction = availableFunds.divide(BigInteger.valueOf(4)).multiply(BigInteger.valueOf(3));
+                    output.add(new Transaction(currentOrigin, currentDestinations.get(0), smallerFraction, currentDate, null, null, null));
+                    output.add(new Transaction(currentOrigin, currentDestinations.get(1), availableFunds.subtract(smallerFraction), currentDate,null, null, null));
+                } else if (balance1.compareTo(balance2) < 0) {
+                    BigInteger smallerFraction = availableFunds.divide(BigInteger.valueOf(4));
+                    output.add(new Transaction(currentOrigin, currentDestinations.get(0), availableFunds.subtract(smallerFraction), currentDate,null, null, null));
+                    output.add(new Transaction(currentOrigin, currentDestinations.get(1), availableFunds, currentDate,null, null, null));
                 } else {
-                    double smallerFraction = availableFunds * 0.5;
-                    output.add(new Transaction(currentOrigin, currentDestinations.get(0), availableFunds - smallerFraction, currentDate));
-                    output.add(new Transaction(currentOrigin, currentDestinations.get(1), smallerFraction, currentDate));
+                    BigInteger smallerFraction = availableFunds.divide(BigInteger.valueOf(2));
+                    output.add(new Transaction(currentOrigin, currentDestinations.get(0), availableFunds.subtract(smallerFraction), currentDate,null, null, null));
+                    output.add(new Transaction(currentOrigin, currentDestinations.get(1), availableFunds.subtract(smallerFraction), currentDate,null, null, null));
                 }
                 done = true;
                 return SmartContractEvent.STOP;

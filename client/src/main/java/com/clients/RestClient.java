@@ -428,7 +428,14 @@ public class RestClient {
             System.out.print("Insert amount: ");
             BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
 
-            Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate,null,null,null);
+            Transaction t = new Transaction(
+                    base32.encodeAsString(currentSession.getPublicKey().getEncoded()),
+                    destination,
+                    amount,
+                    currentDate,
+                    null,
+                    null,
+                    null);
             String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY.name().concat(gson.toJson(t)).concat(currentSession.getNonce()).concat(currentDate);
             System.out.println(msgToBeHashed);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));

@@ -112,9 +112,10 @@ public class LedgerController implements CommandLineRunner {
     @PostMapping("/privacyTransfer")
     @ResponseStatus(HttpStatus.OK)
     public ValidTransaction transferMoneyWithPrivacy(@RequestBody SignedBody<TransactionPlusSecretValue> signedBody) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
-        QuorumResponse quorumResponse = dispatchAsyncRequest(createTransferMoneyWithPrivacyRequest(signedBody), ORDERED_REQUEST);
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createTransferMoneyWithPrivacyRequest(signedBody), ORDERED_REQUEST, REPLICA_TYPE);
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-        objIn.readInt();
+        objIn.readObject(); //Type
+        objIn.readInt(); //ID
         byte[] hash = (byte[]) objIn.readObject();
         if (!objIn.readBoolean()) {
             logger.info("BAD REQUEST");
@@ -124,7 +125,7 @@ public class LedgerController implements CommandLineRunner {
             String secretValue = (String) objIn.readObject();
             TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(signedTransaction,secretValue);
             ValidTransaction validTransaction = commitPrivateTransaction(transactionPlusSecretValue, hash, quorumResponse);
-            logger.info("OK. {} transferred {} coins to {}.", validTransaction.getOrigin(), validTransaction.getAmount(), validTransaction.getDestination());
+            logger.info("OK. {} transferred {} coins to {}.", validTransaction.getOrigin(), validTransaction.getEncryptedAmount(), validTransaction.getDestination());
             return validTransaction;
         }
     }
@@ -156,9 +157,10 @@ public class LedgerController implements CommandLineRunner {
 
     @GetMapping("/{who}/obtainNotSubmittedTransactions")
     public TransactionsForSubmissionInfo obtainNotSubmittedTransactions(@PathVariable String who) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
-        QuorumResponse quorumResponse = dispatchAsyncRequest(createObtainNotSubmittedTransactionsRequest(who), UNORDERED_REQUEST);
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createObtainNotSubmittedTransactionsRequest(who), UNORDERED_REQUEST, REPLICA_TYPE);
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-        objIn.readInt();
+        objIn.readObject(); //Type
+        objIn.readInt(); //ID
         objIn.readObject(); //hash
         if (!objIn.readBoolean()) {
             logger.info("BAD REQUEST");
@@ -333,8 +335,8 @@ public class LedgerController implements CommandLineRunner {
 
     @PostMapping("/smartTransfer/{id}")
     @ResponseStatus(HttpStatus.OK)
-    public List<ValidTransaction> transferMoneyWithSmartContract(@RequestBody SignedBody<SmartContractArgs> signedBody) {
-        return new LinkedList<>();
+    public Ledger transferMoneyWithSmartContract(@RequestBody SignedBody<SmartContractArgs> signedBody) {
+        return new Ledger();
     }
 
     @PostMapping("/{who}/installSmartContract")

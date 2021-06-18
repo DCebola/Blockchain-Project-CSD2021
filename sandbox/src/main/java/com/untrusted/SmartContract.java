@@ -20,7 +20,7 @@ public class SmartContract implements Serializable {
     private final String date;
     private final List<Transaction> output;
     private String currentOrigin;
-    private int availableFunds;
+    private BigInteger availableFunds;
     private List<String> currentDestinations;
     private List<String> tempMemory;
     private String readTarget;
@@ -44,7 +44,7 @@ public class SmartContract implements Serializable {
         this.validatorIDs = null;
         this.hash = null;
         this.currentOrigin = null;
-        this.availableFunds = -1;
+        this.availableFunds = null;
         this.currentDestinations = null;
         this.readTarget = null;
         this.done = false;
@@ -61,7 +61,7 @@ public class SmartContract implements Serializable {
         this.validatorIDs = null;
         this.hash = null;
         this.currentOrigin = null;
-        this.availableFunds = -1;
+        this.availableFunds = null;
         this.currentDestinations = null;
         this.readTarget = null;
         this.done = false;
@@ -80,7 +80,7 @@ public class SmartContract implements Serializable {
         return date;
     }
 
-    public SmartContractEvent init(String origin, int amount, List<String> destinations) {
+    public SmartContractEvent init(String origin, BigInteger amount, List<String> destinations) {
         this.currentOrigin = origin;
         this.availableFunds = amount;
         this.currentDestinations = destinations;
