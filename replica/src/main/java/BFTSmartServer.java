@@ -74,7 +74,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
         Properties properties = new Properties();
         properties.load(new FileInputStream("config/replica.config"));
-
         this.challenge = properties.getProperty("challenge");
         this.hash_algorithm = properties.getProperty("hash_algorithm");
         this.mining_reward = Integer.parseInt(properties.getProperty("mining_reward"));
@@ -165,86 +164,106 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     }
 
     private void registerKeyRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException {
-        logger.debug("New REGISTER_KEY operation.");
-        String publicKey = (String) objIn.readObject();
-        String signatureAlgorithm = (String) objIn.readObject();
-        String publicKeyAlgorithm = (String) objIn.readObject();
-        String hashAlgorithm = (String) objIn.readObject();
-        BigInteger encryptedZero = (BigInteger) objIn.readObject();
-        BigInteger pkNSquare = (BigInteger) objIn.readObject();
+        try {
+            logger.debug("New REGISTER_KEY operation.");
+            String publicKey = (String) objIn.readObject();
+            String signatureAlgorithm = (String) objIn.readObject();
+            String publicKeyAlgorithm = (String) objIn.readObject();
+            String hashAlgorithm = (String) objIn.readObject();
+            BigInteger encryptedZero = (BigInteger) objIn.readObject();
+            BigInteger pkNSquare = (BigInteger) objIn.readObject();
 
-        byte[] hash;
-        jedis = jedisPool.getResource();
-        if (jedis.exists(publicKey)) {
-            jedisPool.close();
-            logger.info("Key {} already registered", publicKey);
-            hash = TOMUtil.computeHash(
-                    Boolean.toString(false)
-                            .concat(publicKey)
-                            .concat(signatureAlgorithm)
-                            .concat(publicKeyAlgorithm)
-                            .concat(hashAlgorithm)
-                            .concat(encryptedZero.toString())
-                            .concat(pkNSquare.toString())
-                            .getBytes());
-            writeRegisterKeyResponse(objOut, hash, false, null);
-        } else {
-            jedis.close();
-            hash = TOMUtil.computeHash(
-                    Boolean.toString(true)
-                            .concat(publicKey)
-                            .concat(signatureAlgorithm)
-                            .concat(publicKeyAlgorithm)
-                            .concat(hashAlgorithm)
-                            .concat(encryptedZero.toString())
-                            .concat(pkNSquare.toString())
-                            .getBytes());
-            writeRegisterKeyResponse(objOut, hash, true, new Wallet(publicKey, publicKeyAlgorithm, signatureAlgorithm, hashAlgorithm, encryptedZero, pkNSquare));
+            byte[] hash;
+            jedis = jedisPool.getResource();
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+            if (jedis.exists(publicKey)) {
+                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+                jedisPool.close();
+                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+                logger.info("Key {} already registered", publicKey);
+                hash = TOMUtil.computeHash(
+                        Boolean.toString(false)
+                                .concat(publicKey)
+                                .concat(signatureAlgorithm)
+                                .concat(publicKeyAlgorithm)
+                                .concat(hashAlgorithm)
+                                .concat(encryptedZero.toString())
+                                .concat(pkNSquare.toString())
+                                .getBytes());
+                writeRegisterKeyResponse(objOut, hash, false, null);
+            } else {
+                jedis.close();
+                hash = TOMUtil.computeHash(
+                        Boolean.toString(true)
+                                .concat(publicKey)
+                                .concat(signatureAlgorithm)
+                                .concat(publicKeyAlgorithm)
+                                .concat(hashAlgorithm)
+                                .concat(encryptedZero.toString())
+                                .concat(pkNSquare.toString())
+                                .getBytes());
+                writeRegisterKeyResponse(objOut, hash, true, new Wallet(publicKey, publicKeyAlgorithm, signatureAlgorithm, hashAlgorithm, encryptedZero, pkNSquare));
+            }
+
+        } catch(Exception e) {
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
         }
     }
 
 
     private void obtainCoinsRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException, NoSuchAlgorithmException, InvalidKeySpecException, SignatureException, InvalidKeyException {
-        logger.debug("New OBTAIN_COINS operation.");
-        String publicKey = (String) objIn.readObject();
-        jedis = jedisPool.getResource();
-        if (!jedis.exists(publicKey)) {
-            jedis.close();
-            logger.info("Key {} does not exist", publicKey);
-            objOut.writeBoolean(false);
-        } else {
-            jedis.close();
-            BigInteger amount = (BigInteger) objIn.readObject();
-            byte[] msgSignature = (byte[]) objIn.readObject();
-            String date = (String) objIn.readObject();
+        try {
+            logger.debug("New OBTAIN_COINS operation.");
+            String publicKey = (String) objIn.readObject();
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
             jedis = jedisPool.getResource();
-            String nonce = jedis.lindex(publicKey, WALLET_NONCE);
-            jedis.close();
-            String msg = LedgerRequestType.OBTAIN_COINS.name().concat(gson.toJson(amount)).concat(nonce).concat(date);
-            System.out.println("-----------");
-            System.out.println(msg);
-            System.out.println("-----------");
-
-            byte[] hash;
-            if (verifySignature(publicKey, msg, msgSignature) && amount.intValue() > 0) {
-                logger.info("Signature verified successfully");
-                hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
-                SignedTransaction signedTransaction = createSignedTransaction(
-                        SYSTEM,
-                        publicKey,
-                        amount,
-                        base32.encodeAsString(msgSignature),
-                        date,
-                        NORMAL_TRANSACTION_ID_PREFIX,
-                        null,
-                        null,
-                        null
-                );
-                writeObtainAmountResponse(objOut, hash, true, signedTransaction, amount, date);
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+            if (!jedis.exists(publicKey)) {
+                jedis.close();
+                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+                logger.info("Key {} does not exist", publicKey);
+                objOut.writeBoolean(false);
             } else {
-                hash = TOMUtil.computeHash(Boolean.toString(false).concat(new BigInteger("-1").toString()).getBytes());
-                writeObtainAmountResponse(objOut, hash, false, null, new BigInteger("-1"), null);
+                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+                jedis.close();
+                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+                BigInteger amount = (BigInteger) objIn.readObject();
+                byte[] msgSignature = (byte[]) objIn.readObject();
+                String date = (String) objIn.readObject();
+                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+                jedis = jedisPool.getResource();
+                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+                String nonce = jedis.lindex(publicKey, WALLET_NONCE);
+                jedis.close();
+                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+                String msg = LedgerRequestType.OBTAIN_COINS.name().concat(gson.toJson(amount)).concat(nonce).concat(date);
+                System.out.println("-----------");
+                System.out.println(msg);
+                System.out.println("-----------");
+
+                byte[] hash;
+                if (verifySignature(publicKey, msg, msgSignature) && amount.intValue() > 0) {
+                    logger.info("Signature verified successfully");
+                    hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
+                    SignedTransaction signedTransaction = createSignedTransaction(
+                            SYSTEM,
+                            publicKey,
+                            amount,
+                            base32.encodeAsString(msgSignature),
+                            date,
+                            NORMAL_TRANSACTION_ID_PREFIX,
+                            null,
+                            null,
+                            null
+                    );
+                    writeObtainAmountResponse(objOut, hash, true, signedTransaction, amount, date);
+                } else {
+                    hash = TOMUtil.computeHash(Boolean.toString(false).concat(new BigInteger("-1").toString()).getBytes());
+                    writeObtainAmountResponse(objOut, hash, false, null, new BigInteger("-1"), null);
+                }
             }
+        } catch(Exception e) {
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
         }
     }
 
@@ -372,70 +391,75 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
 
     private void sendMinedBlockRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException, NoSuchAlgorithmException, InvalidKeySpecException, SignatureException, InvalidKeyException {
-        logger.debug("New SEND_MINED_BLOCK operation.");
-        BlockHeaderAndReward blockHeaderAndReward = (BlockHeaderAndReward) objIn.readObject();
-        BlockHeader blockHeader = blockHeaderAndReward.getBlockHeader();
-        Transaction reward = blockHeaderAndReward.getTransaction();
-        logger.info("{}", reward);
-        String publicKey = blockHeader.getAuthor();
-        byte[] sigBytes = (byte[]) objIn.readObject();
-        jedis = jedisPool.getResource();
-        if (!jedis.exists(publicKey)) {
-            jedis.close();
-            logger.debug("Key {} does not exist", publicKey);
-            byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
-            writeSendMinedResponse(objOut, hash, false, null);
-        } else {
-            jedis.close();
+        try {
+            logger.debug("New SEND_MINED_BLOCK operation.");
+            BlockHeaderAndReward blockHeaderAndReward = (BlockHeaderAndReward) objIn.readObject();
+            BlockHeader blockHeader = blockHeaderAndReward.getBlockHeader();
+            Transaction reward = blockHeaderAndReward.getTransaction();
+            logger.info("{}", reward);
+            String publicKey = blockHeader.getAuthor();
+            byte[] sigBytes = (byte[]) objIn.readObject();
             jedis = jedisPool.getResource();
-            String nonce = jedis.lindex(publicKey, WALLET_NONCE);
-            jedis.close();
-            String msg = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(nonce);
-            if (verifySignature(publicKey, msg, sigBytes)
-                    && reward.getDestination().equals(publicKey)
-                    && reward.getOrigin().equals(SYSTEM)
-                    && reward.getAmount().intValue() == mining_reward) {
-                logger.info("Signature verified successfully.");
-                byte[] block = gson.toJson(blockHeader).getBytes();
-                byte[] hashedBlock = generateHash(block, hash_algorithm);
+            if (!jedis.exists(publicKey)) {
+                jedis.close();
+                logger.debug("Key {} does not exist", publicKey);
+                byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                writeSendMinedResponse(objOut, hash, false, null);
+            } else {
+                jedis.close();
+                jedis = jedisPool.getResource();
+                String nonce = jedis.lindex(publicKey, WALLET_NONCE);
+                jedis.close();
+                String msg = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(nonce);
+                if (verifySignature(publicKey, msg, sigBytes)
+                        && reward.getDestination().equals(publicKey)
+                        && reward.getOrigin().equals(SYSTEM)
+                        && reward.getAmount().intValue() == mining_reward) {
+                    logger.info("Signature verified successfully.");
+                    byte[] block = gson.toJson(blockHeader).getBytes();
+                    byte[] hashedBlock = generateHash(block, hash_algorithm);
 
-                if (checkProofOfWork(hashedBlock)) {
-                    logger.info("Valid proof of work");
-                    List<ValidTransaction> transactionsToVerify = getPendingTransactions(blockHeader.getTransactions().size() - 1);
-                    assert transactionsToVerify != null;
-                    if (verifyBlockContent(blockHeader, transactionsToVerify)) {
-                        logger.info("Block completely verified.");
-                        Block finalBlock = new Block(blockHeader, transactionsToVerify);
-                        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(finalBlock)).concat(publicKey).getBytes());
-                        SignedTransaction signedReward = createSignedTransaction(
-                                reward.getOrigin(),
-                                reward.getDestination(),
-                                reward.getAmount(),
-                                base32.encodeAsString(sigBytes),
-                                reward.getDate(),
-                                REWARD_TRANSACTION_ID_PREFIX,
-                                reward.getEncryptedAmount(),
-                                reward.getWhoEncrypted(),
-                                reward.getTransactionPointer()
-                        );
-                        BlockAndReward blockAndReward = new BlockAndReward(finalBlock, signedReward);
-                        logger.info("{}", gson.toJson(blockAndReward));
-                        writeSendMinedResponse(objOut, hash, true, blockAndReward);
+                    if (checkProofOfWork(hashedBlock)) {
+                        logger.info("Valid proof of work");
+                        List<ValidTransaction> transactionsToVerify = getPendingTransactions(blockHeader.getTransactions().size() - 1);
+                        assert transactionsToVerify != null;
+                        if (verifyBlockContent(blockHeader, transactionsToVerify)) {
+                            logger.info("Block completely verified.");
+                            Block finalBlock = new Block(blockHeader, transactionsToVerify);
+                            byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(finalBlock)).concat(publicKey).getBytes());
+                            SignedTransaction signedReward = createSignedTransaction(
+                                    reward.getOrigin(),
+                                    reward.getDestination(),
+                                    reward.getAmount(),
+                                    base32.encodeAsString(sigBytes),
+                                    reward.getDate(),
+                                    REWARD_TRANSACTION_ID_PREFIX,
+                                    reward.getEncryptedAmount(),
+                                    reward.getWhoEncrypted(),
+                                    reward.getTransactionPointer()
+                            );
+                            BlockAndReward blockAndReward = new BlockAndReward(finalBlock, signedReward);
+                            logger.info("{}", gson.toJson(blockAndReward));
+                            writeSendMinedResponse(objOut, hash, true, blockAndReward);
+                        } else {
+                            logger.info("Block content invalid.");
+                            byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                            writeSendMinedResponse(objOut, hash, false, null);
+                        }
                     } else {
-                        logger.info("Block content invalid.");
+                        logger.info("Invalid proof of work.");
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
                         writeSendMinedResponse(objOut, hash, false, null);
                     }
                 } else {
-                    logger.info("Invalid proof of work.");
+                    logger.info("Signature not verified");
                     byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
                     writeSendMinedResponse(objOut, hash, false, null);
                 }
-            } else {
-                logger.info("Signature not verified");
-                byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
-                writeSendMinedResponse(objOut, hash, false, null);
             }
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+        } catch(Exception e) {
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
         }
     }
 
@@ -467,44 +491,49 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
 
     private void commitWalletRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException {
-        logger.debug("New COMMIT_WALLET operation.");
-        Commit commit = (Commit) objIn.readObject();
-        Wallet wallet = (Wallet) commit.getRequest();
-        String publicKey = wallet.getPublicKey();
-        String publicKeyAlgorithm = wallet.getPublicKeyAlgorithm();
-        String signatureAlgorithm = wallet.getSignatureAlgorithm();
-        String hashAlgorithm = wallet.getHashAlgorithm();
-        BigInteger encryptedZero = wallet.getEncryptedZero();
-        BigInteger pkNSquare = wallet.getPkNSquare();
-        jedis = jedisPool.getResource();
-        jedis.rpush(publicKey, publicKeyAlgorithm);
-        jedis.close();
-        jedis = jedisPool.getResource();
-        jedis.rpush(publicKey, signatureAlgorithm);
-        jedis.close();
-        jedis = jedisPool.getResource();
-        jedis.rpush(publicKey, hashAlgorithm);
-        jedis.close();
-        jedis = jedisPool.getResource();
-        jedis.rpush(publicKey, INITIAL_NONCE);
-        jedis.close();
-        jedis = jedisPool.getResource();
-        jedis.rpush(publicKey, encryptedZero.toString());
-        jedis.close();
-        jedis = jedisPool.getResource();
-        jedis.rpush(publicKey, pkNSquare.toString());
-        jedis.close();
+        try {
 
-        byte[] hash = TOMUtil.computeHash(
-                Boolean.toString(true)
-                        .concat(publicKey)
-                        .concat(signatureAlgorithm)
-                        .concat(publicKeyAlgorithm)
-                        .concat(hashAlgorithm)
-                        .getBytes());
-        writeCommitWalletResponse(objOut, hash, true);
-        logger.debug("Registered key {} with hash algorithm {}, signature algorithm {} and nonce {} and homomorphic square of key {}", publicKey, hashAlgorithm, signatureAlgorithm, INITIAL_NONCE, pkNSquare.toString());
-        logger.info("Registered key {}", publicKey);
+            logger.debug("New COMMIT_WALLET operation.");
+            Commit commit = (Commit) objIn.readObject();
+            Wallet wallet = (Wallet) commit.getRequest();
+            String publicKey = wallet.getPublicKey();
+            String publicKeyAlgorithm = wallet.getPublicKeyAlgorithm();
+            String signatureAlgorithm = wallet.getSignatureAlgorithm();
+            String hashAlgorithm = wallet.getHashAlgorithm();
+            BigInteger encryptedZero = wallet.getEncryptedZero();
+            BigInteger pkNSquare = wallet.getPkNSquare();
+            jedis = jedisPool.getResource();
+            jedis.rpush(publicKey, publicKeyAlgorithm);
+            jedis.close();
+            jedis = jedisPool.getResource();
+            jedis.rpush(publicKey, signatureAlgorithm);
+            jedis.close();
+            jedis = jedisPool.getResource();
+            jedis.rpush(publicKey, hashAlgorithm);
+            jedis.close();
+            jedis = jedisPool.getResource();
+            jedis.rpush(publicKey, INITIAL_NONCE);
+            jedis.close();
+            jedis = jedisPool.getResource();
+            jedis.rpush(publicKey, encryptedZero.toString());
+            jedis.close();
+            jedis = jedisPool.getResource();
+            jedis.rpush(publicKey, pkNSquare.toString());
+            jedis.close();
+
+            byte[] hash = TOMUtil.computeHash(
+                    Boolean.toString(true)
+                            .concat(publicKey)
+                            .concat(signatureAlgorithm)
+                            .concat(publicKeyAlgorithm)
+                            .concat(hashAlgorithm)
+                            .getBytes());
+            writeCommitWalletResponse(objOut, hash, true);
+            logger.debug("Registered key {} with hash algorithm {}, signature algorithm {} and nonce {} and homomorphic square of key {}", publicKey, hashAlgorithm, signatureAlgorithm, INITIAL_NONCE, pkNSquare.toString());
+            logger.info("Registered key {}", publicKey);
+        } catch(Exception e) {
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+        }
     }
 
     private void commitTransferMoneyWithPrivacy(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException {
@@ -519,11 +548,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String nonce = jedis.lindex(t.getWhoEncrypted(), WALLET_NONCE);
         jedis.close();
         nonce = Integer.toString(Integer.parseInt(nonce) + 1);
-        jedis.close();
         jedis = jedisPool.getResource();
         jedis.lset(t.getWhoEncrypted(), WALLET_NONCE, nonce);
         jedis.close();
-        jedis = jedisPool.getResource();
 
         ValidTransaction validTransaction = new ValidTransaction(
                 t.getOrigin(),
@@ -546,14 +573,15 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             InfoForDestination infoForDestination = new InfoForDestination(t.getOrigin(), t.getDestination(), secretValue, validTransaction.getId());
             jedis = jedisPool.getResource();
             jedis.rpush(t.getDestination(), gson.toJson(infoForDestination));
+            jedis.close();
         } else {
             jedis = jedisPool.getResource();
             String infoToRemove = jedis.lrange(t.getDestination(), 6, 6).get(0);
             jedis.close();
             jedis = jedisPool.getResource();
             jedis.lrem(t.getDestination(), 1, infoToRemove);
+            jedis.close();
         }
-        jedis.close();
 
         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(validTransaction)).getBytes());
         writeCommitTransactionResponse(objOut, hash, true, validTransaction);
@@ -569,22 +597,25 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String destination = t.getDestination();
         BigInteger amount = t.getAmount();
 
-        jedis = jedisPool.getResource();
         String nonce = "";
         if (origin.equals(SYSTEM)) {
+            jedis = jedisPool.getResource();
             nonce = jedis.lindex(destination, WALLET_NONCE);
             jedis.close();
             nonce = Integer.toString(Integer.parseInt(nonce) + 1);
             jedis = jedisPool.getResource();
             jedis.lset(destination, WALLET_NONCE, nonce);
+            jedis.close();
         } else {
+            jedis = jedisPool.getResource();
             nonce = jedis.lindex(origin, WALLET_NONCE);
             jedis.close();
             nonce = Integer.toString(Integer.parseInt(nonce) + 1);
             jedis = jedisPool.getResource();
             jedis.lset(origin, WALLET_NONCE, nonce);
+            jedis.close();
         }
-        jedis.close();
+
         ValidTransaction validTransaction = new ValidTransaction(
                 origin,
                 destination,
@@ -608,88 +639,93 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
 
     private void commitBlockRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException, NoSuchAlgorithmException {
-        logger.debug("New COMMIT_BLOCK operation.");
-        Commit commit = (Commit) objIn.readObject();
-        BlockAndReward blockAndReward = (BlockAndReward) commit.getRequest();
-        SignedTransaction reward = blockAndReward.getTransaction();
-        String publicKey = blockAndReward.getBlock().getBlockHeader().getAuthor();
-        jedis = jedisPool.getResource();
-        String nonce = jedis.lindex(publicKey, WALLET_NONCE);
-        jedis.close();
-        Block block = blockAndReward.getBlock();
-        logger.info("{}", gson.toJson(block));
-
-        nonce = Integer.toString(Integer.parseInt(nonce) + 1);
-        jedis = jedisPool.getResource();
-        List<String> l = jedis.lrange(BLOCK_CHAIN, -1, -1);
-        jedis.close();
-        Block lastBlock = gson.fromJson(l.get(0), Block.class);
-        BlockHeader lastBlockBlockHeader = lastBlock.getBlockHeader();
-        byte[] lastBlockHeaderBytes = gson.toJson(lastBlockBlockHeader).getBytes();
-        byte[] lastBlockHash = generateHash(lastBlockHeaderBytes, hash_algorithm);
-
-        if (block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(lastBlockHash))) {
+        try {
+            logger.debug("New COMMIT_BLOCK operation.");
+            Commit commit = (Commit) objIn.readObject();
+            BlockAndReward blockAndReward = (BlockAndReward) commit.getRequest();
+            SignedTransaction reward = blockAndReward.getTransaction();
+            String publicKey = blockAndReward.getBlock().getBlockHeader().getAuthor();
             jedis = jedisPool.getResource();
-            List<String> removedTransactions = jedis.lpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size());
+            String nonce = jedis.lindex(publicKey, WALLET_NONCE);
             jedis.close();
-            logger.info("{}", gson.toJson(removedTransactions));
-            cleanPendingRewards(removedTransactions);
-            addBlock(publicKey, nonce, block, reward, commit, objOut);
+            Block block = blockAndReward.getBlock();
+            logger.info("{}", gson.toJson(block));
 
+            nonce = Integer.toString(Integer.parseInt(nonce) + 1);
             jedis = jedisPool.getResource();
-            List<String> l2 = jedis.lrange(BLOCK_CHAIN, -3, -3);
-            jedisPool.close();
-            if (l2.size() > 0) {
+            List<String> l = jedis.lrange(BLOCK_CHAIN, -1, -1);
+            jedis.close();
+            Block lastBlock = gson.fromJson(l.get(0), Block.class);
+            BlockHeader lastBlockBlockHeader = lastBlock.getBlockHeader();
+            byte[] lastBlockHeaderBytes = gson.toJson(lastBlockBlockHeader).getBytes();
+            byte[] lastBlockHash = generateHash(lastBlockHeaderBytes, hash_algorithm);
+
+            if (block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(lastBlockHash))) {
                 jedis = jedisPool.getResource();
-                jedis.lpop(PENDING_TRANSACTIONS, l2.size());
+                List<String> removedTransactions = jedis.lpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size());
                 jedis.close();
-            }
-        } else {
-            jedis = jedisPool.getResource();
-            l = jedis.lrange(BLOCK_CHAIN, -2, -2);
-            jedis.close();
-            if (l.size() > 0) {
-                BlockHeader secondLastBlockHeader = gson.fromJson(l.get(0), Block.class).getBlockHeader();
-                lastBlockHeaderBytes = gson.toJson(secondLastBlockHeader).getBytes();
-                lastBlockHash = generateHash(lastBlockHeaderBytes, hash_algorithm);
-                if (block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(lastBlockHash))) {
-                    if (lastBlock.getSignedTransactions().size() > block.getSignedTransactions().size()) {
-                        logger.info("Old block has more transactions.");
-                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
-                        writeCommitBlockResponse(objOut, hash, false, null);
-                    } else if (lastBlock.getSignedTransactions().size() == block.getSignedTransactions().size()) {
-                        if (compareProofsOfWork(block, lastBlock)) {
-                            cancelReward(lastBlock.getBlockHeader().getPreviousHash());
+                logger.info("{}", gson.toJson(removedTransactions));
+                cleanPendingRewards(removedTransactions);
+                addBlock(publicKey, nonce, block, reward, commit, objOut);
+
+                jedis = jedisPool.getResource();
+                List<String> l2 = jedis.lrange(BLOCK_CHAIN, -3, -3);
+                jedisPool.close();
+                if (l2.size() > 0) {
+                    jedis = jedisPool.getResource();
+                    jedis.lpop(PENDING_TRANSACTIONS, l2.size());
+                    jedis.close();
+                }
+            } else {
+                jedis = jedisPool.getResource();
+                l = jedis.lrange(BLOCK_CHAIN, -2, -2);
+                jedis.close();
+                if (l.size() > 0) {
+                    BlockHeader secondLastBlockHeader = gson.fromJson(l.get(0), Block.class).getBlockHeader();
+                    lastBlockHeaderBytes = gson.toJson(secondLastBlockHeader).getBytes();
+                    lastBlockHash = generateHash(lastBlockHeaderBytes, hash_algorithm);
+                    if (block.getBlockHeader().getPreviousHash().equals(base32.encodeAsString(lastBlockHash))) {
+                        if (lastBlock.getSignedTransactions().size() > block.getSignedTransactions().size()) {
+                            logger.info("Old block has more transactions.");
+                            byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                            writeCommitBlockResponse(objOut, hash, false, null);
+                        } else if (lastBlock.getSignedTransactions().size() == block.getSignedTransactions().size()) {
+                            if (compareProofsOfWork(block, lastBlock)) {
+                                cancelReward(lastBlock.getBlockHeader().getPreviousHash());
+                                jedis = jedisPool.getResource();
+                                jedis.rpop(BLOCK_CHAIN, 1);
+                                jedis.close();
+                                addBlock(publicKey, nonce, block, reward, commit, objOut);
+                            } else {
+                                logger.info("Older block has better proof of work.");
+                                byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                                writeCommitBlockResponse(objOut, hash, false, null);
+                            }
+                        } else {
                             jedis = jedisPool.getResource();
                             jedis.rpop(BLOCK_CHAIN, 1);
                             jedis.close();
-                            addBlock(publicKey, nonce, block, reward, commit, objOut);
-                        } else {
-                            logger.info("Older block has better proof of work.");
-                            byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
-                            writeCommitBlockResponse(objOut, hash, false, null);
-                        }
-                    } else {
-                        jedis = jedisPool.getResource();
-                        jedis.rpop(BLOCK_CHAIN, 1);
-                        jedis.close();
                         /*jedis = jedisPool.getResource();
                         List<String> removedTransactions = jedis.rpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size() - lastBlock.getSignedTransactions().size());
                         jedis.close();*/
-                        //cleanPendingRewards(removedTransactions);
-                        cancelReward(lastBlock.getBlockHeader().getPreviousHash());
-                        addBlock(publicKey, nonce, block, reward, commit, objOut);
+                            //cleanPendingRewards(removedTransactions);
+                            cancelReward(lastBlock.getBlockHeader().getPreviousHash());
+                            addBlock(publicKey, nonce, block, reward, commit, objOut);
+                        }
+                    } else {
+                        logger.info("Block is too old to be registered.");
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                        writeCommitBlockResponse(objOut, hash, false, null);
                     }
                 } else {
-                    logger.info("Block is too old to be registered.");
+                    logger.info("Can not replace genesis block.");
                     byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
                     writeCommitBlockResponse(objOut, hash, false, null);
                 }
-            } else {
-                logger.info("Can not replace genesis block.");
-                byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
-                writeCommitBlockResponse(objOut, hash, false, null);
             }
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+        } catch(Exception e) {
+            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
         }
     }
 
@@ -710,7 +746,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     break;
                 count += 1;
             }
+            jedis = jedisPool.getResource();
             jedis.rpop(PENDING_REWARD, pendingRewards.size() - count);
+            jedis.close();
         }
     }
 
@@ -848,9 +886,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
         jedis = jedisPool.getResource();
         List<String> serializedChain = jedis.lrange(BLOCK_CHAIN, 0, -1);
+        jedis.close();
         List<Block> deserializedChain = new LinkedList<>();
         serializedChain.forEach(t -> deserializedChain.add(gson.fromJson(t, Block.class)));
-        jedis.close();
         logger.debug("BlockChain: {}", serializedChain);
         Map<String, List<String>> wallets = getWallets();
         logger.debug("Wallets: {}", wallets);
@@ -1191,8 +1229,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private String getBalance(String publicKey) {
         jedis = jedisPool.getResource();
         BigInteger encryptedBalance = new BigInteger(jedis.lrange(publicKey, 4, 4).get(0));
-        BigInteger balance = new BigInteger("0");
         jedis.close();
+        BigInteger balance = new BigInteger("0");
         jedis = jedisPool.getResource();
         BigInteger pkNSquare = new BigInteger(jedis.lrange(publicKey, 5, 5).get(0));
         jedis.close();
