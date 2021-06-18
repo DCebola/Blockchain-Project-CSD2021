@@ -88,7 +88,6 @@ public class RestClient {
     private static DateTimeFormatter dateTimeFormatter;
 
     public static void main(String[] args) throws Exception {
-
         Properties properties = new Properties();
         properties.load(new FileInputStream("src/main/resources/client.config"));
         port = args[0];
@@ -272,12 +271,39 @@ public class RestClient {
         try {
             if (currentSession == null)
                 requestNonce(requestFactory, in);
-            ResponseEntity<BigInteger> response
+            ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, BigInteger.class);
+                    String.format(BALANCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, String.class);
 
-            if (response.getStatusCode().is2xxSuccessful())
-                System.out.println("Balance: " + response.getBody());
+            PaillierKey pk = currentSession.getPk();
+            BigInteger test1 = HomoAdd.encrypt(new BigInteger("0"),pk);
+            BigInteger test10 = HomoAdd.encrypt(new BigInteger("10"),pk);
+            BigInteger encryptedResult = HomoAdd.sum(test1,test10,pk.getNsquare());
+
+            System.out.println("zero");
+            System.out.println(test1);
+            System.out.println("Encrypted Result");
+            System.out.println(encryptedResult);
+            System.out.println("Decrypted Result");
+            System.out.println(HomoAdd.decrypt(encryptedResult,pk));
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                String[] balanceInfo = response.getBody().split(" ");
+                BigInteger balance = new BigInteger(balanceInfo[0]);
+                System.out.println(balance);
+                System.out.println("-------------");
+                if(balanceInfo.length > 1) {
+                    BigInteger encryptedBalance = new BigInteger(balanceInfo[1]);
+                    System.out.println(balanceInfo[1]);
+                    System.out.println("-------------");
+                    BigInteger result = HomoAdd.decrypt(encryptedBalance,currentSession.getPk());
+                    System.out.println(result);
+                    System.out.println("-----------");
+                    balance = balance.add(result);
+                }
+
+                System.out.println("Balance: " + balance);
+            }
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -363,6 +389,10 @@ public class RestClient {
         System.out.print("Insert amount: ");
         BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
         BigInteger encryptedAmount = HomoAdd.encrypt(amount,currentSession.getPk());
+        String a= encryptedAmount.toString();
+        System.out.println(a);
+        BigInteger result = new BigInteger(a);
+        System.out.println(result);
         String secretValue = encryptWithDestinationPublicKey(destination,amount);
 
         Transaction t = new Transaction(

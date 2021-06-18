@@ -162,7 +162,7 @@ public class LedgerController implements CommandLineRunner {
 
 
     @GetMapping("/{who}/balance")
-    public BigInteger currentAmount(@PathVariable String who) {
+    public String currentAmount(@PathVariable String who) {
         try {
             QuorumResponse quorumResponse = dispatchAsyncRequest(createCurrentAmountRequest(who), UNORDERED_REQUEST);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
@@ -172,7 +172,7 @@ public class LedgerController implements CommandLineRunner {
                 logger.info("BAD REQUEST");
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
             } else {
-                BigInteger balance = (BigInteger) objIn.readObject();
+                String balance = (String) objIn.readObject();
                 logger.info("OK. {} coins associated with key {}.", balance, who);
                 return balance;
             }
