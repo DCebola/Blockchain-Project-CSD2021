@@ -15,7 +15,7 @@ import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
 import static bftsmart.tom.core.messages.TOMMessageType.UNORDERED_REQUEST;
 
 import java.io.*;
-import java.util.LinkedList;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -88,7 +88,7 @@ public class LedgerController implements CommandLineRunner {
 
 
     @PostMapping("/{who}/obtainCoins")
-    public ValidTransaction obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
+    public ValidTransaction obtainAmount(@PathVariable String who, @RequestBody SignedBody<BigInteger> signedBody) {
         try {
             QuorumResponse quorumResponse = dispatchAsyncRequest(createObtainCoinsRequest(who, signedBody), ORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
@@ -106,6 +106,26 @@ public class LedgerController implements CommandLineRunner {
         } catch (IOException | ExecutionException | InterruptedException | ClassNotFoundException e) {
             logger.error("Exception in obtainCoins. Cause: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PostMapping("/privacyTransfer")
+    @ResponseStatus(HttpStatus.OK)
+    public ValidTransaction transferMoneyWithPrivacy(@RequestBody SignedBody<TransactionPlusSecretValue> signedBody) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createTransferMoneyWithPrivacyRequest(signedBody), ORDERED_REQUEST);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readInt();
+        byte[] hash = (byte[]) objIn.readObject();
+        if (!objIn.readBoolean()) {
+            logger.info("BAD REQUEST");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        } else {
+            SignedTransaction signedTransaction = (SignedTransaction) objIn.readObject();
+            String secretValue = (String) objIn.readObject();
+            TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(signedTransaction,secretValue);
+            ValidTransaction validTransaction = commitPrivateTransaction(transactionPlusSecretValue, hash, quorumResponse);
+            logger.info("OK. {} transferred {} coins to {}.", validTransaction.getOrigin(), validTransaction.getAmount(), validTransaction.getDestination());
+            return validTransaction;
         }
     }
 
@@ -134,9 +154,22 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
+    @GetMapping("/{who}/obtainNotSubmittedTransactions")
+    public TransactionsForSubmissionInfo obtainNotSubmittedTransactions(@PathVariable String who) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createObtainNotSubmittedTransactionsRequest(who), UNORDERED_REQUEST);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readInt();
+        objIn.readObject(); //hash
+        if (!objIn.readBoolean()) {
+            logger.info("BAD REQUEST");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
+        } else
+            return (TransactionsForSubmissionInfo) objIn.readObject();
+    }
+
 
     @GetMapping("/{who}/balance")
-    public double currentAmount(@PathVariable String who) {
+    public String currentAmount(@PathVariable String who) {
         try {
             QuorumResponse quorumResponse = dispatchAsyncRequest(createCurrentAmountRequest(who), UNORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
@@ -147,7 +180,7 @@ public class LedgerController implements CommandLineRunner {
                 logger.info("BAD REQUEST");
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
             } else {
-                double balance = objIn.readDouble();
+                String balance = (String) objIn.readObject();
                 logger.info("OK. {} coins associated with key {}.", balance, who);
                 return balance;
             }
@@ -304,12 +337,6 @@ public class LedgerController implements CommandLineRunner {
         return new LinkedList<>();
     }
 
-    @PostMapping("/privacyTransfer")
-    @ResponseStatus(HttpStatus.OK)
-    public void transferMoneyWithPrivacy(@RequestBody SignedBody<BlockHeader> signedBody) {
-
-    }
-
     @PostMapping("/{who}/installSmartContract")
     @ResponseStatus(HttpStatus.OK)
     public String installSmartContract(@PathVariable String who, @RequestBody SignedBody<SmartContract> signedBody) throws IOException, ClassNotFoundException, ExecutionException, InterruptedException {
@@ -385,6 +412,12 @@ public class LedgerController implements CommandLineRunner {
         return getCommitResponse(quorumResponse);
     }
 
+    private ValidTransaction commitPrivateTransaction(TransactionPlusSecretValue transactionPlusSecretValue,byte[] hash, QuorumResponse quorumResponse) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+        Commit<TransactionPlusSecretValue> commit = new Commit<>(transactionPlusSecretValue, base32.encodeAsString(hash), quorumResponse.getReplicas());
+        quorumResponse = commit(commit, LedgerRequestType.COMMIT_TRANSFER_WITH_PRIVACY);
+        return getCommitResponse(quorumResponse);
+    }
+
     private ValidTransaction commitBlock(BlockAndReward blockAndReward, byte[] hash, QuorumResponse quorumResponse) throws InterruptedException, ExecutionException, IOException, ClassNotFoundException {
         Commit<BlockAndReward> commit = new Commit<>(blockAndReward, base32.encodeAsString(hash), quorumResponse.getReplicas());
         quorumResponse = commit(commit, LedgerRequestType.COMMIT_BLOCK);
@@ -436,20 +469,37 @@ public class LedgerController implements CommandLineRunner {
         objOut.writeObject(body.getSignatureAlgorithm());
         objOut.writeObject(body.getPublicKeyAlgorithm());
         objOut.writeObject(body.getHashAlgorithm());
+        objOut.writeObject(body.getEncryptedZero());
+        objOut.writeObject(body.getPkNSquare());
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();
     }
 
-    private byte[] createObtainCoinsRequest(String who, SignedBody<Double> signedBody) throws IOException {
+    private byte[] createObtainCoinsRequest(String who, SignedBody<BigInteger> signedBody) throws IOException {
         ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.OBTAIN_COINS);
         objOut.writeObject(who);
-        objOut.writeDouble(signedBody.getContent());
+        objOut.writeObject(signedBody.getContent());
         objOut.writeObject(signedBody.getSignature());
         objOut.writeObject(signedBody.getDate());
         objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createTransferMoneyWithPrivacyRequest(SignedBody<TransactionPlusSecretValue> signedBody) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objectOutput = new ObjectOutputStream(byteOut);
+        objectOutput.writeObject(LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY);
+        TransactionPlusSecretValue transactionPlusSecretValue = signedBody.getContent();
+        Transaction transaction = transactionPlusSecretValue.getTransaction();
+        String secretValue = transactionPlusSecretValue.getSecretValue();
+        objectOutput.writeObject(transaction);
+        objectOutput.writeObject(secretValue);
+        objectOutput.writeObject(signedBody.getSignature());
+        objectOutput.flush();
         byteOut.flush();
         return byteOut.toByteArray();
     }
@@ -461,6 +511,16 @@ public class LedgerController implements CommandLineRunner {
         Transaction transaction = signedBody.getContent();
         objOut.writeObject(transaction);
         objOut.writeObject(signedBody.getSignature());
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createObtainNotSubmittedTransactionsRequest(String who) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS);
+        objOut.writeObject(who);
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();

@@ -1,4 +1,5 @@
 package com.proxy.controllers;
+import java.math.BigInteger;
 import java.util.List;
 
 public class ValidTransaction extends SignedTransaction {
@@ -7,8 +8,8 @@ public class ValidTransaction extends SignedTransaction {
     private final String hash;
     private final List<Integer> replicas;
 
-    public ValidTransaction(String origin, String destination, double amount, String signature, String date, String hash, List<Integer> replicas, String id) {
-        super(origin, destination, amount, signature, date, id);
+    public ValidTransaction(String origin, String destination, BigInteger amount, String signature, String date, String hash, List<Integer> replicas, String id, BigInteger encryptedAmount, String whoEncrypted, String transactionPointer) {
+        super(origin, destination, amount, signature, date, id, encryptedAmount, whoEncrypted, transactionPointer);
         this.hash = hash;
         this.replicas = replicas;
     }

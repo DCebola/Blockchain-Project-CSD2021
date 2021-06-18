@@ -1,5 +1,7 @@
 package com.clients;
 
+import java.math.BigInteger;
+
 public class SignedTransaction extends Transaction {
 
     private final String signature;
@@ -7,8 +9,8 @@ public class SignedTransaction extends Transaction {
     private final String id;
 
 
-    public SignedTransaction(String origin, String destination, double amount, String signature, String date, String id){
-        super(origin, destination, amount, date);
+    public SignedTransaction(String origin, String destination, BigInteger amount, String signature, String date, String id,BigInteger encryptedAmount,String whoEncrypted, String transactionPointer){
+        super(origin, destination, amount, date,encryptedAmount,whoEncrypted,transactionPointer);
         this.signature = signature;
         this.id = id;
     }
