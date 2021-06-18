@@ -147,6 +147,19 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
+    @GetMapping("/{who}/obtainNotSubmittedTransactions")
+    public TransactionsForSubmissionInfo obtainNotSubmittedTransactions(@PathVariable String who) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createObtainNotSubmittedTransactionsRequest(who), UNORDERED_REQUEST);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readInt();
+        objIn.readObject(); //hash
+        if (!objIn.readBoolean()) {
+            logger.info("BAD REQUEST");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
+        } else
+            return (TransactionsForSubmissionInfo) objIn.readObject();
+    }
+
 
     @GetMapping("/{who}/balance")
     public BigInteger currentAmount(@PathVariable String who) {
@@ -445,6 +458,16 @@ public class LedgerController implements CommandLineRunner {
         Transaction transaction = signedBody.getContent();
         objOut.writeObject(transaction);
         objOut.writeObject(signedBody.getSignature());
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createObtainNotSubmittedTransactionsRequest(String who) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS);
+        objOut.writeObject(who);
         objOut.flush();
         byteOut.flush();
         return byteOut.toByteArray();

@@ -271,15 +271,18 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         if (!jedis.exists(origin) || !jedis.exists(destination) || origin.equals(destination)) {
             jedis.close();
             logger.info("Bad transaction ({}, {}, {})", origin, destination, encryptedAmount);
+            hash = TOMUtil.computeHash(Boolean.toString(false).getBytes());
+            writeTransferMoneyResponse(objOut, hash, false, null);
         } else {
             String date = t.getDate();
             jedis.close();
             byte[] msgSignature = (byte[]) objIn.readObject();
             jedis = jedisPool.getResource();
-            String nonce = jedis.lindex(origin, WALLET_NONCE);
+            String nonce = jedis.lindex(t.getWhoEncrypted(), WALLET_NONCE);
             jedis.close();
-            String msg = LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY.name().concat(gson.toJson(t).concat(secretValue).concat(nonce).concat(date));
-            if (verifySignature(origin, msg, msgSignature)) {
+            String msg = LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY.name().concat(gson.toJson(t)).concat(secretValue).concat(nonce).concat(date);
+            System.out.println(msg);
+            if (verifySignature(t.getWhoEncrypted(), msg, msgSignature)) {
                 logger.info("Signature verified successfully");
                 /*if (getBalance(origin).intValue() >= amount.intValue()) {}*/
                 hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
@@ -506,11 +509,12 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
         jedis = jedisPool.getResource();
 
-        String nonce = jedis.lindex(t.getOrigin(), WALLET_NONCE);
+        String nonce = jedis.lindex(t.getWhoEncrypted(), WALLET_NONCE);
         jedis.close();
         nonce = Integer.toString(Integer.parseInt(nonce) + 1);
+        jedis.close();
         jedis = jedisPool.getResource();
-        jedis.lset(t.getDestination(), WALLET_NONCE, nonce);
+        jedis.lset(t.getWhoEncrypted(), WALLET_NONCE, nonce);
         jedis.close();
         jedis = jedisPool.getResource();
 
@@ -526,16 +530,22 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 t.getEncryptedAmount(),
                 t.getWhoEncrypted(),
                 t.getTransactionPointer());
-
-        InfoForDestination infoForDestination = new InfoForDestination(t.getOrigin(),t.getDestination(),secretValue,validTransaction.getId());
-
         logger.info("T {}", t);
         jedis = jedisPool.getResource();
         jedis.rpush(PENDING_TRANSACTIONS, gson.toJson(validTransaction));
         jedis.close();
 
-        jedis = jedisPool.getResource();
-        jedis.rpush(t.getDestination(), gson.toJson(infoForDestination));
+        if(!secretValue.equals("")) {
+            InfoForDestination infoForDestination = new InfoForDestination(t.getOrigin(), t.getDestination(), secretValue, validTransaction.getId());
+            jedis = jedisPool.getResource();
+            jedis.rpush(t.getDestination(), gson.toJson(infoForDestination));
+        } else {
+            jedis = jedisPool.getResource();
+            String infoToRemove = jedis.lrange(t.getDestination(),6,6).get(0);
+            jedis.close();
+            jedis = jedisPool.getResource();
+            jedis.lrem(t.getDestination(),1,infoToRemove);
+        }
         jedis.close();
 
         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(validTransaction)).getBytes());
@@ -800,6 +810,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case OBTAIN_LAST_BLOCK:
                     obtainLastBlockRequest(objOut);
                     break;
+                case OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS:
+                    obtainUserNotSubmittedTransactionsRequest(objIn, objOut);
+                    break;
             }
             objOut.flush();
             byteOut.flush();
@@ -809,7 +822,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             return ERROR_MSG.getBytes();
         }
     }
-
 
     private void getNonceRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException, NoSuchAlgorithmException, InvalidKeySpecException, SignatureException, InvalidKeyException {
         logger.debug("New REQUEST_NONCE operation");
@@ -836,6 +848,31 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             logger.info("Key not registered.");
             byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(NO_NONCE).getBytes());
             writeGetNonceResponse(objOut, hash, false, NO_NONCE);
+        }
+    }
+
+    private void obtainUserNotSubmittedTransactionsRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException {
+        logger.debug("New USER_NOT_SUBMITTED_TRANSACTIONS operation.");
+        String publicKey = (String) objIn.readObject();
+        jedis = jedisPool.getResource();
+        if(!jedis.exists(publicKey)) {
+            logger.info("Key {} not registered.", publicKey);
+            jedis.close();
+            byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+            writeObtainUserNotSubmittedTransactionsResponse(objOut, hash, false, null);
+        } else {
+            jedis.close();
+            jedis = jedisPool.getResource();
+            List<String> notSubmittedTransactionsInfo = jedis.lrange(publicKey,6,-1);
+            jedis.close();
+            List<InfoForDestination> infoForDestinations = new LinkedList<>();
+            for(String transactionInfo: notSubmittedTransactionsInfo) {
+                InfoForDestination infoForDestination = gson.fromJson(transactionInfo,InfoForDestination.class);
+                infoForDestinations.add(infoForDestination);
+            }
+            TransactionsForSubmissionInfo transactionsInfo = new TransactionsForSubmissionInfo(infoForDestinations);
+            byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(transactionsInfo)).getBytes());
+            writeObtainUserNotSubmittedTransactionsResponse(objOut, hash, true, transactionsInfo);
         }
     }
 
@@ -1146,6 +1183,11 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private void writeGetNonceResponse(ObjectOutput objOut, byte[] hash, boolean decision, String nonce) throws IOException {
         writeReplicaDecision(objOut, hash, decision);
         objOut.writeObject(nonce);
+    }
+
+    private void writeObtainUserNotSubmittedTransactionsResponse(ObjectOutput objOut, byte[] hash, boolean decision, TransactionsForSubmissionInfo transactionsForSubmissionInfo) throws IOException {
+        writeReplicaDecision(objOut, hash, decision);
+        objOut.writeObject(transactionsForSubmissionInfo);
     }
 
     private void writeCurrentAmountResponse(ObjectOutput objOut, byte[] hash, boolean decision, BigInteger balance) throws IOException {

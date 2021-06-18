@@ -56,6 +56,7 @@ public class RestClient {
     private static final String MINE_TRANSACTIONS_URL = "https://127.0.0.1:%s/pendingTransactions/%s";
     private static final String SEND_MINED_BLOCK_URL = "https://127.0.0.1:%s/mine";
     private static final String TRANSFER_MONEY_WITH_PRIVACY_URL = "https://127.0.0.1:%s/privacyTransfer";
+    private static final String OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS_URL = "https://127.0.0.1:%s/%s/obtainNotSubmittedTransactions";
 
     private static final int REGISTER = 0;
     private static final int REQUEST_NONCE = 1;
@@ -68,7 +69,8 @@ public class RestClient {
     private static final int OBTAIN_LAST_BLOCK = 8;
     private static final int MINE_TRANSACTIONS = 9;
     private static final int TRANSFER_MONEY_WITH_PRIVACY = 10;
-    private static final int QUIT = 11;
+    private static final int OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS = 11;
+    private static final int QUIT = 12;
 
 
     private static final int ALL = 0;
@@ -154,7 +156,10 @@ public class RestClient {
                     mineTransactions(requestFactory, in);
                     break;
                 case TRANSFER_MONEY_WITH_PRIVACY:
-                    transferMoneyWithPrivacy(requestFactory,in);
+                    transferMoneyWithPrivacy(requestFactory, in);
+                    break;
+                case OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS:
+                    obtainUserNotSubmittedTransactions(requestFactory, in);
                     break;
                 case QUIT:
                     in.close();
@@ -211,7 +216,8 @@ public class RestClient {
         System.out.println("8 - Obtain last block");
         System.out.println("9 - Mine transactions");
         System.out.println("10 - Transfer money with privacy");
-        System.out.println("11 - Quit");
+        System.out.println("11 - Obtain user not submitted transactions");
+        System.out.println("12 - Quit");
         System.out.print("> ");
     }
 
@@ -309,6 +315,41 @@ public class RestClient {
             currentSession.saveTransaction(response.getBody());
         }
     }
+
+    private static void obtainUserNotSubmittedTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws Exception {
+        if (currentSession == null)
+            requestNonce(requestFactory, in);
+        ResponseEntity<TransactionsForSubmissionInfo> response
+                = new RestTemplate(requestFactory).exchange(
+                String.format(OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, TransactionsForSubmissionInfo.class);
+
+        if(response.getStatusCode().is2xxSuccessful()) {
+            TransactionsForSubmissionInfo transactionsForSubmissionInfo = response.getBody();
+            assert transactionsForSubmissionInfo != null;
+            List<InfoForDestination> transactionsInfo = transactionsForSubmissionInfo.getTransactionsInfo();
+            for(InfoForDestination info: transactionsInfo) {
+                String currentDate = LocalDateTime.now().format(dateTimeFormatter);
+                byte[] bytes = Base64.getDecoder().decode(info.getSecretValue());
+                Cipher decriptCipher = Cipher.getInstance("RSA");
+                decriptCipher.init(Cipher.DECRYPT_MODE, currentSession.getPrivateKey());
+                BigInteger amount = new BigInteger(new String(decriptCipher.doFinal(bytes), StandardCharsets.UTF_8));
+                BigInteger encryptedAmount = HomoAdd.encrypt(amount,currentSession.getPk());
+                Transaction t = new Transaction(info.getOrigin(),info.getDestination(),null,currentDate,encryptedAmount, info.getDestination(), info.getDestinationPointer());
+                TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(t,"");
+                String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY.name().
+                        concat(gson.toJson(t)).concat("").concat(currentSession.getNonce()).concat(currentDate);
+                byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+                SignedBody<TransactionPlusSecretValue> signedBody = new SignedBody<>(transactionPlusSecretValue,sigBytes,currentDate);
+                HttpEntity<SignedBody<TransactionPlusSecretValue>> request = new HttpEntity<>(signedBody);
+                ResponseEntity<ValidTransaction> finalResponse
+                        = new RestTemplate(requestFactory).exchange(
+                        String.format(TRANSFER_MONEY_WITH_PRIVACY_URL, port), HttpMethod.POST, request, ValidTransaction.class);
+                processResponseWithTransaction(finalResponse);
+            }
+        }
+
+    }
+
 
     private static void transferMoneyWithPrivacy(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws Exception {
         if(currentSession == null)
