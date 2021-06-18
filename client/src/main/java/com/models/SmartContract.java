@@ -10,35 +10,28 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class SmartContract implements ISmartContract {
-    private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
     private static final long serialVersionUID = 562968892267729629L;
 
 
-    private final int outputNumber;
     private final String author;
     private final String date;
-    private final List<Transaction> output;
+    private List<Transaction> output;
     private String currentOrigin;
     private BigInteger availableFunds;
     private List<String> currentDestinations;
-    private List<String> tempMemory;
     private String readTarget;
     private boolean done;
-    private DateTimeFormatter dateTimeFormatter;
-    private final Gson gson;
+    private List<Transaction> tempTransactions;
+    private List<BigInteger> tempBalances;
 
     private String signature;
     private int[] validatorIDs;
     private String hash;
 
 
-    public SmartContract(int outputNumber, String author, String date, Gson gson) {
-        this.gson = gson;
-        this.dateTimeFormatter = DateTimeFormatter.ofPattern(DATE_FORMATTER);
-        this.outputNumber = outputNumber;
+    public SmartContract(String author, String date) {
         this.author = author;
         this.date = date;
-        this.output = new ArrayList<>(outputNumber);
         this.signature = null;
         this.validatorIDs = null;
         this.hash = null;
@@ -47,12 +40,12 @@ public class SmartContract implements ISmartContract {
         this.currentDestinations = null;
         this.readTarget = null;
         this.done = false;
+        this.output = null;
+        this.tempTransactions = null;
+        this.tempBalances = null;
     }
 
     public SmartContract() {
-        this.gson = null;
-        this.dateTimeFormatter = null;
-        this.outputNumber = -1;
         this.author = null;
         this.date = null;
         this.output = null;
@@ -64,11 +57,9 @@ public class SmartContract implements ISmartContract {
         this.currentDestinations = null;
         this.readTarget = null;
         this.done = false;
+        this.tempTransactions = null;
+        this.tempBalances = null;
 
-    }
-
-    public int getOutputNumber() {
-        return outputNumber;
     }
 
     public String getAuthor() {
@@ -81,11 +72,13 @@ public class SmartContract implements ISmartContract {
 
     public SmartContractEvent init(String origin, BigInteger amount, List<String> destinations) {
         this.currentOrigin = origin;
+        this.output = new LinkedList<>();
         this.availableFunds = amount;
         this.currentDestinations = destinations;
         this.readTarget = null;
-        this.tempMemory = new LinkedList<>();
         this.done = false;
+        this.tempTransactions = new LinkedList<>();;
+        this.tempBalances = new LinkedList<>();;
         return SmartContractEvent.BEGIN;
     }
 
@@ -93,15 +86,14 @@ public class SmartContract implements ISmartContract {
         if (done)
             return SmartContractEvent.STOP;
         else {
-            int processDestinations = tempMemory.size();
+            int processDestinations = tempBalances.size();
             if (processDestinations < currentDestinations.size()) {
                 readTarget = currentDestinations.get(processDestinations);
                 return SmartContractEvent.READ_BALANCE;
             } else {
-                assert gson != null;
-                BigInteger balance1 = gson.fromJson(tempMemory.get(0), BigInteger.class);
-                BigInteger balance2 = gson.fromJson(tempMemory.get(1), BigInteger.class);
-                String currentDate = LocalDateTime.now().format(dateTimeFormatter);
+                BigInteger balance1 = tempBalances.get(0);
+                BigInteger balance2 = tempBalances.get(1);
+                String currentDate = LocalDateTime.now().toString();
                 if (balance1.compareTo(balance2) > 0) {
                     BigInteger smallerFraction = availableFunds.divide(BigInteger.valueOf(4)).multiply(BigInteger.valueOf(3));
                     output.add(new Transaction(currentOrigin, currentDestinations.get(0), smallerFraction, currentDate, null, null, null));
@@ -125,16 +117,12 @@ public class SmartContract implements ISmartContract {
         return readTarget;
     }
 
-    public void readTransaction(String data) {
-        this.tempMemory.add(data);
+    public void readTransaction(Transaction transaction) {
+        this.tempTransactions.add(transaction);
     }
 
-    public void readLedger(String data) {
-        this.tempMemory.add(data);
-    }
-
-    public void readBalance(String data) {
-        this.tempMemory.add(data);
+    public void readBalance(BigInteger balance) {
+        this.tempBalances.add(balance);
     }
 
     public List<Transaction> getOutput() {

@@ -872,7 +872,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 if (!key.equals(PENDING_TRANSACTIONS) && !key.equals(PENDING_REWARD) && !key.equals(BLOCK_CHAIN) && !wallets.containsKey(key)) {
                     System.out.println(key);
                     jedis = jedisPool.getResource();
-                    wallets.put(key, jedis.lrange(key, 1, -1));
+                    wallets.put(key, jedis.lrange(key, 0, -1));
                     jedis.close();
                 }
             }

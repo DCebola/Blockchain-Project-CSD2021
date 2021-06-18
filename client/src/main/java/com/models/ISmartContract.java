@@ -8,8 +8,6 @@ import java.util.List;
 
 public interface ISmartContract extends Serializable {
 
-    public int getOutputNumber();
-
     public String getAuthor();
 
     public String getDate();
@@ -20,11 +18,9 @@ public interface ISmartContract extends Serializable {
 
     public String getReadTarget();
 
-    public void readTransaction(String data);
+    public void readTransaction(Transaction transaction);
 
-    public void readLedger(String data);
-
-    public void readBalance(String data);
+    public void readBalance(BigInteger balance) ;
 
     public List<Transaction> getOutput();
 

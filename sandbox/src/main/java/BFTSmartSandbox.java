@@ -6,7 +6,6 @@ import com.enums.LedgerRequestType;
 import com.enums.SmartContractEvent;
 import com.google.gson.Gson;
 import com.models.*;
-import com.models.SmartContractTemplate;
 import org.apache.commons.codec.binary.Base32;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
@@ -47,7 +46,6 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
     private Map<String, List<String>> wallets;
     private List<Block> blockChain;
     private final int timeout;
-    private final String smartContractClassName;
 
     public BFTSmartSandbox(int id) throws IOException {
         this.id = id;
@@ -56,7 +54,6 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         this.base32 = new Base32();
         Properties properties = new Properties();
         properties.load(new FileInputStream("config/sandbox.config"));
-        smartContractClassName = properties.getProperty("smartContractClassName");
         timeout = Integer.parseInt(properties.getProperty("timeout"));
         new ServiceReplica(id, this, this);
 
@@ -108,11 +105,11 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         String msg = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(byteCode).concat(date).concat(wallet.get(WALLET_NONCE));
         if (wallet != null) {
             if (verifySignature(pubKey, msg, sigBytes)) {
-                SmartContractLoader scLoader = new SmartContractLoader(base32.decode(byteCode), smartContractClassName);
+                SmartContractLoader scLoader = new SmartContractLoader(base32.decode(byteCode));
                 if (scLoader.loadSmartContract()) {
                     ISmartContract smartContract;
                     try {
-                        smartContract = scLoader.getNewSmartContractInstance(pubKey, date, gson);
+                        smartContract = scLoader.getNewSmartContractInstance(pubKey, date);
                         List<String> destinations = new ArrayList<>(2);
                         if (wallets.keySet().size() < 2) {
                             destinations.add(DUMMY_DESTINATION_1);
@@ -126,7 +123,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
                                     break;
                             }
                         }
-                        safeExecuteContract(objOut, smartContract, pubKey, sigBytes, destinations);
+                        safeExecuteContract(objOut, byteCode, smartContract, pubKey, sigBytes, destinations);
                     } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
                         logger.info("Invalid smart contract. Error on instantiation.");
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
@@ -145,7 +142,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         }
     }
 
-    private void safeExecuteContract(ObjectOutput objOut, ISmartContract smartContract, String pubKey, byte[] sigBytes, List<String> destinations) throws ExecutionException, InterruptedException, IOException {
+    private void safeExecuteContract(ObjectOutput objOut, String bytecode, ISmartContract smartContract, String pubKey, byte[] sigBytes, List<String> destinations) throws ExecutionException, InterruptedException, IOException {
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
         Future<List<Transaction>> future = executor.submit(new sandboxThread(smartContract, DUMMY_ORIGIN, DUMMY_AMOUNT, destinations));
         final boolean[] timedOut = {false};
@@ -156,10 +153,12 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         }, timeout, TimeUnit.MILLISECONDS);
         if (!timedOut[0]) {
             if (smartContract.getAuthor().equals(pubKey)) {
-                if (checkContractOutput(future.get(), smartContract.getOutputNumber(), destinations)) {
+                List<Transaction> output = future.get();
+                logger.info("Smart contract output: {}", Arrays.toString(output.toArray()));
+                if (checkContractOutput(output, destinations)) {
                     logger.info("Valid smart contract.");
                     smartContract.setSignature(base32.encodeAsString(sigBytes));
-                    byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(smartContract)).getBytes());
+                    byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(bytecode).getBytes());
                     writeReplicaDecision(objOut, hash, true);
                     objOut.writeObject(smartContract);
                 } else {
@@ -178,8 +177,8 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         }
     }
 
-    private boolean checkContractOutput(List<Transaction> output, int expectedSize, List<String> destinations) {
-        if (output.size() != expectedSize) {
+    private boolean checkContractOutput(List<Transaction> output, List<String> destinations) {
+        if (output.size() != destinations.size()) {
             logger.info("Wrong output size.");
             return false;
         }
@@ -321,15 +320,13 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
             SmartContractEvent nextEvent = sc.init(origin, amount, destinations);
             while (nextEvent != SmartContractEvent.STOP) {
                 nextEvent = sc.run();
+                logger.info("Next event: {}", nextEvent.name());
                 switch (nextEvent) {
                     case READ_TRANSACTION:
-                        sc.readTransaction(gson.toJson(findTransaction(sc.getReadTarget())));
-                        break;
-                    case READ_CLIENT_LEDGER:
-                        sc.readBalance(gson.toJson(getLedger(sc.getReadTarget())));
+                        sc.readTransaction(findTransaction(sc.getReadTarget()));
                         break;
                     case READ_BALANCE:
-                        sc.readLedger(gson.toJson(getPublicBalance(sc.getReadTarget())));
+                        sc.readBalance(getPublicBalance(sc.getReadTarget()));
                         break;
                 }
             }

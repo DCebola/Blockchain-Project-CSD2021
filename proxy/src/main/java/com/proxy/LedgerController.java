@@ -402,7 +402,7 @@ public class LedgerController implements CommandLineRunner {
             targets = getAvailableSandboxes();
         System.out.println(Arrays.toString(targets));
         System.out.println(getQuorumSize(targets.length));
-        asynchServiceProxy.invokeAsynchRequest(request, targets, new ReplyListenerImp<>(reply, getQuorumSize(targets.length), targets), messageType);
+        asynchServiceProxy.invokeAsynchRequest(request, new ReplyListenerImp<>(reply, getQuorumSize(targets.length), targets), messageType);
         return reply.get();
     }
 
