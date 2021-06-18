@@ -15,6 +15,7 @@ import static bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST;
 import static bftsmart.tom.core.messages.TOMMessageType.UNORDERED_REQUEST;
 
 import java.io.*;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -22,6 +23,8 @@ import java.util.concurrent.*;
 public class LedgerController implements CommandLineRunner {
 
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
+    private static final String SANDBOX_TYPE = "SANDBOX";
+    private static final String REPLICA_TYPE = "REPLICA";
 
     private AsynchServiceProxy asynchServiceProxy;
     private Logger logger;
@@ -32,9 +35,10 @@ public class LedgerController implements CommandLineRunner {
     @PostMapping("/nonce/{who}")
     public String getNonce(@PathVariable String who, @RequestBody SignedBody<String> body) {
         try {
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createGetNonceRequest(who, body), UNORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createGetNonceRequest(who, body), UNORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             objIn.readObject(); //Hash
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST");
@@ -53,9 +57,10 @@ public class LedgerController implements CommandLineRunner {
     @PostMapping("/register/{who}")
     public String register(@PathVariable String who, @RequestBody RegisterKeyMsgBody body) {
         try {
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createRegisterRequest(who, body), ORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createRegisterRequest(who, body), ORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             byte[] hash = (byte[]) objIn.readObject();
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST");
@@ -84,9 +89,10 @@ public class LedgerController implements CommandLineRunner {
     @PostMapping("/{who}/obtainCoins")
     public ValidTransaction obtainAmount(@PathVariable String who, @RequestBody SignedBody<Double> signedBody) {
         try {
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createObtainCoinsRequest(who, signedBody), ORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createObtainCoinsRequest(who, signedBody), ORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             byte[] hash = (byte[]) objIn.readObject();
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST");
@@ -107,9 +113,10 @@ public class LedgerController implements CommandLineRunner {
     @ResponseStatus(HttpStatus.OK)
     public ValidTransaction transferAmount(@RequestBody SignedBody<Transaction> signedBody) {
         try {
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createTransferMoneyRequest(signedBody), ORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createTransferMoneyRequest(signedBody), ORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             byte[] hash = (byte[]) objIn.readObject();
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST");
@@ -130,9 +137,10 @@ public class LedgerController implements CommandLineRunner {
     @GetMapping("/{who}/balance")
     public double currentAmount(@PathVariable String who) {
         try {
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createCurrentAmountRequest(who), UNORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createCurrentAmountRequest(who), UNORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             objIn.readObject(); // Hash
             if (!objIn.readBoolean()) {
                 logger.info("BAD REQUEST");
@@ -154,9 +162,10 @@ public class LedgerController implements CommandLineRunner {
     @PostMapping("/ledger")
     public Ledger ledgerOfGlobalTransactions(@RequestBody DateInterval dates) {
         try {
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createGlobalLedgerRequest(dates), UNORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createGlobalLedgerRequest(dates), UNORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             objIn.readObject(); // Hash
             List<Commit> global_ledger = (List<Commit>) objIn.readObject();
             logger.info("OK. Global ledger with length {}.", global_ledger.size());
@@ -173,9 +182,10 @@ public class LedgerController implements CommandLineRunner {
     public Ledger ledgerOfClientTransactions(@PathVariable String who, @RequestBody DateInterval dateInterval) {
         try {
 
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createClientLedgerRequest(who, dateInterval), UNORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createClientLedgerRequest(who, dateInterval), UNORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             objIn.readObject(); // Hash
             boolean result = objIn.readBoolean();
             List<Commit> client_ledger = (List<Commit>) objIn.readObject();
@@ -197,9 +207,10 @@ public class LedgerController implements CommandLineRunner {
     @GetMapping("/verify/{id}")
     public ValidTransaction verify(@PathVariable String id) {
         try {
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createVerifyRequest(id), UNORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createVerifyRequest(id), UNORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             objIn.readObject(); //Hash
             boolean result = objIn.readBoolean();
             ValidTransaction t = (ValidTransaction) objIn.readObject();
@@ -221,20 +232,21 @@ public class LedgerController implements CommandLineRunner {
     @GetMapping("/lastBlock")
     public Block obtainLastMinedBlock() {
         try {
-            QuorumResponse quorumResponse = dispatchAsyncRequest(obtainLastBlockRequest(), UNORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(obtainLastBlockRequest(), UNORDERED_REQUEST, REPLICA_TYPE);
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             objIn.readObject(); //Hash
             boolean result = objIn.readBoolean();
             Block block = (Block) objIn.readObject();
-            if(!result) {
+            if (!result) {
                 logger.info("BAD REQUEST");
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
             } else {
                 logger.info("Obtained valid block from a quorum of replicas");
                 return block;
             }
-        } catch(InterruptedException | ExecutionException | IOException | ClassNotFoundException e) {
+        } catch (InterruptedException | ExecutionException | IOException | ClassNotFoundException e) {
             logger.error("Exception in obtainLastBlock. Cause: {}", e.getMessage());
             e.printStackTrace();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -245,10 +257,11 @@ public class LedgerController implements CommandLineRunner {
     public BlockHeader pickNotMineratedTransactions(@PathVariable int numPending) {
         try {
             logger.info("hello");
-            QuorumResponse quorumResponse = dispatchAsyncRequest(createPickPendingTransactionsRequest(numPending), UNORDERED_REQUEST);
+            QuorumResponse quorumResponse = dispatchAsyncRequest(createPickPendingTransactionsRequest(numPending), UNORDERED_REQUEST, REPLICA_TYPE);
             logger.info("goodbye");
             ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-            objIn.readInt();
+            objIn.readObject(); //Type
+            objIn.readInt(); //ID
             objIn.readObject(); // Hash
             boolean result = objIn.readBoolean();
             BlockHeader blockHeader = (BlockHeader) objIn.readObject();
@@ -268,16 +281,16 @@ public class LedgerController implements CommandLineRunner {
 
     @PostMapping("/mine")
     public ValidTransaction sendMinedBlock(@RequestBody SignedBody<BlockHeaderAndReward> signedBody) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
-        QuorumResponse quorumResponse = dispatchAsyncRequest(createSendMinedBlockRequest(signedBody), ORDERED_REQUEST);
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createSendMinedBlockRequest(signedBody), ORDERED_REQUEST, REPLICA_TYPE);
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-        objIn.readInt();
+        objIn.readObject(); //Type
+        objIn.readInt(); //ID
         byte[] hash = (byte[]) objIn.readObject();
         if (!objIn.readBoolean()) {
             logger.info("BAD REQUEST");
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
         } else {
             BlockAndReward blockAndReward = (BlockAndReward) objIn.readObject();
-            logger.info(gson.toJson(blockAndReward));
             ValidTransaction reward = commitBlock(blockAndReward, hash, quorumResponse);
             logger.info("OK. Adding block to blockchain");
             return reward;
@@ -286,8 +299,8 @@ public class LedgerController implements CommandLineRunner {
 
     @PostMapping("/smartTransfer")
     @ResponseStatus(HttpStatus.OK)
-    public void transferMoneyWithSmartContract(@RequestBody SignedBody<BlockHeader> signedBody) {
-
+    public List<ValidTransaction> transferMoneyWithSmartContract(@RequestBody SignedBody<SmartContract> signedBody) {
+        return new LinkedList<>();
     }
 
     @PostMapping("/privacyTransfer")
@@ -298,7 +311,22 @@ public class LedgerController implements CommandLineRunner {
 
     @PostMapping("/{who}/installSmartContract")
     @ResponseStatus(HttpStatus.OK)
-    public void installSmartContract(@PathVariable String who, @RequestBody SmartContract smartContract) {
+    public String installSmartContract(@PathVariable String who, @RequestBody SignedBody<SmartContract> signedBody) throws IOException, ClassNotFoundException, ExecutionException, InterruptedException {
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createValidateSmartContractRequest(who, signedBody), ORDERED_REQUEST, SANDBOX_TYPE);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readObject(); //Type
+        objIn.readInt(); //ID
+        byte[] hash = (byte[]) objIn.readObject();
+        if (!objIn.readBoolean()) {
+            logger.info("BAD REQUEST");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BAD REQUEST");
+        } else {
+            SmartContract smartContract = (SmartContract) objIn.readObject();
+            logger.info(gson.toJson(smartContract));
+            String id = commitSmartContract(smartContract, hash, quorumResponse);
+            logger.info("OK. Installing smart contract.");
+            return id;
+        }
     }
 
 
@@ -323,10 +351,10 @@ public class LedgerController implements CommandLineRunner {
         return asynchServiceProxy.getViewManager().getCurrentViewN() - asynchServiceProxy.getViewManager().getCurrentViewF();
     }
 
-    private QuorumResponse dispatchAsyncRequest(byte[] request, TOMMessageType messageType) throws IOException, ExecutionException, InterruptedException {
+    private QuorumResponse dispatchAsyncRequest(byte[] request, TOMMessageType messageType, String target) throws IOException, ExecutionException, InterruptedException {
         CompletableFuture<QuorumResponse> reply = new CompletableFuture<>();
         int quorumSize = getQuorumSize();
-        asynchServiceProxy.invokeAsynchRequest(request, new ReplyListenerImp<>(reply, quorumSize), messageType);
+        asynchServiceProxy.invokeAsynchRequest(request, new ReplyListenerImp<>(reply, quorumSize, target), messageType);
         return reply.get();
     }
 
@@ -337,8 +365,9 @@ public class LedgerController implements CommandLineRunner {
         objOut.writeObject(op);
         objOut.flush();
         byteOut.flush();
-        return dispatchAsyncRequest(byteOut.toByteArray(), ORDERED_REQUEST);
+        return dispatchAsyncRequest(byteOut.toByteArray(), ORDERED_REQUEST, REPLICA_TYPE);
     }
+
 
     private ValidTransaction commitTransaction(SignedTransaction signedTransaction, byte[] hash, QuorumResponse quorumResponse) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
         Commit<SignedTransaction> commit = new Commit<>(signedTransaction, base32.encodeAsString(hash), quorumResponse.getReplicas());
@@ -352,9 +381,24 @@ public class LedgerController implements CommandLineRunner {
         return getCommitResponse(quorumResponse);
     }
 
+    private String commitSmartContract(SmartContract smartContract, byte[] hash, QuorumResponse quorumResponse) throws InterruptedException, ExecutionException, IOException, ClassNotFoundException {
+        Commit<SmartContract> commit = new Commit<>(smartContract, base32.encodeAsString(hash), quorumResponse.getReplicas());
+        quorumResponse = commit(commit, LedgerRequestType.INSTALL_SMART_CONTRACT);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readObject(); //Type
+        objIn.readInt(); //ID
+        objIn.readObject(); //Hash
+        if (!objIn.readBoolean()) {
+            logger.info("Found tampered request!");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tampered request.");
+        }
+        return (String) objIn.readObject();
+    }
+
     private ValidTransaction getCommitResponse(QuorumResponse quorumResponse) throws IOException, ClassNotFoundException {
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
-        objIn.readInt();
+        objIn.readObject(); //Type
+        objIn.readInt(); //ID
         objIn.readObject(); //Hash
         if (!objIn.readBoolean()) {
             logger.info("Found tampered request!");
@@ -480,6 +524,20 @@ public class LedgerController implements CommandLineRunner {
         BlockHeaderAndReward blockHeaderAndReward = signedBody.getContent();
         logger.info("{}", gson.toJson(signedBody.getContent()));
         objOut.writeObject(blockHeaderAndReward);
+        objOut.writeObject(signedBody.getSignature());
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+
+    private byte[] createValidateSmartContractRequest(String who, SignedBody<SmartContract> signedBody) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.VALIDATE_SMART_CONTRACT);
+        logger.info("{}", gson.toJson(signedBody.getContent()));
+        objOut.writeObject(who);
+        objOut.writeObject(signedBody.getContent());
         objOut.writeObject(signedBody.getSignature());
         objOut.flush();
         byteOut.flush();

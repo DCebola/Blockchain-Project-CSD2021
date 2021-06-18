@@ -31,6 +31,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
     private static final String ERROR_MSG = "ERROR";
     private static final String IGNORE_MSG = "IGNORE_MSG";
+    private static final String REPLICA_TYPE = "REPLICA";
+
 
     private static final String INITIAL_NONCE = "0";
     private static final String NO_NONCE = "-1";

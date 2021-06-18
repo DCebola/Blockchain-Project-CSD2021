@@ -36,6 +36,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
     private static final String DUMMY_DESTINATION_2 = "DUMMY_DESTINATION_2";
     private static final String DUMMY_ORIGIN = "DUMMY_ORIGIN";
     private static final int DUMMY_AMOUNT = 100;
+    private static final String SANDBOX_TYPE = "SANDBOX";
 
 
     private final Logger logger;
@@ -99,10 +100,9 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         String pubKey = (String) objIn.readObject();
         int amount = objIn.readInt();
         Object smartContract = gson.fromJson((String) objIn.readObject(), SmartContract.class);
-        String date = (String) objIn.readObject();
         byte[] sigBytes = (byte[]) objIn.readObject();
         List<String> wallet = wallets.get(pubKey);
-        String msg = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(gson.toJson(amount)).concat(wallet.get(WALLET_NONCE)).concat(date);
+        String msg = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(gson.toJson(amount)).concat(wallet.get(WALLET_NONCE));
         if (wallet != null && amount > 0) {
             if (verifySignature(pubKey, msg, sigBytes)) {
                 Class<?> scClass = smartContract.getClass();
@@ -208,6 +208,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
     /************************************************ Auxiliary Response methods **************************************/
 
     private void writeReplicaDecision(ObjectOutput objOut, byte[] hash, boolean decision) throws IOException {
+        objOut.writeObject(SANDBOX_TYPE);
         objOut.writeInt(id);
         objOut.writeObject(hash);
         objOut.writeBoolean(decision);
