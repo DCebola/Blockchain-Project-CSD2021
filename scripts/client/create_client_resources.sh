@@ -25,6 +25,7 @@ for i in `seq $NUM_CLIENTS`; do
 	echo Created keypair for client$i 
 done
 
+cp SmartContract.class ../../client/src/main/resources
 cp *.jks ../../client/src/main/resources
 rm client*
 cd ..

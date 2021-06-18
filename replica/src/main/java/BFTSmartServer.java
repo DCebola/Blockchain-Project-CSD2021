@@ -837,15 +837,17 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         logger.debug("New GET_SYSTEM_SNAPSHOT operation");
 
         jedis = jedisPool.getResource();
-        List<String> serializedChain = jedis.lrange(BLOCK_CHAIN, 1, -1);
+        List<String> serializedChain = jedis.lrange(BLOCK_CHAIN, 0, -1);
+        List<Block> deserializedChain = new LinkedList<>();
+        serializedChain.forEach(t -> deserializedChain.add(gson.fromJson(t, Block.class)));
         jedis.close();
-
+        logger.debug("BlockChain: {}", serializedChain);
         Map<String, List<String>> wallets = getWallets();
-
+        logger.debug("Wallets: {}", wallets);
         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(NO_NONCE).getBytes());
         writeReplicaDecision(objOut, hash, true);
-        objOut.writeObject(serializedChain);
         objOut.writeObject(wallets);
+        objOut.writeObject(deserializedChain);
     }
 
     private Map<String, List<String>> getWallets() {
@@ -858,6 +860,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             jedis.close();
             for (String key : scanResult.getResult()) {
                 if (!key.equals(PENDING_TRANSACTIONS) && !key.equals(PENDING_REWARD) && !key.equals(BLOCK_CHAIN) && !wallets.containsKey(key)) {
+                    System.out.println(key);
                     jedis = jedisPool.getResource();
                     wallets.put(key, jedis.lrange(key, 1, -1));
                     jedis.close();

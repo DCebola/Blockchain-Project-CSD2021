@@ -349,10 +349,13 @@ public class LedgerController implements CommandLineRunner {
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
         objIn.readInt(); //ID
         objIn.readObject(); //Hash
-        quorumResponse = dispatchAsyncRequest(createValidateSmartContractRequest(who, signedBody,
-                (Map<String, List<String>>) objIn.readObject(),
-                (List<Block>) objIn.readObject()),
-                ORDERED_REQUEST, SANDBOX_TYPE);
+        objIn.readBoolean(); //Decision
+        Map<String, List<String>> wallets = (Map<String, List<String>>) objIn.readObject();
+        logger.info("{}", wallets);
+        List<Block> blockChain = (List<Block>) objIn.readObject();
+        logger.info("{}", blockChain);
+
+        quorumResponse = dispatchAsyncRequest(createValidateSmartContractRequest(who, signedBody, wallets, blockChain), ORDERED_REQUEST, SANDBOX_TYPE);
         objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
         objIn.readInt(); //ID
         byte[] hash = (byte[]) objIn.readObject();
@@ -397,6 +400,8 @@ public class LedgerController implements CommandLineRunner {
             targets = getAvailableReplicas();
         else
             targets = getAvailableSandboxes();
+        System.out.println(Arrays.toString(targets));
+        System.out.println(getQuorumSize(targets.length));
         asynchServiceProxy.invokeAsynchRequest(request, targets, new ReplyListenerImp<>(reply, getQuorumSize(targets.length), targets), messageType);
         return reply.get();
     }
@@ -407,9 +412,11 @@ public class LedgerController implements CommandLineRunner {
             if (id >= numReplicas)
                 sandboxes.add(id);
         }
+        System.out.println(Arrays.toString(sandboxes.toArray()));
         int[] found = new int[sandboxes.size()];
         for (int i = 0; i < sandboxes.size(); i++)
             found[i] = sandboxes.get(i);
+        System.out.println(Arrays.toString(found));
         return found;
     }
 
@@ -659,7 +666,6 @@ public class LedgerController implements CommandLineRunner {
         objOut.writeObject(LedgerRequestType.VALIDATE_SMART_CONTRACT);
         objOut.writeObject(wallets);
         objOut.writeObject(blockchain);
-        logger.info("{}", gson.toJson(signedBody.getContent()));
         objOut.writeObject(who);
         objOut.writeObject(signedBody.getDate());
         objOut.writeObject(signedBody.getContent());
@@ -674,7 +680,7 @@ public class LedgerController implements CommandLineRunner {
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.SMART_TRANSFER);
         logger.info("{}", gson.toJson(signedBody.getContent()));
-        SmartContractArgs  scArgs= signedBody.getContent();
+        SmartContractArgs scArgs = signedBody.getContent();
         objOut.writeObject(id);
         objOut.writeObject(scArgs.getOrigin());
         objOut.writeObject(scArgs.getAmount());

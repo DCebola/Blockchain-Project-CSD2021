@@ -7,6 +7,7 @@ mvn clean -f ../sandbox
 
 rm -rf ../client/config
 rm ../client/src/main/resources/*.jks 
+rm ../client/src/main/resources/SmartContract.class 
 rm -rf ../proxy/config
 rm -rf ../replica/config
 rm -rf ../sandbox/config

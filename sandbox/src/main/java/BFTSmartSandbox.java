@@ -80,7 +80,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
             ObjectInput objIn = new ObjectInputStream(byteIn);
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
-            if ((objIn.readObject()).equals(LedgerRequestType.INSTALL_SMART_CONTRACT)) {
+            if ((objIn.readObject()).equals(LedgerRequestType.VALIDATE_SMART_CONTRACT)) {
                 this.wallets = (Map<String, List<String>>) objIn.readObject();
                 this.blockChain = (List<Block>) objIn.readObject();
                 testContract(objIn, objOut);
@@ -102,13 +102,13 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         logger.debug("New TEST_CONTRACT operation.");
         String pubKey = (String) objIn.readObject();
         String date = (String) objIn.readObject();
-        byte[] byteCode = base32.decode((String) objIn.readObject());
+        String byteCode = (String) objIn.readObject();
         byte[] sigBytes = (byte[]) objIn.readObject();
         List<String> wallet = wallets.get(pubKey);
-        String msg = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(gson.toJson(byteCode)).concat(wallet.get(WALLET_NONCE));
+        String msg = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(byteCode).concat(date).concat(wallet.get(WALLET_NONCE));
         if (wallet != null) {
             if (verifySignature(pubKey, msg, sigBytes)) {
-                SmartContractLoader scLoader = new SmartContractLoader(byteCode, smartContractClassName);
+                SmartContractLoader scLoader = new SmartContractLoader(base32.decode(byteCode), smartContractClassName);
                 if (scLoader.loadSmartContract()) {
                     ISmartContract smartContract;
                     try {

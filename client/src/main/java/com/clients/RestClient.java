@@ -13,7 +13,10 @@ import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContextBuilder;
+import org.apache.tomcat.util.http.fileupload.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -24,10 +27,10 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -60,6 +63,9 @@ public class RestClient {
     private static final String SEND_MINED_BLOCK_URL = "https://127.0.0.1:%s/mine";
     private static final String TRANSFER_MONEY_WITH_PRIVACY_URL = "https://127.0.0.1:%s/privacyTransfer";
     private static final String OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS_URL = "https://127.0.0.1:%s/%s/obtainNotSubmittedTransactions";
+    private static final String INSTALL_SMART_CONTRACT_URL = "https://127.0.0.1:%s/%s/installSmartContract";
+    ;
+
 
     private static final int REGISTER = 0;
     private static final int REQUEST_NONCE = 1;
@@ -73,14 +79,15 @@ public class RestClient {
     private static final int MINE_TRANSACTIONS = 9;
     private static final int TRANSFER_MONEY_WITH_PRIVACY = 10;
     private static final int OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS = 11;
-    private static final int QUIT = 12;
+    private static final int INSTALL_SMART_CONTRACT = 12;
+    private static final int QUIT = 13;
 
 
     private static final int ALL = 0;
     private static final int UP_TO = 1;
     private static final int IN_BETWEEN = 2;
 
-    private static String hash_algorithm;
+    private static String hashAlgorithm;
     private static String challenge;
     private static BigInteger reward;
 
@@ -89,14 +96,16 @@ public class RestClient {
     private static Session currentSession;
     private static String port;
     private static DateTimeFormatter dateTimeFormatter;
+    private static String smartContractPath;
 
     public static void main(String[] args) throws Exception {
         Properties properties = new Properties();
         properties.load(new FileInputStream("src/main/resources/client.config"));
         port = args[0];
-        hash_algorithm = properties.getProperty("hash_algorithm");
+        hashAlgorithm = properties.getProperty("hash_algorithm");
         challenge = properties.getProperty("challenge");
         reward = new BigInteger(properties.getProperty("mining_reward"));
+        smartContractPath = properties.getProperty("smartContractPath");
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         base32 = new Base32();
@@ -163,6 +172,9 @@ public class RestClient {
                 case OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS:
                     obtainUserNotSubmittedTransactions(requestFactory, in);
                     break;
+                case INSTALL_SMART_CONTRACT:
+                    installSmartContract(requestFactory, in);
+                    break;
                 case QUIT:
                     in.close();
                     break;
@@ -173,6 +185,7 @@ public class RestClient {
             }
         }
     }
+
 
     private static void setSession(Scanner in) throws IOException {
         System.out.print("Insert username: ");
@@ -196,7 +209,7 @@ public class RestClient {
         BigInteger nsquare = new BigInteger(properties.getProperty("nsquare"));
         BigInteger g = new BigInteger(properties.getProperty("g"));
         BigInteger mu = new BigInteger(properties.getProperty("mu"));
-        return new PaillierKey(p,q,lambda,n,nsquare,g,mu);
+        return new PaillierKey(p, q, lambda, n, nsquare, g, mu);
     }
 
     private static void printSession() {
@@ -219,7 +232,8 @@ public class RestClient {
         System.out.println("9 - Mine transactions");
         System.out.println("10 - Transfer money with privacy");
         System.out.println("11 - Obtain user not submitted transactions");
-        System.out.println("12 - Quit");
+        System.out.println("12 - Install Smart Contract");
+        System.out.println("13 - Quit");
         System.out.print("> ");
     }
 
@@ -234,7 +248,7 @@ public class RestClient {
         try {
             setSession(in);
             PaillierKey pk = currentSession.getPk();
-            BigInteger encryptedZero = HomoAdd.encrypt(new BigInteger("0"),pk);
+            BigInteger encryptedZero = HomoAdd.encrypt(new BigInteger("0"), pk);
             //BigInteger encrypted10 = HomoAdd.encrypt(new BigInteger("0"),pk);
             BigInteger pkNSquare = pk.getNsquare();
             //pk = new PaillierKey(currentSession.getPk().getP(), currentSession.getPk().getQ(),currentSession.getPk().getLambda(),currentSession.getPk().getN(),currentSession.getPk().getNsquare(),currentSession.getPk().getG(),currentSession.getPk().getMu());
@@ -256,7 +270,7 @@ public class RestClient {
 
 
             HttpEntity<RegisterKeyMsgBody> request = new HttpEntity<>(
-                    new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm(),encryptedZero,pkNSquare));
+                    new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm(), encryptedZero, pkNSquare));
             ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(REGISTER_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
@@ -301,13 +315,13 @@ public class RestClient {
             if (response.getStatusCode().is2xxSuccessful()) {
                 String[] balanceInfo = response.getBody().split(" ");
                 BigInteger balance = new BigInteger(balanceInfo[0]);
-                if(balanceInfo.length > 1) {
+                if (balanceInfo.length > 1) {
                     BigInteger encryptedBalance = new BigInteger(balanceInfo[1]);
-                    BigInteger result = HomoAdd.decrypt(encryptedBalance,pk);
+                    BigInteger result = HomoAdd.decrypt(encryptedBalance, pk);
                     System.out.println(result);
                     balance = balance.add(result);
                 }
-                
+
                 System.out.println("Balance: " + balance);
             }
 
@@ -355,23 +369,23 @@ public class RestClient {
                 = new RestTemplate(requestFactory).exchange(
                 String.format(OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, TransactionsForSubmissionInfo.class);
 
-        if(response.getStatusCode().is2xxSuccessful()) {
+        if (response.getStatusCode().is2xxSuccessful()) {
             TransactionsForSubmissionInfo transactionsForSubmissionInfo = response.getBody();
             assert transactionsForSubmissionInfo != null;
             List<InfoForDestination> transactionsInfo = transactionsForSubmissionInfo.getTransactionsInfo();
-            for(InfoForDestination info: transactionsInfo) {
+            for (InfoForDestination info : transactionsInfo) {
                 String currentDate = LocalDateTime.now().format(dateTimeFormatter);
                 byte[] bytes = Base64.getDecoder().decode(info.getSecretValue());
                 Cipher decriptCipher = Cipher.getInstance("RSA");
                 decriptCipher.init(Cipher.DECRYPT_MODE, currentSession.getPrivateKey());
                 BigInteger amount = new BigInteger(new String(decriptCipher.doFinal(bytes), StandardCharsets.UTF_8));
-                BigInteger encryptedAmount = HomoAdd.encrypt(amount,currentSession.getPk());
-                Transaction t = new Transaction(info.getOrigin(),info.getDestination(),null,currentDate,encryptedAmount, info.getDestination(), info.getDestinationPointer());
-                TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(t,"");
+                BigInteger encryptedAmount = HomoAdd.encrypt(amount, currentSession.getPk());
+                Transaction t = new Transaction(info.getOrigin(), info.getDestination(), null, currentDate, encryptedAmount, info.getDestination(), info.getDestinationPointer());
+                TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(t, "");
                 String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY.name().
                         concat(gson.toJson(t)).concat("").concat(currentSession.getNonce()).concat(currentDate);
                 byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
-                SignedBody<TransactionPlusSecretValue> signedBody = new SignedBody<>(transactionPlusSecretValue,sigBytes,currentDate);
+                SignedBody<TransactionPlusSecretValue> signedBody = new SignedBody<>(transactionPlusSecretValue, sigBytes, currentDate);
                 HttpEntity<SignedBody<TransactionPlusSecretValue>> request = new HttpEntity<>(signedBody);
                 ResponseEntity<ValidTransaction> finalResponse
                         = new RestTemplate(requestFactory).exchange(
@@ -384,8 +398,8 @@ public class RestClient {
 
 
     private static void transferMoneyWithPrivacy(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws Exception {
-        if(currentSession == null)
-            requestNonce(requestFactory,in);
+        if (currentSession == null)
+            requestNonce(requestFactory, in);
 
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
         System.out.print("Insert destination: ");
@@ -394,8 +408,8 @@ public class RestClient {
         in.nextLine();
         System.out.print("Insert amount: ");
         BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
-        BigInteger encryptedAmount = HomoAdd.encrypt(amount,currentSession.getPk());
-        String secretValue = encryptWithDestinationPublicKey(destination,amount);
+        BigInteger encryptedAmount = HomoAdd.encrypt(amount, currentSession.getPk());
+        String secretValue = encryptWithDestinationPublicKey(destination, amount);
 
         Transaction t = new Transaction(
                 origin,
@@ -406,12 +420,12 @@ public class RestClient {
                 origin,
                 null);
 
-        TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(t,secretValue);
+        TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(t, secretValue);
         String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY.name().
                 concat(gson.toJson(t)).concat(secretValue).concat(currentSession.getNonce()).concat(currentDate);
 
         byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
-        SignedBody<TransactionPlusSecretValue> signedBody = new SignedBody<>(transactionPlusSecretValue,sigBytes,currentDate);
+        SignedBody<TransactionPlusSecretValue> signedBody = new SignedBody<>(transactionPlusSecretValue, sigBytes, currentDate);
         HttpEntity<SignedBody<TransactionPlusSecretValue>> request = new HttpEntity<>(signedBody);
         ResponseEntity<ValidTransaction> response
                 = new RestTemplate(requestFactory).exchange(
@@ -526,7 +540,7 @@ public class RestClient {
 
     private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), RestClient.reward, currentDate,null,null,null);
+        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), RestClient.reward, currentDate, null, null, null);
         BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader, reward);
         String msgToBeHashed = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(currentSession.getNonce());
         System.out.println(msgToBeHashed);
@@ -562,9 +576,33 @@ public class RestClient {
 
     private static byte[] hashBlock(BlockHeader blockHeader) throws NoSuchAlgorithmException {
         byte[] block = gson.toJson(blockHeader).getBytes();
-        MessageDigest hash = MessageDigest.getInstance("SHA-256");
+        MessageDigest hash = MessageDigest.getInstance(hashAlgorithm);
         hash.update(block);
         return hash.digest();
+    }
+
+
+    private static void installSmartContract(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws IOException, NoSuchAlgorithmException, SignatureException, InvalidKeyException {
+        if (currentSession == null)
+            requestNonce(requestFactory, in);
+        String currentDate = LocalDateTime.now().format(dateTimeFormatter);
+
+        File f = new File(smartContractPath);
+        byte[] byteCode = new byte[(int) f.length()];
+        DataInputStream dis = new DataInputStream(new FileInputStream(smartContractPath));
+        dis.readFully(byteCode);
+
+        String encodedByteCode = base32.encodeAsString(byteCode);
+        String msgToBeHashed = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(encodedByteCode).concat(currentDate).concat(currentSession.getNonce());
+        System.out.println(msgToBeHashed);
+        byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+        SignedBody<String> signedBody = new SignedBody<>(encodedByteCode, sigBytes, currentDate);
+        HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
+        ResponseEntity<ValidTransaction> response
+                = new RestTemplate(requestFactory).exchange(
+                String.format(INSTALL_SMART_CONTRACT_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())),
+                HttpMethod.POST, request, ValidTransaction.class);
+        processResponseWithTransaction(response);
     }
 
     private static DateInterval getDateInterval(Scanner in) {
@@ -698,7 +736,7 @@ public class RestClient {
             this.publicKey = cert.getPublicKey();
             this.privateKey = (PrivateKey) keystore.getKey(username, password);
             this.sigAlg = cert.getSigAlgName();
-            this.hashAlgorithm = hash_algorithm;
+            this.hashAlgorithm = RestClient.hashAlgorithm;
             this.transactions = new LinkedList<>();
         }
 
