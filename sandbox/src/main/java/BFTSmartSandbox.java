@@ -42,7 +42,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
     private final Base32 base32;
     private final int id;
     private Map<String, List<String>> wallets;
-    private TreeSet<Block> blockchain;
+    private List<Block> blockChain;
     private final int timeout;
 
     public BFTSmartSandbox(int id) throws IOException {
@@ -77,7 +77,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
             ObjectOutput objOut = new ObjectOutputStream(byteOut);
             if ((objIn.readObject()).equals(LedgerRequestType.INSTALL_SMART_CONTRACT)) {
                 this.wallets = (Map<String, List<String>>) objIn.readObject();
-                this.blockchain = new TreeSet<>((List<Block>) objIn.readObject());
+                this.blockChain = (List<Block>) objIn.readObject();
                 testContract(objIn, objOut);
             } else {
                 logger.info("Ignored operation.");
@@ -254,13 +254,13 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
                 nextEvent = sc.run();
                 switch (nextEvent) {
                     case READ_TRANSACTION:
-                        sc.read(gson.toJson(findTransaction(sc.getReadTarget())));
+                        sc.readTransaction(gson.toJson(findTransaction(sc.getReadTarget())));
                         break;
                     case READ_CLIENT_LEDGER:
-                        sc.read(gson.toJson(getLedger(sc.getReadTarget())));
+                        sc.readBalance(gson.toJson(getLedger(sc.getReadTarget())));
                         break;
                     case READ_BALANCE:
-                        sc.read(gson.toJson(getBalance(sc.getReadTarget())));
+                        sc.readLedger(gson.toJson(getBalance(sc.getReadTarget())));
                         break;
                 }
             }
@@ -268,15 +268,44 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         }
     }
 
-    private int getBalance(String walletKey) {
-        return 0;
+    private double getBalance(String walletKey) {
+        double balance = 0;
+        if (!wallets.containsKey(walletKey)) {
+            return -1;
+        }
+        for (Block block : blockChain) {
+            List<ValidTransaction> validTransactions = block.getSignedTransactions();
+            for (ValidTransaction t : validTransactions) {
+                if (t.getOrigin().equals(walletKey))
+                    balance -= t.getAmount();
+                else if (t.getDestination().equals(walletKey))
+                    balance += t.getAmount();
+            }
+        }
+        return balance;
     }
 
     private List<ValidTransaction> getLedger(String walletKey) {
-        return null;
+        List<ValidTransaction> ledger = new LinkedList<>();
+        for (Block block : blockChain) {
+            List<ValidTransaction> validTransactions = block.getSignedTransactions();
+            for (ValidTransaction transaction : validTransactions) {
+                if (transaction.getOrigin().equals(walletKey) || transaction.getDestination().equals(walletKey))
+                    ledger.add(transaction);
+            }
+        }
+        return ledger;
     }
 
     private ValidTransaction findTransaction(String id) {
+        for (Block block : blockChain) {
+            List<ValidTransaction> validTransactions = block.getSignedTransactions();
+            for (ValidTransaction transaction : validTransactions) {
+                if (transaction.getId().equals(id))
+                    return transaction;
+            }
+        }
         return null;
     }
+
 }

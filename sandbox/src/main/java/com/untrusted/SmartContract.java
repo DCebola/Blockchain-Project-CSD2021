@@ -19,7 +19,7 @@ public class SmartContract implements Serializable {
     private String currentOrigin;
     private int availableFunds;
     private List<String> currentDestinations;
-    private String tempMemory;
+    private List<String> tempMemory;
     private String readTarget;
 
 
@@ -73,6 +73,7 @@ public class SmartContract implements Serializable {
         this.availableFunds = amount;
         this.currentDestinations = destinations;
         this.readTarget = null;
+        this.tempMemory = new LinkedList<>();
         return SmartContractEvent.BEGIN;
     }
 
@@ -81,12 +82,20 @@ public class SmartContract implements Serializable {
         return SmartContractEvent.STOP;
     }
 
-    public String getReadTarget(){
+    public String getReadTarget() {
         return readTarget;
     }
 
-    public void read(String data){
-        this.tempMemory = data;
+    public void readTransaction(String data) {
+        this.tempMemory.add(data);
+    }
+
+    public void readLedger(String data) {
+        this.tempMemory.add(data);
+    }
+
+    public void readBalance(String data) {
+        this.tempMemory.add(data);
     }
 
     public List<Transaction> getOutput() {
