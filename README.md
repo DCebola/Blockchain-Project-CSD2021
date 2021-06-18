@@ -59,6 +59,8 @@ note: BFTSMaRT is configured for benchmark so only one key pair is provided for 
 
 **[DEPLOY]**
 
+(Note! ECDSA does not work with private transaction.)
+
 To deploy the proxies, replicas and redis containers to a custom network use **deploy <n_proxies> <n_faults> [-tls <key_type>]**
 
 Ex.1 To deploy a system that can tolerate 1 fault, uses TLS with ECDSA and creates 5 proxies
@@ -75,9 +77,11 @@ Ex.2 To deploy a system that can tolerate 1 fault, uses TLS with RSA and creates
 
 We created a custom docker network **bftsmart-net** with a subnet 172.18.0.0/16.
 
-The proxy container for the proxy with id n is name **proxy-n**, uses the ip **172.18.10.n** and exposes its **8443** port on **127.0.0.1:900n**.
+The proxy container for the proxy with id n is named **proxy-n**, uses the ip **172.18.10.n** and exposes its **8443** port on **127.0.0.1:900n**.
 
-The replica container for the replica with id n is name **replica-n**, uses the ip **172.18.20.n**.
+The replica container for the replica with id n is named **replica-n**, uses the ip **172.18.20.n**.
+
+The sandbox container for the sandbox with id n is named **sandbox-n**, uses the ip **172.18.20.2\*n**.
 
 The redis container for the redis instance of the replica n is name **redis-n**, uses the ip **172.18.30.n**.
 
@@ -85,8 +89,13 @@ The redis container for the redis instance of the replica n is name **redis-n**,
 
 ## Command line client
 
-To run the command line client use **java -cp target/demo-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.RestClient org.springframework.boot.loader.PropertiesLauncher <proxy port_to_connect>**
+To run the command line client use **java -cp target/client-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.RestClient org.springframework.boot.loader.PropertiesLauncher <proxy port_to_connect>**
+  
+ ## Benchmark client
 
+(Note! Benchmark client is outdated and is not compatible with recent version of the system, due to changes necessary for the transactions with privacy.)
+
+To run the benchmark client use **java -cp target/client-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.BenchmarkClient org.springframework.boot.loader.PropertiesLauncher <proxy port_to_connect> <file with ops in resources folder> <key-alias> <key-pass> **
 
 
 Authors:
