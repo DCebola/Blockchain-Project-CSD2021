@@ -1,9 +1,8 @@
 package com.proxy.controllers;
 
-import com.proxy.controllers.Transaction;
 import java.io.Serializable;
-import java.util.*;
-import java.math.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SmartContract implements Serializable {
 

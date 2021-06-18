@@ -14,6 +14,13 @@ public class SmartContract implements Serializable {
     private final String author;
     private final String date;
     private final List<Transaction> output;
+    private String currentOrigin;
+    private int availableFunds;
+    private List<String> currentDestinations;
+    private String tempMemory;
+    private String readTarget;
+
+
     private String signature;
     private int[] validatorIDs;
     private String hash;
@@ -27,6 +34,10 @@ public class SmartContract implements Serializable {
         this.signature = null;
         this.validatorIDs = null;
         this.hash = null;
+        this.currentOrigin = null;
+        this.availableFunds = -1;
+        this.currentDestinations = null;
+        this.readTarget = null;
     }
 
     public SmartContract() {
@@ -37,6 +48,10 @@ public class SmartContract implements Serializable {
         this.signature = null;
         this.validatorIDs = null;
         this.hash = null;
+        this.currentOrigin = null;
+        this.availableFunds = -1;
+        this.currentDestinations = null;
+        this.readTarget = null;
     }
 
     public int getOutputNumber() {
@@ -51,10 +66,28 @@ public class SmartContract implements Serializable {
         return date;
     }
 
-    public List<Transaction> exec(String origin, int amount, List<String> destinations) {
-        assert output != null;
-        output.clear();
-        // Do stuff
+    public SmartContractEvent init(String origin, int amount, List<String> destinations) {
+        this.currentOrigin = origin;
+        this.availableFunds = amount;
+        this.currentDestinations = destinations;
+        this.readTarget = null;
+        return SmartContractEvent.BEGIN;
+    }
+
+    public SmartContractEvent run() {
+        // Define contract behaviour here.
+        return SmartContractEvent.STOP;
+    }
+
+    public String getReadTarget(){
+        return readTarget;
+    }
+
+    public void read(String data){
+        this.tempMemory = data;
+    }
+
+    public List<Transaction> getOutput() {
         return output;
     }
 

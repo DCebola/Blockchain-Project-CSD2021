@@ -297,9 +297,9 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
-    @PostMapping("/smartTransfer")
+    @PostMapping("/smartTransfer/{id}")
     @ResponseStatus(HttpStatus.OK)
-    public List<ValidTransaction> transferMoneyWithSmartContract(@RequestBody SignedBody<SmartContract> signedBody) {
+    public List<ValidTransaction> transferMoneyWithSmartContract(@RequestBody SignedBody<SmartContractArgs> signedBody) {
         return new LinkedList<>();
     }
 

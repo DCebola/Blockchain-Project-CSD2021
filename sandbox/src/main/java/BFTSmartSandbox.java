@@ -3,9 +3,7 @@ import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 import bftsmart.tom.util.TOMUtil;
 import com.google.gson.Gson;
-import com.models.Block;
-import com.models.LedgerRequestType;
-import com.models.Transaction;
+import com.models.*;
 import com.untrusted.SmartContract;
 import org.apache.commons.codec.binary.Base32;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -134,7 +132,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
                                 byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
                                 writeReplicaDecision(objOut, hash, false);
                             }
-                        }else{
+                        } else {
                             logger.info("Mismatched author.");
                             byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
                             writeReplicaDecision(objOut, hash, false);
@@ -251,7 +249,34 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
 
         @Override
         public List<Transaction> call() {
-            return sc.exec(origin, amount, destinations);
+            SmartContractEvent nextEvent = sc.init(origin, amount, destinations);
+            while (nextEvent != SmartContractEvent.STOP) {
+                nextEvent = sc.run();
+                switch (nextEvent) {
+                    case READ_TRANSACTION:
+                        sc.read(gson.toJson(findTransaction(sc.getReadTarget())));
+                        break;
+                    case READ_CLIENT_LEDGER:
+                        sc.read(gson.toJson(getLedger(sc.getReadTarget())));
+                        break;
+                    case READ_BALANCE:
+                        sc.read(gson.toJson(getBalance(sc.getReadTarget())));
+                        break;
+                }
+            }
+            return sc.getOutput();
         }
+    }
+
+    private int getBalance(String walletKey) {
+        return 0;
+    }
+
+    private List<ValidTransaction> getLedger(String walletKey) {
+        return null;
+    }
+
+    private ValidTransaction findTransaction(String id) {
+        return null;
     }
 }
