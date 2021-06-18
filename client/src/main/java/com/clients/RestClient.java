@@ -316,13 +316,34 @@ public class RestClient {
 
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
         System.out.print("Insert destination: ");
+        String origin = base32.encodeAsString(currentSession.getPublicKey().getEncoded());
         String destination = in.next();
         in.nextLine();
         System.out.print("Insert amount: ");
         BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
-        BigInteger homomorphicEncryptedAmount = HomoAdd.encrypt(amount,currentSession.getPk());
-        String encryptedWithDestinationPublicKey = encryptWithDestinationPublicKey(destination,amount);
-        //Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()),destination,amount,)
+        BigInteger encryptedAmount = HomoAdd.encrypt(amount,currentSession.getPk());
+        String secretValue = encryptWithDestinationPublicKey(destination,amount);
+
+        Transaction t = new Transaction(
+                origin,
+                destination,
+                null,
+                currentDate,
+                encryptedAmount,
+                origin,
+                null);
+
+        TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(t,secretValue);
+        String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY.name().
+                concat(gson.toJson(t)).concat(secretValue).concat(currentSession.getNonce()).concat(currentDate);
+
+        byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+        SignedBody<TransactionPlusSecretValue> signedBody = new SignedBody<>(transactionPlusSecretValue,sigBytes,currentDate);
+        HttpEntity<SignedBody<TransactionPlusSecretValue>> request = new HttpEntity<>(signedBody);
+        ResponseEntity<ValidTransaction> response
+                = new RestTemplate(requestFactory).exchange(
+                String.format(TRANSFER_MONEY_WITH_PRIVACY_URL, port), HttpMethod.POST, request, ValidTransaction.class);
+        processResponseWithTransaction(response);
     }
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {

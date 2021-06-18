@@ -304,7 +304,6 @@ public class BenchmarkClient {
             long duration = System.currentTimeMillis() - start;
             writer.append(opType.concat("\t").concat(Long.toString(duration)).concat("\n"));
         }
-
     }
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, BigInteger amount, BufferedWriter writer) {

@@ -103,6 +103,26 @@ public class LedgerController implements CommandLineRunner {
         }
     }
 
+    @PostMapping("/privacyTransfer")
+    @ResponseStatus(HttpStatus.OK)
+    public ValidTransaction transferMoneyWithPrivacy(@RequestBody SignedBody<TransactionPlusSecretValue> signedBody) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createTransferMoneyWithPrivacyRequest(signedBody), ORDERED_REQUEST);
+        ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readInt();
+        byte[] hash = (byte[]) objIn.readObject();
+        if (!objIn.readBoolean()) {
+            logger.info("BAD REQUEST");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        } else {
+            SignedTransaction signedTransaction = (SignedTransaction) objIn.readObject();
+            String secretValue = (String) objIn.readObject();
+            TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(signedTransaction,secretValue);
+            ValidTransaction validTransaction = commitPrivateTransaction(transactionPlusSecretValue, hash, quorumResponse);
+            logger.info("OK. {} transferred {} coins to {}.", validTransaction.getOrigin(), validTransaction.getAmount(), validTransaction.getDestination());
+            return validTransaction;
+        }
+    }
+
 
     @PostMapping("/transferMoney")
     @ResponseStatus(HttpStatus.OK)
@@ -291,12 +311,6 @@ public class LedgerController implements CommandLineRunner {
 
     }
 
-    @PostMapping("/privacyTransfer")
-    @ResponseStatus(HttpStatus.OK)
-    public void transferMoneyWithPrivacy(@RequestBody SignedBody<Transaction> signedBody) {
-
-    }
-
     @PostMapping("/{who}/installSmartContract")
     @ResponseStatus(HttpStatus.OK)
     public void installSmartContract(@PathVariable String who, @RequestBody SmartContract smartContract) {
@@ -344,6 +358,12 @@ public class LedgerController implements CommandLineRunner {
     private ValidTransaction commitTransaction(SignedTransaction signedTransaction, byte[] hash, QuorumResponse quorumResponse) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
         Commit<SignedTransaction> commit = new Commit<>(signedTransaction, base32.encodeAsString(hash), quorumResponse.getReplicas());
         quorumResponse = commit(commit, LedgerRequestType.COMMIT_TRANSACTION);
+        return getCommitResponse(quorumResponse);
+    }
+
+    private ValidTransaction commitPrivateTransaction(TransactionPlusSecretValue transactionPlusSecretValue,byte[] hash, QuorumResponse quorumResponse) throws IOException, ExecutionException, InterruptedException, ClassNotFoundException {
+        Commit<TransactionPlusSecretValue> commit = new Commit<>(transactionPlusSecretValue, base32.encodeAsString(hash), quorumResponse.getReplicas());
+        quorumResponse = commit(commit, LedgerRequestType.COMMIT_TRANSFER_WITH_PRIVACY);
         return getCommitResponse(quorumResponse);
     }
 
@@ -399,6 +419,21 @@ public class LedgerController implements CommandLineRunner {
         objOut.writeObject(signedBody.getSignature());
         objOut.writeObject(signedBody.getDate());
         objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+    private byte[] createTransferMoneyWithPrivacyRequest(SignedBody<TransactionPlusSecretValue> signedBody) throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objectOutput = new ObjectOutputStream(byteOut);
+        objectOutput.writeObject(LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY);
+        TransactionPlusSecretValue transactionPlusSecretValue = signedBody.getContent();
+        Transaction transaction = transactionPlusSecretValue.getTransaction();
+        String secretValue = transactionPlusSecretValue.getSecretValue();
+        objectOutput.writeObject(transaction);
+        objectOutput.writeObject(secretValue);
+        objectOutput.writeObject(signedBody.getSignature());
+        objectOutput.flush();
         byteOut.flush();
         return byteOut.toByteArray();
     }
