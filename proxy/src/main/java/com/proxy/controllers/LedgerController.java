@@ -17,6 +17,7 @@ import static bftsmart.tom.core.messages.TOMMessageType.UNORDERED_REQUEST;
 import java.io.*;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 
 @RestController
@@ -312,8 +313,17 @@ public class LedgerController implements CommandLineRunner {
     @PostMapping("/{who}/installSmartContract")
     @ResponseStatus(HttpStatus.OK)
     public String installSmartContract(@PathVariable String who, @RequestBody SignedBody<SmartContract> signedBody) throws IOException, ClassNotFoundException, ExecutionException, InterruptedException {
-        QuorumResponse quorumResponse = dispatchAsyncRequest(createValidateSmartContractRequest(who, signedBody), ORDERED_REQUEST, SANDBOX_TYPE);
+
+        QuorumResponse quorumResponse = dispatchAsyncRequest(createGetSystemSnapshot(), UNORDERED_REQUEST, REPLICA_TYPE);
         ObjectInput objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
+        objIn.readObject(); //Type
+        objIn.readInt(); //ID
+        objIn.readObject(); //Hash
+        quorumResponse = dispatchAsyncRequest(createValidateSmartContractRequest(who, signedBody,
+                (Map<String, List<String>>) objIn.readObject(),
+                (List<Block>) objIn.readObject()),
+                ORDERED_REQUEST, SANDBOX_TYPE);
+        objIn = new ObjectInputStream(new ByteArrayInputStream(quorumResponse.getResponse()));
         objIn.readObject(); //Type
         objIn.readInt(); //ID
         byte[] hash = (byte[]) objIn.readObject();
@@ -531,10 +541,22 @@ public class LedgerController implements CommandLineRunner {
     }
 
 
-    private byte[] createValidateSmartContractRequest(String who, SignedBody<SmartContract> signedBody) throws IOException {
+    private byte[] createGetSystemSnapshot() throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutput objOut = new ObjectOutputStream(byteOut);
+        objOut.writeObject(LedgerRequestType.GET_SYSTEM_SNAPSHOT);
+        objOut.flush();
+        byteOut.flush();
+        return byteOut.toByteArray();
+    }
+
+
+    private byte[] createValidateSmartContractRequest(String who, SignedBody<SmartContract> signedBody, Map<String, List<String>> wallets, List<Block> blockchain) throws IOException {
         ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
         ObjectOutput objOut = new ObjectOutputStream(byteOut);
         objOut.writeObject(LedgerRequestType.VALIDATE_SMART_CONTRACT);
+        objOut.writeObject(wallets);
+        objOut.writeObject(blockchain);
         logger.info("{}", gson.toJson(signedBody.getContent()));
         objOut.writeObject(who);
         objOut.writeObject(signedBody.getContent());

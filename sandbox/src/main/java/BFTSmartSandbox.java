@@ -203,70 +203,6 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         return hash.digest();
     }
 
-    /************************************************ Auxiliary Response methods **************************************/
-
-    private void writeReplicaDecision(ObjectOutput objOut, byte[] hash, boolean decision) throws IOException {
-        objOut.writeObject(SANDBOX_TYPE);
-        objOut.writeInt(id);
-        objOut.writeObject(hash);
-        objOut.writeBoolean(decision);
-    }
-
-    /*** Ordered requests' responses **/
-
-
-    /*** Unordered requests' responses **/
-
-
-    /************************************************* Snapshot methods ***********************************************/
-
-    @Override
-    public void installSnapshot(byte[] bytes) {
-
-    }
-
-    @Override
-    public byte[] getSnapshot() {
-        return new byte[0];
-    }
-
-    private class sandboxThread implements Callable<List<Transaction>> {
-
-        private static final String TEST_ORIGIN = "DUMMY_ORIGIN";
-        private static final int TEST_AMOUNT_1 = 100;
-
-        private final SmartContract sc;
-        private final String origin;
-        private final int amount;
-        private final List<String> destinations;
-
-        public sandboxThread(SmartContract sc, String origin, int amount, List<String> destinations) {
-            this.sc = sc;
-            this.origin = origin;
-            this.amount = amount;
-            this.destinations = destinations;
-        }
-
-        @Override
-        public List<Transaction> call() {
-            SmartContractEvent nextEvent = sc.init(origin, amount, destinations);
-            while (nextEvent != SmartContractEvent.STOP) {
-                nextEvent = sc.run();
-                switch (nextEvent) {
-                    case READ_TRANSACTION:
-                        sc.readTransaction(gson.toJson(findTransaction(sc.getReadTarget())));
-                        break;
-                    case READ_CLIENT_LEDGER:
-                        sc.readBalance(gson.toJson(getLedger(sc.getReadTarget())));
-                        break;
-                    case READ_BALANCE:
-                        sc.readLedger(gson.toJson(getBalance(sc.getReadTarget())));
-                        break;
-                }
-            }
-            return sc.getOutput();
-        }
-    }
 
     private double getBalance(String walletKey) {
         double balance = 0;
@@ -308,4 +244,61 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         return null;
     }
 
+    /************************************************ Auxiliary Response methods **************************************/
+
+    private void writeReplicaDecision(ObjectOutput objOut, byte[] hash, boolean decision) throws IOException {
+        objOut.writeObject(SANDBOX_TYPE);
+        objOut.writeInt(id);
+        objOut.writeObject(hash);
+        objOut.writeBoolean(decision);
+    }
+
+    /************************************************* Snapshot methods ***********************************************/
+
+    @Override
+    public void installSnapshot(byte[] bytes) {
+
+    }
+
+    @Override
+    public byte[] getSnapshot() {
+        return new byte[0];
+    }
+
+    /************************************************* Execution thread ***********************************************/
+
+    private class sandboxThread implements Callable<List<Transaction>> {
+
+        private final SmartContract sc;
+        private final String origin;
+        private final int amount;
+        private final List<String> destinations;
+
+        public sandboxThread(SmartContract sc, String origin, int amount, List<String> destinations) {
+            this.sc = sc;
+            this.origin = origin;
+            this.amount = amount;
+            this.destinations = destinations;
+        }
+
+        @Override
+        public List<Transaction> call() {
+            SmartContractEvent nextEvent = sc.init(origin, amount, destinations);
+            while (nextEvent != SmartContractEvent.STOP) {
+                nextEvent = sc.run();
+                switch (nextEvent) {
+                    case READ_TRANSACTION:
+                        sc.readTransaction(gson.toJson(findTransaction(sc.getReadTarget())));
+                        break;
+                    case READ_CLIENT_LEDGER:
+                        sc.readBalance(gson.toJson(getLedger(sc.getReadTarget())));
+                        break;
+                    case READ_BALANCE:
+                        sc.readLedger(gson.toJson(getBalance(sc.getReadTarget())));
+                        break;
+                }
+            }
+            return sc.getOutput();
+        }
+    }
 }
