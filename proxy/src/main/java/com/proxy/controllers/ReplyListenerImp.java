@@ -21,15 +21,13 @@ public class ReplyListenerImp<T> implements ReplyListener {
     private int numReplies;
     private final int quorumSize;
     private final Map<String, List<Integer>> hashes;
-    private final String target;
 
-    public ReplyListenerImp(CompletableFuture<T> reply, int quorumSize, String target) {
+    public ReplyListenerImp(CompletableFuture<T> reply, int quorumSize) {
         this.objectInput = null;
         this.reply = reply;
         this.numReplies = 0;
         this.quorumSize = quorumSize;
         this.hashes = new HashMap<>(quorumSize);
-        this.target = target;
     }
 
     @Override
@@ -43,8 +41,7 @@ public class ReplyListenerImp<T> implements ReplyListener {
             numReplies++;
             try {
                 objectInput = new ObjectInputStream(new ByteArrayInputStream(tomMessage.getContent()));
-                if (target.equals(objectInput.readObject())) {
-                    int id = objectInput.readInt();
+                int id = objectInput.readInt();
                     byte[] hash = (byte[]) objectInput.readObject();
                     String hashOperation = Utils.toHex(hash);
                     List<Integer> replicas = hashes.get(hashOperation);
@@ -58,7 +55,6 @@ public class ReplyListenerImp<T> implements ReplyListener {
                         QuorumResponse op = new QuorumResponse(tomMessage.getContent(), replicas);
                         reply.complete((T) op);
                     }
-                }
             } catch (IOException | ClassNotFoundException e) {
                 e.printStackTrace();
             }

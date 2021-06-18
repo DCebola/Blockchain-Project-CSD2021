@@ -33,8 +33,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
     private static final String ERROR_MSG = "ERROR";
     private static final String IGNORE_MSG = "IGNORE_MSG";
-    private static final String REPLICA_TYPE = "REPLICA";
-    private static final String SANDBOX_TYPE = "REPLICA";
 
     private static final String INITIAL_NONCE = "0";
     private static final String NO_NONCE = "-1";
@@ -47,10 +45,15 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final int SIGNATURE_ALGORITHM = 1;
     private static final int HASH_ALGORITHM = 2;
     private static final int WALLET_NONCE = 3;
+    private static final int ENCRYPTED_ZERO = 4;
+    private static final int NSQUARE = 5;
     private static final int TRANSACTION_ID_SIZE = 20;
 
     private static final String NORMAL_TRANSACTION_ID_PREFIX = "0xT";
     private static final String REWARD_TRANSACTION_ID_PREFIX = "0xTB";
+    private static final String PRIVATE_TRANSACTION_ID_PREFIX = "0xTP";
+    private static final String SMART_CONTRACT_TRANSACTION_ID_PREFIX = "0xTS";
+
 
     private final Logger logger;
     private Jedis jedis;
@@ -301,7 +304,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         t.getAmount(),
                         base32.encodeAsString(msgSignature),
                         date,
-                        NORMAL_TRANSACTION_ID_PREFIX,
+                        PRIVATE_TRANSACTION_ID_PREFIX,
                         encryptedAmount,
                         t.getWhoEncrypted(),
                         t.getTransactionPointer()
@@ -339,10 +342,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             String nonce = jedis.lindex(origin, WALLET_NONCE);
             jedis.close();
             String msg = LedgerRequestType.TRANSFER_MONEY.name().concat(gson.toJson(transaction)).concat(nonce).concat(date);
-            if (amount.intValue() > 0 && verifySignature(origin, msg, msgSignature)) {
+            if (verifySignature(origin, msg, msgSignature)) {
                 logger.info("Signature verified successfully.");
-                //if (getBalance(origin).intValue() >= amount.intValue()) {
-                    /*
+                if (amount.compareTo(BigInteger.ZERO) > 0) {
                     hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
                     SignedTransaction signedTransaction = createSignedTransaction(
                             origin,
@@ -356,18 +358,19 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             null
                     );
                     logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
-                    writeTransferMoneyResponse(objOut, hash, true, signedTransaction);*/
-                //} else {
-                hash = TOMUtil.computeHash(Boolean.toString(false).getBytes());
-                writeTransferMoneyResponse(objOut, hash, false, null);
-                logger.info("Not enough balance.");
-                //}
+                    writeTransferMoneyResponse(objOut, hash, true, signedTransaction);
+                } else {
+                    hash = TOMUtil.computeHash(Boolean.toString(false).getBytes());
+                    writeTransferMoneyResponse(objOut, hash, false, null);
+                    logger.info("Not enough balance.");
+                }
             } else {
                 hash = TOMUtil.computeHash(Boolean.toString(true).getBytes());
                 writeTransferMoneyResponse(objOut, hash, false, null);
                 logger.info("Invalid Signature");
             }
         }
+
     }
 
 
@@ -391,9 +394,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             String nonce = jedis.lindex(publicKey, WALLET_NONCE);
             jedis.close();
             String msg = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(nonce);
-            System.out.println("-------------------------");
-            System.out.println(msg);
-            System.out.println("-------------------------");
             if (verifySignature(publicKey, msg, sigBytes)
                     && reward.getDestination().equals(publicKey)
                     && reward.getOrigin().equals(SYSTEM)
@@ -478,9 +478,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String signatureAlgorithm = wallet.getSignatureAlgorithm();
         String hashAlgorithm = wallet.getHashAlgorithm();
         BigInteger encryptedZero = wallet.getEncryptedZero();
-        System.out.println("commitwallet-----------");
-        System.out.println(encryptedZero);
-        System.out.println("-------------------");
         BigInteger pkNSquare = wallet.getPkNSquare();
         jedis = jedisPool.getResource();
         jedis.rpush(publicKey, publicKeyAlgorithm);
@@ -1160,7 +1157,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     /************************************************ Auxiliary Response methods **************************************/
 
     private void writeReplicaDecision(ObjectOutput objOut, byte[] hash, boolean decision) throws IOException {
-        objOut.writeObject(REPLICA_TYPE);
         objOut.writeInt(id);
         objOut.writeObject(hash);
         objOut.writeBoolean(decision);

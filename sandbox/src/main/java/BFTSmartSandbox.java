@@ -112,7 +112,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
                     List<String> destinations = new ArrayList<>(2);
                     if (wallets.keySet().size() < 2) {
                         destinations.add(DUMMY_DESTINATION_1);
-                        destinations.add(DUMMY_DESTINATION_1);
+                        destinations.add(DUMMY_DESTINATION_2);
                     }else{
                         int i = 0;
                         for(String walletKey: wallets.keySet()){
@@ -198,7 +198,20 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
 
     @Override
     public byte[] appExecuteUnordered(byte[] command, MessageContext messageContext) {
-        return new byte[]{};
+        try {
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(command);
+            ObjectInput objIn = new ObjectInputStream(byteIn);
+            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+            ObjectOutput objOut = new ObjectOutputStream(byteOut);
+            logger.info("Ignored operation.");
+            writeReplicaDecision(objOut, IGNORE_MSG.getBytes(), false);
+            objOut.flush();
+            byteOut.flush();
+            return byteOut.toByteArray();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ERROR_MSG.getBytes();
+        }
     }
 
     /************************************************ Auxiliary methods ***********************************************/
@@ -263,7 +276,6 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
     /************************************************ Auxiliary Response methods **************************************/
 
     private void writeReplicaDecision(ObjectOutput objOut, byte[] hash, boolean decision) throws IOException {
-        objOut.writeObject(SANDBOX_TYPE);
         objOut.writeInt(id);
         objOut.writeObject(hash);
         objOut.writeBoolean(decision);
