@@ -46,14 +46,12 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final int SIGNATURE_ALGORITHM = 1;
     private static final int HASH_ALGORITHM = 2;
     private static final int WALLET_NONCE = 3;
-    private static final int ENCRYPTED_ZERO = 4;
-    private static final int NSQUARE = 5;
     private static final int TRANSACTION_ID_SIZE = 20;
 
-    private static final String NORMAL_TRANSACTION_ID_PREFIX = "0xT";
-    private static final String REWARD_TRANSACTION_ID_PREFIX = "0xTB";
-    private static final String PRIVATE_TRANSACTION_ID_PREFIX = "0xTP";
-    private static final String SMART_CONTRACT_TRANSACTION_ID_PREFIX = "0xTS";
+    private static final String NORMAL_TRANSACTION_ID_PREFIX = "0xT-";
+    private static final String REWARD_TRANSACTION_ID_PREFIX = "0xTB-";
+    private static final String PRIVATE_TRANSACTION_ID_PREFIX = "0xTP-";
+    private static final String SMART_CONTRACT_TRANSACTION_ID_PREFIX = "0xTS-";
 
 
     private final Logger logger;
