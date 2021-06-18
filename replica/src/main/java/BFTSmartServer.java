@@ -1098,7 +1098,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis.close();
 
         if (numTransactions >= 0 && globalLedgerSize > 0) {
+            jedis = jedisPool.getResource();
             List<String> blocks = jedis.lrange(BLOCK_CHAIN, -1, -1);
+            jedis.close();
             if (blocks.size() == 1) { //only exists the genesis block
                 if (numTransactions <= globalLedgerSize) {
                     jedis = jedisPool.getResource();
