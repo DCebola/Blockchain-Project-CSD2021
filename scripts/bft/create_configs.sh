@@ -57,7 +57,6 @@ mv logback.xml ../../replica/config
 
 cp system.config ../../sandbox/config
 cp sandbox.config ../../sandbox/config
-cp import-control.xml ../../sandbox/config
 cp logback_sandbox.xml logback.xml
 mv logback.xml ../../sandbox/config
 
