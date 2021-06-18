@@ -1,6 +1,10 @@
 package com.clients;
 
-import com.clients.mlib.PaillierKey;
+import com.enums.LedgerRequestType;
+import com.libs.Utils;
+import com.models.*;
+import com.libs.mlib.HomoAdd;
+import com.libs.mlib.PaillierKey;
 import com.google.gson.Gson;
 import org.apache.commons.codec.binary.Base32;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
@@ -16,11 +20,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -32,6 +44,8 @@ public class RestClient {
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
     private static final String FIRST_DATE = "2021-01-01 01:01:01";
     private static final String SYSTEM = "SYSTEM";
+    private static final String HOMOMORPHIC_INFO_CONFIG = "_homomorphic_info.config";
+    private static final String CONFIGS_DIRECTORY = "src/main/resources/";
 
     private static final String REGISTER_URL = "https://127.0.0.1:%s/register/%s";
     private static final String OBTAIN_COINS_URL = "https://127.0.0.1:%s/%s/obtainCoins";
@@ -44,6 +58,8 @@ public class RestClient {
     private static final String OBTAIN_LAST_BLOCK_URL = "https://127.0.0.1:%s/lastBlock";
     private static final String MINE_TRANSACTIONS_URL = "https://127.0.0.1:%s/pendingTransactions/%s";
     private static final String SEND_MINED_BLOCK_URL = "https://127.0.0.1:%s/mine";
+    private static final String TRANSFER_MONEY_WITH_PRIVACY_URL = "https://127.0.0.1:%s/privacyTransfer";
+    private static final String OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS_URL = "https://127.0.0.1:%s/%s/obtainNotSubmittedTransactions";
 
     private static final int REGISTER = 0;
     private static final int REQUEST_NONCE = 1;
@@ -55,8 +71,9 @@ public class RestClient {
     private static final int VERIFY_OP = 7;
     private static final int OBTAIN_LAST_BLOCK = 8;
     private static final int MINE_TRANSACTIONS = 9;
-    private static final int SEND_MINED_BLOCK = 10;
-    private static final int QUIT = 11;
+    private static final int TRANSFER_MONEY_WITH_PRIVACY = 10;
+    private static final int OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS = 11;
+    private static final int QUIT = 12;
 
 
     private static final int ALL = 0;
@@ -65,7 +82,7 @@ public class RestClient {
 
     private static String hash_algorithm;
     private static String challenge;
-    private static int reward;
+    private static BigInteger reward;
 
     private static Gson gson;
     private static Base32 base32;
@@ -73,14 +90,13 @@ public class RestClient {
     private static String port;
     private static DateTimeFormatter dateTimeFormatter;
 
-    public static void main(String[] args) throws IOException, KeyStoreException, CertificateException, NoSuchAlgorithmException, KeyManagementException, SignatureException, InvalidKeyException {
+    public static void main(String[] args) throws Exception {
         Properties properties = new Properties();
         properties.load(new FileInputStream("src/main/resources/client.config"));
         port = args[0];
         hash_algorithm = properties.getProperty("hash_algorithm");
         challenge = properties.getProperty("challenge");
-        reward = Integer.parseInt(properties.getProperty("mining_reward"));
-
+        reward = new BigInteger(properties.getProperty("mining_reward"));
         Security.addProvider(new BouncyCastleProvider());
         gson = new Gson();
         base32 = new Base32();
@@ -141,6 +157,12 @@ public class RestClient {
                 case MINE_TRANSACTIONS:
                     mineTransactions(requestFactory, in);
                     break;
+                case TRANSFER_MONEY_WITH_PRIVACY:
+                    transferMoneyWithPrivacy(requestFactory, in);
+                    break;
+                case OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS:
+                    obtainUserNotSubmittedTransactions(requestFactory, in);
+                    break;
                 case QUIT:
                     in.close();
                     break;
@@ -152,14 +174,13 @@ public class RestClient {
         }
     }
 
-    private static void setSession(Scanner in) {
+    private static void setSession(Scanner in) throws IOException {
         System.out.print("Insert username: ");
         String user = in.next();
         in.nextLine();
         System.out.print("Insert password: ");
         char[] password = in.next().toCharArray();
         in.nextLine();
-
         try {
             currentSession = new Session(user, password);
         } catch (UnrecoverableKeyException | CertificateException | IOException | KeyStoreException | NoSuchAlgorithmException e) {
@@ -167,11 +188,22 @@ public class RestClient {
         }
     }
 
+    private static PaillierKey createHomomorphicKey(Properties properties) {
+        BigInteger p = new BigInteger(properties.getProperty("p"));
+        BigInteger q = new BigInteger(properties.getProperty("q"));
+        BigInteger lambda = new BigInteger(properties.getProperty("lambda"));
+        BigInteger n = new BigInteger(properties.getProperty("n"));
+        BigInteger nsquare = new BigInteger(properties.getProperty("nsquare"));
+        BigInteger g = new BigInteger(properties.getProperty("g"));
+        BigInteger mu = new BigInteger(properties.getProperty("mu"));
+        return new PaillierKey(p,q,lambda,n,nsquare,g,mu);
+    }
+
     private static void printSession() {
         if (currentSession == null)
             System.out.println("[No session active]");
         else
-            System.out.println("[Current session: " + currentSession.getUsername() + "]");
+            System.out.println("[Current session: " + base32.encodeAsString(currentSession.getPublicKey().getEncoded()) + "]\n" + currentSession.getNonce());
     }
 
     private static void printOps() {
@@ -185,8 +217,9 @@ public class RestClient {
         System.out.println("7 - Verify transaction");
         System.out.println("8 - Obtain last block");
         System.out.println("9 - Mine transactions");
-        System.out.println("10 - Send mined block");
-        System.out.println("11 - Quit");
+        System.out.println("10 - Transfer money with privacy");
+        System.out.println("11 - Obtain user not submitted transactions");
+        System.out.println("12 - Quit");
         System.out.print("> ");
     }
 
@@ -200,8 +233,11 @@ public class RestClient {
     private static void register(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
         try {
             setSession(in);
+            PaillierKey pk = currentSession.getPk();
+            BigInteger encryptedZero = HomoAdd.encrypt(new BigInteger("0"),pk);
+            BigInteger pkNSquare = pk.getNsquare();
             HttpEntity<RegisterKeyMsgBody> request = new HttpEntity<>(
-                    new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm()));
+                    new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm(),encryptedZero,pkNSquare));
             ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
                     String.format(REGISTER_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.POST, request, String.class);
@@ -238,12 +274,39 @@ public class RestClient {
         try {
             if (currentSession == null)
                 requestNonce(requestFactory, in);
-            ResponseEntity<Double> response
+            ResponseEntity<String> response
                     = new RestTemplate(requestFactory).exchange(
-                    String.format(BALANCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, Double.class);
+                    String.format(BALANCE_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, String.class);
 
-            if (response.getStatusCode().is2xxSuccessful())
-                System.out.println("Balance: " + response.getBody());
+            PaillierKey pk = currentSession.getPk();
+            BigInteger test1 = HomoAdd.encrypt(new BigInteger("0"),pk);
+            BigInteger test10 = HomoAdd.encrypt(new BigInteger("10"),pk);
+            BigInteger encryptedResult = HomoAdd.sum(test1,test10,pk.getNsquare());
+
+            System.out.println("zero");
+            System.out.println(test1);
+            System.out.println("Encrypted Result");
+            System.out.println(encryptedResult);
+            System.out.println("Decrypted Result");
+            System.out.println(HomoAdd.decrypt(encryptedResult,pk));
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                String[] balanceInfo = response.getBody().split(" ");
+                BigInteger balance = new BigInteger(balanceInfo[0]);
+                System.out.println(balance);
+                System.out.println("-------------");
+                if(balanceInfo.length > 1) {
+                    BigInteger encryptedBalance = new BigInteger(balanceInfo[1]);
+                    System.out.println(balanceInfo[1]);
+                    System.out.println("-------------");
+                    BigInteger result = HomoAdd.decrypt(encryptedBalance,currentSession.getPk());
+                    System.out.println(result);
+                    System.out.println("-----------");
+                    balance = balance.add(result);
+                }
+
+                System.out.println("Balance: " + balance);
+            }
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -256,12 +319,12 @@ public class RestClient {
                 requestNonce(requestFactory, in);
             String currentDate = LocalDateTime.now().format(dateTimeFormatter);
             System.out.print("Insert amount: ");
-            double amount = in.nextDouble();
+            BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
             String msgToBeHashed = LedgerRequestType.OBTAIN_COINS.name().concat(gson.toJson(amount)).concat(currentSession.getNonce()).concat(currentDate);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
-            SignedBody<Double> signedBody = new SignedBody<>(amount, sigBytes, currentDate);
-            HttpEntity<SignedBody<Double>> request = new HttpEntity<>(signedBody);
+            SignedBody<BigInteger> signedBody = new SignedBody<>(amount, sigBytes, currentDate);
+            HttpEntity<SignedBody<BigInteger>> request = new HttpEntity<>(signedBody);
 
             ResponseEntity<ValidTransaction> response
                     = new RestTemplate(requestFactory).exchange(
@@ -280,7 +343,81 @@ public class RestClient {
             System.out.printf("[ %s ]\n", response.getBody());
             currentSession.saveTransaction(response.getBody());
         }
+    }
 
+    private static void obtainUserNotSubmittedTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws Exception {
+        if (currentSession == null)
+            requestNonce(requestFactory, in);
+        ResponseEntity<TransactionsForSubmissionInfo> response
+                = new RestTemplate(requestFactory).exchange(
+                String.format(OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())), HttpMethod.GET, null, TransactionsForSubmissionInfo.class);
+
+        if(response.getStatusCode().is2xxSuccessful()) {
+            TransactionsForSubmissionInfo transactionsForSubmissionInfo = response.getBody();
+            assert transactionsForSubmissionInfo != null;
+            List<InfoForDestination> transactionsInfo = transactionsForSubmissionInfo.getTransactionsInfo();
+            for(InfoForDestination info: transactionsInfo) {
+                String currentDate = LocalDateTime.now().format(dateTimeFormatter);
+                byte[] bytes = Base64.getDecoder().decode(info.getSecretValue());
+                Cipher decriptCipher = Cipher.getInstance("RSA");
+                decriptCipher.init(Cipher.DECRYPT_MODE, currentSession.getPrivateKey());
+                BigInteger amount = new BigInteger(new String(decriptCipher.doFinal(bytes), StandardCharsets.UTF_8));
+                BigInteger encryptedAmount = HomoAdd.encrypt(amount,currentSession.getPk());
+                Transaction t = new Transaction(info.getOrigin(),info.getDestination(),null,currentDate,encryptedAmount, info.getDestination(), info.getDestinationPointer());
+                TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(t,"");
+                String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY.name().
+                        concat(gson.toJson(t)).concat("").concat(currentSession.getNonce()).concat(currentDate);
+                byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+                SignedBody<TransactionPlusSecretValue> signedBody = new SignedBody<>(transactionPlusSecretValue,sigBytes,currentDate);
+                HttpEntity<SignedBody<TransactionPlusSecretValue>> request = new HttpEntity<>(signedBody);
+                ResponseEntity<ValidTransaction> finalResponse
+                        = new RestTemplate(requestFactory).exchange(
+                        String.format(TRANSFER_MONEY_WITH_PRIVACY_URL, port), HttpMethod.POST, request, ValidTransaction.class);
+                processResponseWithTransaction(finalResponse);
+            }
+        }
+
+    }
+
+
+    private static void transferMoneyWithPrivacy(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) throws Exception {
+        if(currentSession == null)
+            requestNonce(requestFactory,in);
+
+        String currentDate = LocalDateTime.now().format(dateTimeFormatter);
+        System.out.print("Insert destination: ");
+        String origin = base32.encodeAsString(currentSession.getPublicKey().getEncoded());
+        String destination = in.next();
+        in.nextLine();
+        System.out.print("Insert amount: ");
+        BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
+        BigInteger encryptedAmount = HomoAdd.encrypt(amount,currentSession.getPk());
+        String a= encryptedAmount.toString();
+        System.out.println(a);
+        BigInteger result = new BigInteger(a);
+        System.out.println(result);
+        String secretValue = encryptWithDestinationPublicKey(destination,amount);
+
+        Transaction t = new Transaction(
+                origin,
+                destination,
+                null,
+                currentDate,
+                encryptedAmount,
+                origin,
+                null);
+
+        TransactionPlusSecretValue transactionPlusSecretValue = new TransactionPlusSecretValue(t,secretValue);
+        String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY.name().
+                concat(gson.toJson(t)).concat(secretValue).concat(currentSession.getNonce()).concat(currentDate);
+
+        byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+        SignedBody<TransactionPlusSecretValue> signedBody = new SignedBody<>(transactionPlusSecretValue,sigBytes,currentDate);
+        HttpEntity<SignedBody<TransactionPlusSecretValue>> request = new HttpEntity<>(signedBody);
+        ResponseEntity<ValidTransaction> response
+                = new RestTemplate(requestFactory).exchange(
+                String.format(TRANSFER_MONEY_WITH_PRIVACY_URL, port), HttpMethod.POST, request, ValidTransaction.class);
+        processResponseWithTransaction(response);
     }
 
     private static void transferMoney(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
@@ -292,10 +429,18 @@ public class RestClient {
             String destination = in.next();
             in.nextLine();
             System.out.print("Insert amount: ");
-            double amount = in.nextDouble();
+            BigInteger amount = new BigInteger(Integer.toString(in.nextInt()));
 
-            Transaction t = new Transaction(base32.encodeAsString(currentSession.getPublicKey().getEncoded()), destination, amount, currentDate);
+            Transaction t = new Transaction(
+                    base32.encodeAsString(currentSession.getPublicKey().getEncoded()),
+                    destination,
+                    amount,
+                    currentDate,
+                    null,
+                    null,
+                    null);
             String msgToBeHashed = LedgerRequestType.TRANSFER_MONEY.name().concat(gson.toJson(t)).concat(currentSession.getNonce()).concat(currentDate);
+            System.out.println(msgToBeHashed);
             byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
 
             SignedBody<Transaction> signedBody = new SignedBody<>(t, sigBytes, currentDate);
@@ -343,7 +488,7 @@ public class RestClient {
         }
     }
 
-    private static Block obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory) {
+    private static void obtainLastBlock(HttpComponentsClientHttpRequestFactory requestFactory) {
         try {
             ResponseEntity<Block> response
                     = new RestTemplate(requestFactory).exchange(
@@ -352,12 +497,10 @@ public class RestClient {
             if (response.getStatusCode().is2xxSuccessful()) {
                 Block block = response.getBody();
                 System.out.println(gson.toJson(block));
-                return block;
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
-        return null;
     }
 
     private static void mineTransactions(HttpComponentsClientHttpRequestFactory requestFactory, Scanner in) {
@@ -384,7 +527,7 @@ public class RestClient {
 
     private static void sendMinedBlock(HttpComponentsClientHttpRequestFactory requestFactory, BlockHeader blockHeader) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException {
         String currentDate = LocalDateTime.now().format(dateTimeFormatter);
-        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), RestClient.reward, currentDate);
+        Transaction reward = new Transaction(SYSTEM, blockHeader.getAuthor(), RestClient.reward, currentDate,null,null,null);
         BlockHeaderAndReward blockHeaderAndReward = new BlockHeaderAndReward(blockHeader, reward);
         String msgToBeHashed = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(currentSession.getNonce());
         System.out.println(msgToBeHashed);
@@ -512,6 +655,14 @@ public class RestClient {
         }
     }
 
+    private static String encryptWithDestinationPublicKey(String pubKey, BigInteger amount) throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException {
+        PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(base32.decode(pubKey)));
+        Cipher encryptCipher = Cipher.getInstance("RSA");
+        encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey);
+        byte[] cipheredText = encryptCipher.doFinal(amount.toString().getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(cipheredText);
+    }
+
     private static byte[] generateSignature(byte[] msg) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
         Signature signature = Signature.getInstance(currentSession.getSigAlg());
         signature.initSign(currentSession.getPrivateKey(), new SecureRandom());
@@ -534,8 +685,12 @@ public class RestClient {
         private final char[] password;
         private String nonce;
         private List<ValidTransaction> transactions;
+        private PaillierKey pk;
 
         public Session(String username, char[] password) throws UnrecoverableKeyException, CertificateException, IOException, KeyStoreException, NoSuchAlgorithmException {
+            Properties properties = new Properties();
+            properties.load(new FileInputStream(CONFIGS_DIRECTORY.concat(username).concat(HOMOMORPHIC_INFO_CONFIG)));
+            this.pk = createHomomorphicKey(properties);
             this.nonce = "";
             this.username = username;
             this.password = password;
@@ -586,6 +741,10 @@ public class RestClient {
 
         public void saveTransaction(ValidTransaction t) {
             this.transactions.add(t);
+        }
+
+        public PaillierKey getPk() {
+            return pk;
         }
 
     }

@@ -14,9 +14,10 @@ for i in `seq $N`; do
     ip="172.18.20.${i}"
     container_name="replica-$(( $i - 1 ))"
     docker run --network bftsmart-net --ip $ip --name $container_name -d replica java -Dlogback.configurationFile="./config/logback.xml" -jar replica.jar $(( $i - 1 )) 
-
     docker run --network bftsmart-net --ip $redis_ip --name $redis_name -d redis
-
+    ip="172.18.20.$(( $i + $N ))"
+    container_name="sandbox-$(( $i - 1))"
+    docker run --network bftsmart-net --ip $ip --name $container_name -d sandbox java -Dlogback.configurationFile="./config/logback.xml" -jar sandbox.jar $(( $i - 1 + $N )) 
 done
 
 for i in `seq $P`; do

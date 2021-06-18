@@ -2,8 +2,11 @@ import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 import bftsmart.tom.util.TOMUtil;
+import com.enums.LedgerRequestType;
 import com.google.gson.Gson;
-import com.proxy.controllers.*;
+import com.libs.Utils;
+import com.models.*;
+import com.libs.mlib.HomoAdd;
 import org.apache.commons.codec.EncoderException;
 import org.apache.commons.codec.binary.Base32;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -16,6 +19,7 @@ import redis.clients.jedis.JedisPoolConfig;
 
 
 import java.io.*;
+import java.math.BigInteger;
 import java.security.*;
 
 import java.security.spec.InvalidKeySpecException;
@@ -29,24 +33,29 @@ import java.util.*;
 public class BFTSmartServer extends DefaultSingleRecoverable {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private static final String ERROR_MSG = "ERROR";
+    private static final String IGNORE_MSG = "IGNORE_MSG";
+
     private static final String INITIAL_NONCE = "0";
     private static final String NO_NONCE = "-1";
-
     private static final String SYSTEM = "SYSTEM";
-    private static final String ERROR_MSG = "ERROR";
     private static final String PENDING_TRANSACTIONS = "PENDING-TRANSACTIONS";
     private static final String PENDING_REWARD = "PENDING-REWARDS";
     private static final String BLOCK_CHAIN = "BLOCK-CHAIN";
-
 
     private static final int KEY_ALGORITHM = 0;
     private static final int SIGNATURE_ALGORITHM = 1;
     private static final int HASH_ALGORITHM = 2;
     private static final int WALLET_NONCE = 3;
+    private static final int ENCRYPTED_ZERO = 4;
+    private static final int NSQUARE = 5;
     private static final int TRANSACTION_ID_SIZE = 20;
 
     private static final String NORMAL_TRANSACTION_ID_PREFIX = "0xT";
     private static final String REWARD_TRANSACTION_ID_PREFIX = "0xTB";
+    private static final String PRIVATE_TRANSACTION_ID_PREFIX = "0xTP";
+    private static final String SMART_CONTRACT_TRANSACTION_ID_PREFIX = "0xTS";
+
 
     private final Logger logger;
     private Jedis jedis;
@@ -89,10 +98,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedisPoolConfig.setMaxTotal(Integer.parseInt(properties.getProperty("max_total")));
         jedisPoolConfig.setMaxIdle(Integer.parseInt(properties.getProperty("max_idle")));
         jedisPoolConfig.setMinIdle(Integer.parseInt(properties.getProperty("min_idle")));
-        this.jedisPool = new JedisPool(jedisPoolConfig,redis_ip,Integer.parseInt(redisPort)); //TODO: ENABLE TLS
+        this.jedisPool = new JedisPool(jedisPoolConfig, redis_ip, Integer.parseInt(redisPort)); //TODO: ENABLE TLS
 
         jedis = jedisPool.getResource();
-        //jedis = new Jedis("redis://".concat(redis_ip).concat(":").concat(redisPort));
         jedis.rpush(BLOCK_CHAIN, gson.toJson(genesisBlock));
         jedis.close();
         new ServiceReplica(id, this, this);
@@ -138,6 +146,17 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     break;
                 case COMMIT_BLOCK:
                     commitBlockRequest(objIn, objOut);
+                    break;
+                case TRANSFER_MONEY_WITH_PRIVACY:
+                    transferMoneyWithPrivacyRequest(objIn, objOut);
+                    break;
+                case COMMIT_TRANSFER_WITH_PRIVACY:
+                    commitTransferMoneyWithPrivacy(objIn, objOut);
+                    break;
+                case VALIDATE_SMART_CONTRACT:
+                    logger.info("Ignored VALIDATE_SMART_CONTRACT operation.");
+                    writeReplicaDecision(objOut, IGNORE_MSG.getBytes(), false);
+                    break;
             }
             objOut.flush();
             byteOut.flush();
@@ -154,6 +173,12 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String signatureAlgorithm = (String) objIn.readObject();
         String publicKeyAlgorithm = (String) objIn.readObject();
         String hashAlgorithm = (String) objIn.readObject();
+        BigInteger encryptedZero = (BigInteger) objIn.readObject();
+        System.out.println("-----------registerkey----------------------------------------------------");
+        System.out.println(encryptedZero);
+        System.out.println("---------------------------------------------------------------");
+        BigInteger pkNSquare = (BigInteger) objIn.readObject();
+
         byte[] hash;
         jedis = jedisPool.getResource();
         if (jedis.exists(publicKey)) {
@@ -165,6 +190,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             .concat(signatureAlgorithm)
                             .concat(publicKeyAlgorithm)
                             .concat(hashAlgorithm)
+                            .concat(encryptedZero.toString())
+                            .concat(pkNSquare.toString())
                             .getBytes());
             writeRegisterKeyResponse(objOut, hash, false, null);
         } else {
@@ -175,8 +202,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             .concat(signatureAlgorithm)
                             .concat(publicKeyAlgorithm)
                             .concat(hashAlgorithm)
+                            .concat(encryptedZero.toString())
+                            .concat(pkNSquare.toString())
                             .getBytes());
-            writeRegisterKeyResponse(objOut, hash, true, new Wallet(publicKey, publicKeyAlgorithm, signatureAlgorithm, hashAlgorithm));
+            writeRegisterKeyResponse(objOut, hash, true, new Wallet(publicKey, publicKeyAlgorithm, signatureAlgorithm, hashAlgorithm, encryptedZero, pkNSquare));
         }
     }
 
@@ -191,19 +220,19 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             objOut.writeBoolean(false);
         } else {
             jedis.close();
-            double amount = objIn.readDouble();
+            BigInteger amount = (BigInteger) objIn.readObject();
             byte[] msgSignature = (byte[]) objIn.readObject();
             String date = (String) objIn.readObject();
             jedis = jedisPool.getResource();
             String nonce = jedis.lindex(publicKey, WALLET_NONCE);
             jedis.close();
             String msg = LedgerRequestType.OBTAIN_COINS.name().concat(gson.toJson(amount)).concat(nonce).concat(date);
+            System.out.println("-----------");
+            System.out.println(msg);
+            System.out.println("-----------");
+
             byte[] hash;
-            if (verifySignature(publicKey, msg, msgSignature) && amount > 0) {
-                nonce = Integer.toString(Integer.parseInt(nonce) + 1);
-                jedis = jedisPool.getResource();
-                jedis.lset(publicKey, WALLET_NONCE, nonce);
-                jedis.close();
+            if (verifySignature(publicKey, msg, msgSignature) && amount.intValue() > 0) {
                 logger.info("Signature verified successfully");
                 hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
                 SignedTransaction signedTransaction = createSignedTransaction(
@@ -212,17 +241,20 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         amount,
                         base32.encodeAsString(msgSignature),
                         date,
-                        NORMAL_TRANSACTION_ID_PREFIX
+                        NORMAL_TRANSACTION_ID_PREFIX,
+                        null,
+                        null,
+                        null
                 );
                 writeObtainAmountResponse(objOut, hash, true, signedTransaction, amount, date);
             } else {
-                hash = TOMUtil.computeHash(Boolean.toString(false).concat(Double.toString(-1)).getBytes());
-                writeObtainAmountResponse(objOut, hash, false, null, -1, null);
+                hash = TOMUtil.computeHash(Boolean.toString(false).concat(new BigInteger("-1").toString()).getBytes());
+                writeObtainAmountResponse(objOut, hash, false, null, new BigInteger("-1"), null);
             }
         }
     }
 
-    private SignedTransaction createSignedTransaction(String origin, String destination, double amount, String signature, String date, String prefix) {
+    private SignedTransaction createSignedTransaction(String origin, String destination, BigInteger amount, String signature, String date, String prefix, BigInteger encryptedAmount, String whoEncrypted, String transactionPointer) {
         byte[] idBytes = new byte[TRANSACTION_ID_SIZE];
         rand.nextBytes(idBytes);
         SignedTransaction signedTransaction = new SignedTransaction(
@@ -231,10 +263,62 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 amount,
                 signature,
                 date,
-                prefix + base32.encodeAsString(idBytes)
+                prefix + base32.encodeAsString(idBytes),
+                encryptedAmount,
+                whoEncrypted,
+                transactionPointer
         );
         logger.info("T {}", gson.toJson(signedTransaction));
         return signedTransaction;
+    }
+
+    private void transferMoneyWithPrivacyRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException, NoSuchAlgorithmException, InvalidKeySpecException, SignatureException, InvalidKeyException {
+        logger.debug("New TRANSFER_MONEY_WITH_PRIVACY operation");
+        Transaction t = (Transaction) objIn.readObject();
+        String secretValue = (String) objIn.readObject();
+        String origin = t.getOrigin();
+        String destination = t.getDestination();
+        BigInteger encryptedAmount = t.getEncryptedAmount();
+
+        jedis = jedisPool.getResource();
+        byte[] hash;
+        if (!jedis.exists(origin) || !jedis.exists(destination) || origin.equals(destination)) {
+            jedis.close();
+            logger.info("Bad transaction ({}, {}, {})", origin, destination, encryptedAmount);
+            hash = TOMUtil.computeHash(Boolean.toString(false).getBytes());
+            writeTransferMoneyResponse(objOut, hash, false, null);
+        } else {
+            String date = t.getDate();
+            jedis.close();
+            byte[] msgSignature = (byte[]) objIn.readObject();
+            jedis = jedisPool.getResource();
+            String nonce = jedis.lindex(t.getWhoEncrypted(), WALLET_NONCE);
+            jedis.close();
+            String msg = LedgerRequestType.TRANSFER_MONEY_WITH_PRIVACY.name().concat(gson.toJson(t)).concat(secretValue).concat(nonce).concat(date);
+            System.out.println(msg);
+            if (verifySignature(t.getWhoEncrypted(), msg, msgSignature)) {
+                logger.info("Signature verified successfully");
+                /*if (getBalance(origin).intValue() >= amount.intValue()) {}*/
+                hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
+                SignedTransaction signedTransaction = createSignedTransaction(
+                        origin,
+                        destination,
+                        t.getAmount(),
+                        base32.encodeAsString(msgSignature),
+                        date,
+                        PRIVATE_TRANSACTION_ID_PREFIX,
+                        encryptedAmount,
+                        t.getWhoEncrypted(),
+                        t.getTransactionPointer()
+                );
+                logger.info("Proposed transaction ({}, {}, {}).", origin, destination, encryptedAmount);
+                writeTransferMoneyWithPrivacyResponse(objOut, hash, true, signedTransaction, secretValue);
+            } else {
+                hash = TOMUtil.computeHash(Boolean.toString(false).getBytes());
+                writeTransferMoneyResponse(objOut, hash, false, null);
+                logger.info("Signature not verified!");
+            }
+        }
     }
 
 
@@ -243,7 +327,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         Transaction transaction = (Transaction) objIn.readObject();
         String origin = transaction.getOrigin();
         String destination = transaction.getDestination();
-        double amount = transaction.getAmount();
+        BigInteger amount = transaction.getAmount();
         byte[] hash;
         jedis = jedisPool.getResource();
         if (!jedis.exists(origin) || !jedis.exists(destination) || origin.equals(destination)) {
@@ -260,13 +344,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             String nonce = jedis.lindex(origin, WALLET_NONCE);
             jedis.close();
             String msg = LedgerRequestType.TRANSFER_MONEY.name().concat(gson.toJson(transaction)).concat(nonce).concat(date);
-            if (amount > 0 && verifySignature(origin, msg, msgSignature)) {
+            if (verifySignature(origin, msg, msgSignature)) {
                 logger.info("Signature verified successfully.");
-                if (getBalance(origin) >= amount) {
-                    nonce = Integer.toString(Integer.parseInt(nonce) + 1);
-                    jedis = jedisPool.getResource();
-                    jedis.lset(origin, WALLET_NONCE, nonce);
-                    jedis.close();
+                if (amount.compareTo(BigInteger.ZERO) > 0) {
                     hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
                     SignedTransaction signedTransaction = createSignedTransaction(
                             origin,
@@ -274,7 +354,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             amount,
                             base32.encodeAsString(msgSignature),
                             date,
-                            NORMAL_TRANSACTION_ID_PREFIX
+                            NORMAL_TRANSACTION_ID_PREFIX,
+                            null,
+                            null,
+                            null
                     );
                     logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
                     writeTransferMoneyResponse(objOut, hash, true, signedTransaction);
@@ -289,6 +372,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 logger.info("Invalid Signature");
             }
         }
+
     }
 
 
@@ -315,7 +399,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             if (verifySignature(publicKey, msg, sigBytes)
                     && reward.getDestination().equals(publicKey)
                     && reward.getOrigin().equals(SYSTEM)
-                    && reward.getAmount() == mining_reward) {
+                    && reward.getAmount().intValue() == mining_reward) {
                 logger.info("Signature verified successfully.");
                 byte[] block = gson.toJson(blockHeader).getBytes();
                 byte[] hashedBlock = generateHash(block, hash_algorithm);
@@ -326,10 +410,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     assert transactionsToVerify != null;
                     if (verifyBlockContent(blockHeader, transactionsToVerify)) {
                         logger.info("Block completely verified.");
-                        nonce = Integer.toString(Integer.parseInt(nonce) + 1);
-                        jedis = jedisPool.getResource();
-                        jedis.lset(publicKey, WALLET_NONCE, nonce);
-                        jedis.close();
                         Block finalBlock = new Block(blockHeader, transactionsToVerify);
                         byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(finalBlock)).concat(publicKey).getBytes());
                         SignedTransaction signedReward = createSignedTransaction(
@@ -338,7 +418,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                 reward.getAmount(),
                                 base32.encodeAsString(sigBytes),
                                 reward.getDate(),
-                                REWARD_TRANSACTION_ID_PREFIX
+                                REWARD_TRANSACTION_ID_PREFIX,
+                                null,
+                                null,
+                                null
                         );
                         BlockAndReward blockAndReward = new BlockAndReward(finalBlock, signedReward);
                         logger.info("{}", gson.toJson(blockAndReward));
@@ -396,6 +479,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String publicKeyAlgorithm = wallet.getPublicKeyAlgorithm();
         String signatureAlgorithm = wallet.getSignatureAlgorithm();
         String hashAlgorithm = wallet.getHashAlgorithm();
+        BigInteger encryptedZero = wallet.getEncryptedZero();
+        BigInteger pkNSquare = wallet.getPkNSquare();
         jedis = jedisPool.getResource();
         jedis.rpush(publicKey, publicKeyAlgorithm);
         jedis.close();
@@ -408,6 +493,12 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         jedis = jedisPool.getResource();
         jedis.rpush(publicKey, INITIAL_NONCE);
         jedis.close();
+        jedis = jedisPool.getResource();
+        jedis.rpush(publicKey, encryptedZero.toString());
+        jedis.close();
+        jedis = jedisPool.getResource();
+        jedis.rpush(publicKey, pkNSquare.toString());
+        jedis.close();
 
         byte[] hash = TOMUtil.computeHash(
                 Boolean.toString(true)
@@ -417,8 +508,61 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                         .concat(hashAlgorithm)
                         .getBytes());
         writeCommitWalletResponse(objOut, hash, true);
-        logger.debug("Registered key {} with hash algorithm {}, signature algorithm {} and nonce {}", publicKey, hashAlgorithm, signatureAlgorithm, INITIAL_NONCE);
+        logger.debug("Registered key {} with hash algorithm {}, signature algorithm {} and nonce {} and homomorphic square of key {}", publicKey, hashAlgorithm, signatureAlgorithm, INITIAL_NONCE, pkNSquare.toString());
         logger.info("Registered key {}", publicKey);
+    }
+
+    private void commitTransferMoneyWithPrivacy(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException {
+        logger.debug("New COMMIT_TRANSACTION_WITH_PRIVACY operation");
+        Commit commit = (Commit) objIn.readObject();
+        TransactionPlusSecretValue transactionPlusSecretValue = (TransactionPlusSecretValue) commit.getRequest();
+        SignedTransaction t = (SignedTransaction) transactionPlusSecretValue.getTransaction();
+        String secretValue = transactionPlusSecretValue.getSecretValue();
+
+        jedis = jedisPool.getResource();
+
+        String nonce = jedis.lindex(t.getWhoEncrypted(), WALLET_NONCE);
+        jedis.close();
+        nonce = Integer.toString(Integer.parseInt(nonce) + 1);
+        jedis.close();
+        jedis = jedisPool.getResource();
+        jedis.lset(t.getWhoEncrypted(), WALLET_NONCE, nonce);
+        jedis.close();
+        jedis = jedisPool.getResource();
+
+        ValidTransaction validTransaction = new ValidTransaction(
+                t.getOrigin(),
+                t.getDestination(),
+                t.getAmount(),
+                t.getSignature(),
+                t.getDate(),
+                commit.getHash(),
+                commit.getReplicas(),
+                t.getId(),
+                t.getEncryptedAmount(),
+                t.getWhoEncrypted(),
+                t.getTransactionPointer());
+        logger.info("T {}", t);
+        jedis = jedisPool.getResource();
+        jedis.rpush(PENDING_TRANSACTIONS, gson.toJson(validTransaction));
+        jedis.close();
+
+        if (!secretValue.equals("")) {
+            InfoForDestination infoForDestination = new InfoForDestination(t.getOrigin(), t.getDestination(), secretValue, validTransaction.getId());
+            jedis = jedisPool.getResource();
+            jedis.rpush(t.getDestination(), gson.toJson(infoForDestination));
+        } else {
+            jedis = jedisPool.getResource();
+            String infoToRemove = jedis.lrange(t.getDestination(), 6, 6).get(0);
+            jedis.close();
+            jedis = jedisPool.getResource();
+            jedis.lrem(t.getDestination(), 1, infoToRemove);
+        }
+        jedis.close();
+
+        byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(validTransaction)).getBytes());
+        writeCommitTransactionResponse(objOut, hash, true, validTransaction);
+        logger.info("Transaction ({}, {}, {}) added to global ledger.", t.getOrigin(), t.getDestination(), t.getEncryptedAmount());
     }
 
 
@@ -428,7 +572,24 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         SignedTransaction t = (SignedTransaction) commit.getRequest();
         String origin = t.getOrigin();
         String destination = t.getDestination();
-        double amount = t.getAmount();
+        BigInteger amount = t.getAmount();
+
+        jedis = jedisPool.getResource();
+        String nonce = "";
+        if (origin.equals(SYSTEM)) {
+            nonce = jedis.lindex(destination, WALLET_NONCE);
+            jedis.close();
+            nonce = Integer.toString(Integer.parseInt(nonce) + 1);
+            jedis = jedisPool.getResource();
+            jedis.lset(destination, WALLET_NONCE, nonce);
+        } else {
+            nonce = jedis.lindex(origin, WALLET_NONCE);
+            jedis.close();
+            nonce = Integer.toString(Integer.parseInt(nonce) + 1);
+            jedis = jedisPool.getResource();
+            jedis.lset(origin, WALLET_NONCE, nonce);
+        }
+        jedis.close();
         ValidTransaction validTransaction = new ValidTransaction(
                 origin,
                 destination,
@@ -437,7 +598,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 t.getDate(),
                 commit.getHash(),
                 commit.getReplicas(),
-                t.getId());
+                t.getId(),
+                null,
+                null,
+                null);
         logger.info("T {}", t);
         jedis = jedisPool.getResource();
         jedis.rpush(PENDING_TRANSACTIONS, gson.toJson(validTransaction));
@@ -591,7 +755,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 t.getDate(),
                 commit.getHash(),
                 commit.getReplicas(),
-                t.getId());
+                t.getId(),
+                null,
+                null,
+                null);
         jedis = jedisPool.getResource();
         jedis.rpush(PENDING_REWARD, gson.toJson(new PendingReward(block.getBlockHeader().getPreviousHash(), validReward.getId())));
         jedis.close();
@@ -655,6 +822,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 case OBTAIN_LAST_BLOCK:
                     obtainLastBlockRequest(objOut);
                     break;
+                case OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS:
+                    obtainUserNotSubmittedTransactionsRequest(objIn, objOut);
+                    break;
             }
             objOut.flush();
             byteOut.flush();
@@ -664,7 +834,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             return ERROR_MSG.getBytes();
         }
     }
-
 
     private void getNonceRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException, NoSuchAlgorithmException, InvalidKeySpecException, SignatureException, InvalidKeyException {
         logger.debug("New REQUEST_NONCE operation");
@@ -694,6 +863,31 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         }
     }
 
+    private void obtainUserNotSubmittedTransactionsRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException {
+        logger.debug("New USER_NOT_SUBMITTED_TRANSACTIONS operation.");
+        String publicKey = (String) objIn.readObject();
+        jedis = jedisPool.getResource();
+        if (!jedis.exists(publicKey)) {
+            logger.info("Key {} not registered.", publicKey);
+            jedis.close();
+            byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+            writeObtainUserNotSubmittedTransactionsResponse(objOut, hash, false, null);
+        } else {
+            jedis.close();
+            jedis = jedisPool.getResource();
+            List<String> notSubmittedTransactionsInfo = jedis.lrange(publicKey, 6, -1);
+            jedis.close();
+            List<InfoForDestination> infoForDestinations = new LinkedList<>();
+            for (String transactionInfo : notSubmittedTransactionsInfo) {
+                InfoForDestination infoForDestination = gson.fromJson(transactionInfo, InfoForDestination.class);
+                infoForDestinations.add(infoForDestination);
+            }
+            TransactionsForSubmissionInfo transactionsInfo = new TransactionsForSubmissionInfo(infoForDestinations);
+            byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(gson.toJson(transactionsInfo)).getBytes());
+            writeObtainUserNotSubmittedTransactionsResponse(objOut, hash, true, transactionsInfo);
+        }
+    }
+
 
     private void currentAmountRequest(ObjectInput objIn, ObjectOutput objOut) throws IOException, ClassNotFoundException {
         logger.debug("New CURRENT_AMOUNT operation.");
@@ -702,13 +896,13 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         if (!jedis.exists(publicKey)) {
             jedis.close();
             logger.info("Key {} not registered.", publicKey);
-            byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(Double.toString(-1)).getBytes());
-            writeCurrentAmountResponse(objOut, hash, false, -1);
+            byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(new BigInteger("-1").toString()).getBytes());
+            writeCurrentAmountResponse(objOut, hash, false, new BigInteger("-1").toString());
         } else {
             jedis.close();
-            double balance = getBalance(publicKey);
-            logger.info("{} coins associated with key {}.", publicKey, balance);
-            byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(Double.toString(balance)).getBytes());
+            String balance = getBalance(publicKey);
+            logger.info("{} coins associated with key {}.", balance, publicKey);
+            byte[] hash = TOMUtil.computeHash(Boolean.toString(true).concat(balance).getBytes());
             writeCurrentAmountResponse(objOut, hash, true, balance);
         }
     }
@@ -824,8 +1018,7 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         List<String> walletData = jedis.lrange(publicKey, 0, -1);
         jedis.close();
         Signature sign = Signature.getInstance(walletData.get(SIGNATURE_ALGORITHM));
-        sign.initVerify(KeyFactory.getInstance(walletData.get(KEY_ALGORITHM)).
-                generatePublic(new X509EncodedKeySpec(base32.decode(publicKey))));
+        sign.initVerify(KeyFactory.getInstance(walletData.get(KEY_ALGORITHM)).generatePublic(new X509EncodedKeySpec(base32.decode(publicKey))));
         sign.update(generateHash(msg.getBytes(), walletData.get(HASH_ALGORITHM)));
         return sign.verify(signature);
     }
@@ -917,12 +1110,19 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         return deserializedLedger;
     }
 
-    private double getBalance(String publicKey) {
-        double balance = 0;
+    private String getBalance(String publicKey) {
+        jedis = jedisPool.getResource();
+        BigInteger encryptedBalance = new BigInteger(jedis.lrange(publicKey, 4, 4).get(0));
+        BigInteger balance = new BigInteger("0");
+        jedis.close();
+        jedis = jedisPool.getResource();
+        BigInteger pkNSquare = new BigInteger(jedis.lrange(publicKey, 5, 5).get(0));
+        jedis.close();
+
         jedis = jedisPool.getResource();
         if (!jedis.exists(publicKey)) {
             jedis.close();
-            return -1;
+            return new BigInteger("-1").toString();
         }
         jedis.close();
 
@@ -933,13 +1133,26 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             Block block = gson.fromJson(b, Block.class);
             List<ValidTransaction> validTransactions = block.getSignedTransactions();
             for (ValidTransaction t : validTransactions) {
-                if (t.getOrigin().equals(publicKey))
-                    balance -= t.getAmount();
-                else if (t.getDestination().equals(publicKey))
-                    balance += t.getAmount();
+                if (t.getWhoEncrypted() == null) {
+                    if (t.getOrigin().equals(publicKey))
+                        balance = balance.subtract(t.getAmount());
+                    else if (t.getDestination().equals(publicKey))
+                        balance = balance.add(t.getAmount());
+                } else if (t.getWhoEncrypted().equals(publicKey)) {
+                    if (t.getOrigin().equals(publicKey)) {
+                        System.out.println("zero");
+                        System.out.println(encryptedBalance);
+                        System.out.println("EncryptedAmount");
+                        System.out.println(t.getEncryptedAmount());
+                        encryptedBalance = HomoAdd.dif(encryptedBalance, t.getEncryptedAmount(), pkNSquare);
+                        System.out.println("EncryptedBalance");
+                        System.out.println(encryptedBalance);
+                    } else if (t.getDestination().equals(publicKey))
+                        encryptedBalance = HomoAdd.sum(encryptedBalance, t.getEncryptedAmount(), pkNSquare);
+                }
             }
         }
-        return balance;
+        return balance.toString().concat(" ").concat(encryptedBalance.toString());
     }
 
 
@@ -958,16 +1171,22 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         objOut.writeObject(wallet);
     }
 
-    private void writeObtainAmountResponse(ObjectOutput objOut, byte[] hash, boolean decision, SignedTransaction signedTransaction, double amount, String date) throws IOException {
+    private void writeObtainAmountResponse(ObjectOutput objOut, byte[] hash, boolean decision, SignedTransaction signedTransaction, BigInteger amount, String date) throws IOException {
         writeReplicaDecision(objOut, hash, decision);
         objOut.writeObject(signedTransaction);
-        objOut.writeDouble(amount);
+        objOut.writeObject(amount);
         objOut.writeObject(date);
     }
 
     private void writeTransferMoneyResponse(ObjectOutput objOut, byte[] hash, boolean decision, SignedTransaction signedTransaction) throws IOException {
         writeReplicaDecision(objOut, hash, decision);
         objOut.writeObject(signedTransaction);
+    }
+
+    private void writeTransferMoneyWithPrivacyResponse(ObjectOutput objOut, byte[] hash, boolean decision, SignedTransaction signedTransaction, String secretValue) throws IOException {
+        writeReplicaDecision(objOut, hash, decision);
+        objOut.writeObject(signedTransaction);
+        objOut.writeObject(secretValue);
     }
 
     private void writeSendMinedResponse(ObjectOutput objOut, byte[] hash, boolean decision, BlockAndReward blockAndReward) throws IOException {
@@ -997,9 +1216,14 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         objOut.writeObject(nonce);
     }
 
-    private void writeCurrentAmountResponse(ObjectOutput objOut, byte[] hash, boolean decision, double balance) throws IOException {
+    private void writeObtainUserNotSubmittedTransactionsResponse(ObjectOutput objOut, byte[] hash, boolean decision, TransactionsForSubmissionInfo transactionsForSubmissionInfo) throws IOException {
         writeReplicaDecision(objOut, hash, decision);
-        objOut.writeDouble(balance);
+        objOut.writeObject(transactionsForSubmissionInfo);
+    }
+
+    private void writeCurrentAmountResponse(ObjectOutput objOut, byte[] hash, boolean decision, String balance) throws IOException {
+        writeReplicaDecision(objOut, hash, decision);
+        objOut.writeObject(balance);
     }
 
     private void writeClientLedgerResponse(ObjectOutput objOut, byte[] hash, boolean decision, List<ValidTransaction> clientLedger) throws IOException {
