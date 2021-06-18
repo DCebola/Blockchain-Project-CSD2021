@@ -164,9 +164,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String publicKeyAlgorithm = (String) objIn.readObject();
         String hashAlgorithm = (String) objIn.readObject();
         BigInteger encryptedZero = (BigInteger) objIn.readObject();
-        System.out.println("-----------registerkey----------------------------------------------------");
-        System.out.println(encryptedZero);
-        System.out.println("---------------------------------------------------------------");
         BigInteger pkNSquare = (BigInteger) objIn.readObject();
 
         byte[] hash;
@@ -337,21 +334,21 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             if (amount.intValue() > 0 && verifySignature(origin, msg, msgSignature)) {
                 logger.info("Signature verified successfully.");
                 //if (getBalance(origin).intValue() >= amount.intValue()) {
-                    /*
-                    hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
-                    SignedTransaction signedTransaction = createSignedTransaction(
-                            origin,
-                            destination,
-                            amount,
-                            base32.encodeAsString(msgSignature),
-                            date,
-                            NORMAL_TRANSACTION_ID_PREFIX,
-                            null,
-                            null,
-                            null
-                    );
-                    logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
-                    writeTransferMoneyResponse(objOut, hash, true, signedTransaction);*/
+
+                hash = TOMUtil.computeHash(Boolean.toString(true).concat(msg).getBytes());
+                SignedTransaction signedTransaction = createSignedTransaction(
+                        origin,
+                        destination,
+                        amount,
+                        base32.encodeAsString(msgSignature),
+                        date,
+                        NORMAL_TRANSACTION_ID_PREFIX,
+                        transaction.getEncryptedAmount(),
+                        transaction.getWhoEncrypted(),
+                        transaction.getTransactionPointer()
+                );
+                logger.info("Proposed transaction ({}, {}, {}).", origin, destination, amount);
+                writeTransferMoneyResponse(objOut, hash, true, signedTransaction);
                 //} else {
                 hash = TOMUtil.computeHash(Boolean.toString(false).getBytes());
                 writeTransferMoneyResponse(objOut, hash, false, null);
@@ -386,9 +383,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             String nonce = jedis.lindex(publicKey, WALLET_NONCE);
             jedis.close();
             String msg = LedgerRequestType.SEND_MINED_BLOCK.name().concat(gson.toJson(blockHeaderAndReward)).concat(nonce);
-            System.out.println("-------------------------");
-            System.out.println(msg);
-            System.out.println("-------------------------");
             if (verifySignature(publicKey, msg, sigBytes)
                     && reward.getDestination().equals(publicKey)
                     && reward.getOrigin().equals(SYSTEM)
@@ -412,9 +406,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                                 base32.encodeAsString(sigBytes),
                                 reward.getDate(),
                                 REWARD_TRANSACTION_ID_PREFIX,
-                                null,
-                                null,
-                                null
+                                reward.getEncryptedAmount(),
+                                reward.getWhoEncrypted(),
+                                reward.getTransactionPointer()
                         );
                         BlockAndReward blockAndReward = new BlockAndReward(finalBlock, signedReward);
                         logger.info("{}", gson.toJson(blockAndReward));
@@ -473,9 +467,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         String signatureAlgorithm = wallet.getSignatureAlgorithm();
         String hashAlgorithm = wallet.getHashAlgorithm();
         BigInteger encryptedZero = wallet.getEncryptedZero();
-        System.out.println("commitwallet-----------");
-        System.out.println(encryptedZero);
-        System.out.println("-------------------");
         BigInteger pkNSquare = wallet.getPkNSquare();
         jedis = jedisPool.getResource();
         jedis.rpush(publicKey, publicKeyAlgorithm);
@@ -595,9 +586,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 commit.getHash(),
                 commit.getReplicas(),
                 t.getId(),
-                null,
-                null,
-                null);
+                t.getEncryptedAmount(),
+                t.getWhoEncrypted(),
+                t.getTransactionPointer());
         logger.info("T {}", t);
         jedis = jedisPool.getResource();
         jedis.rpush(PENDING_TRANSACTIONS, gson.toJson(validTransaction));
@@ -752,9 +743,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 commit.getHash(),
                 commit.getReplicas(),
                 t.getId(),
-                null,
-                null,
-                null);
+                t.getEncryptedAmount(),
+                t.getWhoEncrypted(),
+                t.getTransactionPointer());
         jedis = jedisPool.getResource();
         jedis.rpush(PENDING_REWARD, gson.toJson(new PendingReward(block.getBlockHeader().getPreviousHash(), validReward.getId())));
         jedis.close();
@@ -1131,21 +1122,23 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             List<ValidTransaction> validTransactions = block.getSignedTransactions();
             for (ValidTransaction t : validTransactions) {
                 if (t.getWhoEncrypted() == null) {
-                    if (t.getOrigin().equals(publicKey))
-                        balance = balance.subtract(t.getAmount());
-                    else if (t.getDestination().equals(publicKey))
-                        balance = balance.add(t.getAmount());
-                } else if (t.getWhoEncrypted().equals(publicKey)) {
+                    System.out.println("hello");
                     if (t.getOrigin().equals(publicKey)) {
-                        System.out.println("zero");
-                        System.out.println(encryptedBalance);
-                        System.out.println("EncryptedAmount");
-                        System.out.println(t.getEncryptedAmount());
+                        System.out.println("hello1");
+                        balance = balance.subtract(t.getAmount());
+                    } else if (t.getDestination().equals(publicKey)) {
+                        System.out.println("hello2");
+                        balance = balance.add(t.getAmount());
+                    }
+                } else if (t.getWhoEncrypted().equals(publicKey)) {
+                    System.out.println("hello3");
+                    if (t.getOrigin().equals(publicKey)) {
+                        System.out.println("hello4");
                         encryptedBalance = HomoAdd.dif(encryptedBalance, t.getEncryptedAmount(), pkNSquare);
-                        System.out.println("EncryptedBalance");
-                        System.out.println(encryptedBalance);
-                    } else if (t.getDestination().equals(publicKey))
+                    } else if (t.getDestination().equals(publicKey)) {
+                        System.out.println("hello5");
                         encryptedBalance = HomoAdd.sum(encryptedBalance, t.getEncryptedAmount(), pkNSquare);
+                    }
                 }
             }
         }
