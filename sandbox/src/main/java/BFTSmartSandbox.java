@@ -6,13 +6,14 @@ import com.enums.LedgerRequestType;
 import com.enums.SmartContractEvent;
 import com.google.gson.Gson;
 import com.models.*;
-import com.untrusted.SmartContract;
+import com.models.SmartContractTemplate;
 import org.apache.commons.codec.binary.Base32;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.lang.reflect.InvocationTargetException;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
@@ -46,6 +47,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
     private Map<String, List<String>> wallets;
     private List<Block> blockChain;
     private final int timeout;
+    private final String smartContractClassName;
 
     public BFTSmartSandbox(int id) throws IOException {
         this.id = id;
@@ -54,6 +56,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         this.base32 = new Base32();
         Properties properties = new Properties();
         properties.load(new FileInputStream("config/sandbox.config"));
+        smartContractClassName = properties.getProperty("smartContractClassName");
         timeout = Integer.parseInt(properties.getProperty("timeout"));
         new ServiceReplica(id, this, this);
 
@@ -99,31 +102,36 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         logger.debug("New TEST_CONTRACT operation.");
         String pubKey = (String) objIn.readObject();
         int amount = objIn.readInt();
-        Object smartContract = gson.fromJson((String) objIn.readObject(), SmartContract.class);
+        byte[] byteCode = (byte[]) objIn.readObject(); //TODO: Define loader
         byte[] sigBytes = (byte[]) objIn.readObject();
         List<String> wallet = wallets.get(pubKey);
         String msg = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(gson.toJson(amount)).concat(wallet.get(WALLET_NONCE));
         if (wallet != null && amount > 0) {
             if (verifySignature(pubKey, msg, sigBytes)) {
-                Class<?> scClass = smartContract.getClass();
-                if (scClass.isInstance(SmartContract.class) && !scClass.isInterface() &&
-                        scClass.getDeclaredClasses().length == SmartContract.class.getDeclaredClasses().length &&
-                        scClass.getDeclaredFields().length == SmartContract.class.getDeclaredFields().length &&
-                        scClass.getDeclaredMethods().length == SmartContract.class.getDeclaredMethods().length) {
-                    List<String> destinations = new ArrayList<>(2);
-                    if (wallets.keySet().size() < 2) {
-                        destinations.add(DUMMY_DESTINATION_1);
-                        destinations.add(DUMMY_DESTINATION_2);
-                    }else{
-                        int i = 0;
-                        for(String walletKey: wallets.keySet()){
-                            ++i;
-                            destinations.add(walletKey);
-                            if (i == 2)
-                                break;
+                SmartContractLoader scLoader = new SmartContractLoader(byteCode, smartContractClassName);
+                if (scLoader.loadSmartContract()) {
+                    ISmartContract smartContract;
+                    try {
+                        smartContract = scLoader.getNewSmartContractInstance(pubKey, "", gson);
+                        List<String> destinations = new ArrayList<>(2);
+                        if (wallets.keySet().size() < 2) {
+                            destinations.add(DUMMY_DESTINATION_1);
+                            destinations.add(DUMMY_DESTINATION_2);
+                        } else {
+                            int i = 0;
+                            for (String walletKey : wallets.keySet()) {
+                                ++i;
+                                destinations.add(walletKey);
+                                if (i == 2)
+                                    break;
+                            }
                         }
+                        safeExecuteContract(objOut, smartContract, pubKey, sigBytes, destinations);
+                    } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
+                        logger.info("Invalid smart contract. Error on instantiation.");
+                        byte[] hash = TOMUtil.computeHash(Boolean.toString(false).concat(gson.toJson(null)).getBytes());
+                        writeReplicaDecision(objOut, hash, false);
                     }
-                    safeExecuteContract(objOut, (SmartContract) smartContract, pubKey, sigBytes, destinations);
                 }
             } else {
                 logger.info("Invalid signature");
@@ -137,7 +145,7 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
         }
     }
 
-    private void safeExecuteContract(ObjectOutput objOut, SmartContract smartContract, String pubKey, byte[] sigBytes, List<String> destinations) throws ExecutionException, InterruptedException, IOException {
+    private void safeExecuteContract(ObjectOutput objOut, ISmartContract smartContract, String pubKey, byte[] sigBytes, List<String> destinations) throws ExecutionException, InterruptedException, IOException {
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
         Future<List<Transaction>> future = executor.submit(new sandboxThread(smartContract, DUMMY_ORIGIN, DUMMY_AMOUNT, destinations));
         final boolean[] timedOut = {false};
@@ -298,12 +306,12 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
 
     private class sandboxThread implements Callable<List<Transaction>> {
 
-        private final SmartContract sc;
+        private final ISmartContract sc;
         private final String origin;
         private final BigInteger amount;
         private final List<String> destinations;
 
-        public sandboxThread(SmartContract sc, String origin, BigInteger amount, List<String> destinations) {
+        public sandboxThread(ISmartContract sc, String origin, BigInteger amount, List<String> destinations) {
             this.sc = sc;
             this.origin = origin;
             this.amount = amount;

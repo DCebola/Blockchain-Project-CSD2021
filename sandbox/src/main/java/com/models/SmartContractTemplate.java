@@ -1,4 +1,4 @@
-package com.untrusted;
+package com.models;
 
 import com.google.gson.Gson;
 import com.models.Transaction;
@@ -9,7 +9,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.math.*;
 
-public class SmartContract implements Serializable {
+public class SmartContractTemplate implements Serializable {
     private static final String DATE_FORMATTER = "yyyy-MM-dd HH:mm:ss";
     private static final long serialVersionUID = 562968899267729629L;
 
@@ -32,7 +32,7 @@ public class SmartContract implements Serializable {
     private String hash;
 
 
-    public SmartContract(int outputNumber, String author, String date, Gson gson) {
+    public SmartContractTemplate(int outputNumber, String author, String date, Gson gson) {
         this.gson = gson;
         this.dateTimeFormatter = DateTimeFormatter.ofPattern(DATE_FORMATTER);
         this.outputNumber = outputNumber;
@@ -49,7 +49,7 @@ public class SmartContract implements Serializable {
         this.done = false;
     }
 
-    public SmartContract() {
+    public SmartContractTemplate() {
         this.gson = null;
         this.dateTimeFormatter = null;
         this.outputNumber = -1;
