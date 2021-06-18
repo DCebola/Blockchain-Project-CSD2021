@@ -61,7 +61,7 @@ note: BFTSMaRT is configured for benchmark so only one key pair is provided for 
 
 (Note! ECDSA does not work with private transaction.)
 
-To deploy the proxies, replicas and redis containers to a custom network use **deploy <n_proxies> <n_faults> [-tls <key_type>]**
+To deploy the proxies, replicas, redis containers and sandboxes to a custom network use **deploy <n_proxies> <n_faults> [-tls <key_type>]**
 
 Ex.1 To deploy a system that can tolerate 1 fault, uses TLS with ECDSA and creates 5 proxies
 
