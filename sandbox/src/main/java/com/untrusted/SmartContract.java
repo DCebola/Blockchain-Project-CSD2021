@@ -2,10 +2,9 @@ package com.untrusted;
 
 import com.google.gson.Gson;
 import com.models.Transaction;
-import com.models.SmartContractEvent;
+import com.enums.SmartContractEvent;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.math.*;

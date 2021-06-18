@@ -2,6 +2,8 @@ import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 import bftsmart.tom.util.TOMUtil;
+import com.enums.LedgerRequestType;
+import com.enums.SmartContractEvent;
 import com.google.gson.Gson;
 import com.models.*;
 import com.untrusted.SmartContract;
@@ -35,7 +37,6 @@ public class BFTSmartSandbox extends DefaultSingleRecoverable {
     private static final String DUMMY_DESTINATION_2 = "DUMMY_DESTINATION_2";
     private static final String DUMMY_ORIGIN = "DUMMY_ORIGIN";
     private static final BigInteger DUMMY_AMOUNT = BigInteger.valueOf(100);
-    private static final String SANDBOX_TYPE = "SANDBOX";
 
 
     private final Logger logger;
