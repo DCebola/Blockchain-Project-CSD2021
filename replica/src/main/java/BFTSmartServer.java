@@ -175,11 +175,11 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
             byte[] hash;
             jedis = jedisPool.getResource();
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
             if (jedis.exists(publicKey)) {
-                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
                 jedisPool.close();
-                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
                 logger.info("Key {} already registered", publicKey);
                 hash = TOMUtil.computeHash(
                         Boolean.toString(false)
@@ -205,8 +205,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 writeRegisterKeyResponse(objOut, hash, true, new Wallet(publicKey, publicKeyAlgorithm, signatureAlgorithm, hashAlgorithm, encryptedZero, pkNSquare));
             }
 
-        } catch(Exception e) {
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+        } catch (Exception e) {
+
         }
     }
 
@@ -215,27 +215,27 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
         try {
             logger.debug("New OBTAIN_COINS operation.");
             String publicKey = (String) objIn.readObject();
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
             jedis = jedisPool.getResource();
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
             if (!jedis.exists(publicKey)) {
                 jedis.close();
-                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
                 logger.info("Key {} does not exist", publicKey);
                 objOut.writeBoolean(false);
             } else {
-                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
                 jedis.close();
-                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
                 BigInteger amount = (BigInteger) objIn.readObject();
                 byte[] msgSignature = (byte[]) objIn.readObject();
                 String date = (String) objIn.readObject();
-                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
                 jedis = jedisPool.getResource();
-                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
                 String nonce = jedis.lindex(publicKey, WALLET_NONCE);
                 jedis.close();
-                System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
                 String msg = LedgerRequestType.OBTAIN_COINS.name().concat(gson.toJson(amount)).concat(nonce).concat(date);
                 System.out.println("-----------");
                 System.out.println(msg);
@@ -262,8 +262,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     writeObtainAmountResponse(objOut, hash, false, null, new BigInteger("-1"), null);
                 }
             }
-        } catch(Exception e) {
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+        } catch (Exception e) {
+
         }
     }
 
@@ -457,9 +457,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     writeSendMinedResponse(objOut, hash, false, null);
                 }
             }
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
-        } catch(Exception e) {
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
+        } catch (Exception e) {
+
         }
     }
 
@@ -531,8 +531,8 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
             writeCommitWalletResponse(objOut, hash, true);
             logger.debug("Registered key {} with hash algorithm {}, signature algorithm {} and nonce {} and homomorphic square of key {}", publicKey, hashAlgorithm, signatureAlgorithm, INITIAL_NONCE, pkNSquare.toString());
             logger.info("Registered key {}", publicKey);
-        } catch(Exception e) {
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+        } catch (Exception e) {
+
         }
     }
 
@@ -667,15 +667,6 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                 logger.info("{}", gson.toJson(removedTransactions));
                 cleanPendingRewards(removedTransactions);
                 addBlock(publicKey, nonce, block, reward, commit, objOut);
-
-                jedis = jedisPool.getResource();
-                List<String> l2 = jedis.lrange(BLOCK_CHAIN, -3, -3);
-                jedisPool.close();
-                if (l2.size() > 0) {
-                    jedis = jedisPool.getResource();
-                    jedis.lpop(PENDING_TRANSACTIONS, l2.size());
-                    jedis.close();
-                }
             } else {
                 jedis = jedisPool.getResource();
                 l = jedis.lrange(BLOCK_CHAIN, -2, -2);
@@ -705,10 +696,10 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                             jedis = jedisPool.getResource();
                             jedis.rpop(BLOCK_CHAIN, 1);
                             jedis.close();
-                        /*jedis = jedisPool.getResource();
-                        List<String> removedTransactions = jedis.rpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size() - lastBlock.getSignedTransactions().size());
-                        jedis.close();*/
-                            //cleanPendingRewards(removedTransactions);
+                            jedis = jedisPool.getResource();
+                            List<String> removedTransactions = jedis.rpop(PENDING_TRANSACTIONS, block.getSignedTransactions().size() - lastBlock.getSignedTransactions().size());
+                            jedis.close();
+                            cleanPendingRewards(removedTransactions);
                             cancelReward(lastBlock.getBlockHeader().getPreviousHash());
                             addBlock(publicKey, nonce, block, reward, commit, objOut);
                         }
@@ -723,9 +714,9 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
                     writeCommitBlockResponse(objOut, hash, false, null);
                 }
             }
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
-        } catch(Exception e) {
-            System.out.println(jedisPool.getNumActive() + " " + jedisPool.getNumIdle() + " " + jedisPool.getNumWaiters());
+
+        } catch (Exception e) {
+
         }
     }
 
@@ -1130,55 +1121,24 @@ public class BFTSmartServer extends DefaultSingleRecoverable {
 
     private List<ValidTransaction> getPendingTransactions(int numTransactions) {
         List<ValidTransaction> deserializedLedger = new LinkedList<>();
-        List<String> serializedLedger = null;
+        List<String> serializedLedger;
         jedis = jedisPool.getResource();
         long globalLedgerSize = jedis.llen(PENDING_TRANSACTIONS);
         jedis.close();
-
         if (numTransactions >= 0 && globalLedgerSize > 0) {
-            jedis = jedisPool.getResource();
-            List<String> blocks = jedis.lrange(BLOCK_CHAIN, -1, -1);
-            jedis.close();
-            if (blocks.size() == 1) { //only exists the genesis block
-                if (numTransactions <= globalLedgerSize) {
-                    jedis = jedisPool.getResource();
-                    serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, 0, numTransactions);
-                    jedis.close();
-                } else {
-                    jedis = jedisPool.getResource();
-                    serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, 0, -1);
-                    jedis.close();
-                }
-            } else if (blocks.size() == 2) {
-                int blockSize = gson.fromJson(blocks.get(1), Block.class).getSignedTransactions().size();
-                if (numTransactions <= globalLedgerSize-blockSize) {
-                    jedis = jedisPool.getResource();
-                    serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, blockSize, blockSize+numTransactions);
-                    jedis.close();
-                } else {
-                    jedis = jedisPool.getResource();
-                    serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, blockSize, -1);
-                    jedis.close();
-                }
+            if (numTransactions <= globalLedgerSize) {
+                jedis = jedisPool.getResource();
+                serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, 0, numTransactions);
+                jedis.close();
             } else {
-                int firstBlockSize = gson.fromJson(blocks.get(blocks.size()-1), Block.class).getSignedTransactions().size();
-                int secondBlockSize = gson.fromJson(blocks.get(blocks.size()-2), Block.class).getSignedTransactions().size();
-                int total = firstBlockSize+secondBlockSize;
-                if (numTransactions <= globalLedgerSize-total) {
-                    jedis = jedisPool.getResource();
-                    serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, total, total+numTransactions);
-                    jedis.close();
-                } else {
-                    jedis = jedisPool.getResource();
-                    serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, total, -1);
-                    jedis.close();
-                }
+                jedis = jedisPool.getResource();
+                serializedLedger = jedis.lrange(PENDING_TRANSACTIONS, 0, -1);
+                jedis.close();
             }
             serializedLedger.forEach(t -> deserializedLedger.add(gson.fromJson(t, ValidTransaction.class)));
             return deserializedLedger;
         }
         return null;
-
     }
 
 
