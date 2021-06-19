@@ -95,7 +95,7 @@ To run the command line client use **java -cp target/client-0.0.1-SNAPSHOT.jar -
 
 (Note! Benchmark client is outdated and is not compatible with recent version of the system, due to changes necessary for the transactions with privacy.)
 
-To run the benchmark client use **java -cp target/client-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.BenchmarkClient org.springframework.boot.loader.PropertiesLauncher <proxy port_to_connect> <file with ops in resources folder> <key-alias> <key-pass> **
+To run the benchmark client use **java -cp target/client-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.BenchmarkClient org.springframework.boot.loader.PropertiesLauncher <proxy port_to_connect> <file with ops in resources folder> <key-alias> <key-pass>**
 
 
 Authors:
