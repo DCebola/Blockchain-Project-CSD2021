@@ -263,7 +263,7 @@
 	With the increasing number of distributed systems being used for critical tasks, it is imperative that they are dependable and ensure high degree of reliability, availability, safety, confidentiality, fault tolerance, integrity and maintainability. When designing dependable systems it is necessary to consider the execution environment and the correct adversary model.
 	
 	Inspired by the rise of blockchain technologies and the way such technologies deal with consensus, in the realm of financial operations, we will present the implementation of a dependable decentralized ledger for a blockchained global wallet service. From this point onwards we will refer to the system using BGWS.
-	BGWS will operate in an asynchronous environment, with no timing assumptions, and consider that all faults are byzantine. 
+	BGWS will operate in an asynchronous environment, with no timing assumptions, over authenticated channels and consider byzantine faults. 
 
 	We will study how the number of replicas impact the overall performance of the system, how the size of blocks affect the latency of successful mining operations and how the system tolerates faults.
 		
@@ -286,7 +286,7 @@
 	In State Machine Replication, multiple replicas of a system are created, each one being a deterministic state machine. If they are given an input of the same operations in the same order, all the replicas will transition to the same state and produce the same output. The ordering of the operations will have to be decided through an agreement protocol. 
 
 	\subsection{Consensus}
-	There are various forms of consensus, from binary consensus, multi-valued consensus, to probabilistic consensus that relies on randomization algorithms. Let us consider the following specification of consensus: 
+	Consensus algorithms are used by processes to reach agreement. There are various forms of consensus and algorithms that solve them\cite{lamport2001paxos}\cite{raft}. From binary consensus, multi-valued consensus, to probabilistic consensus that relies on randomization algorithms\cite{moniz2008ritas}\cite{moniz2006experimental}. Let us consider the following specification of consensus: 
 
 	\begin{description}
 		\item \textbf{C1 (Termination)}: Every correct process eventually decides a value.
@@ -295,8 +295,12 @@
 		\item \textbf{C4 (Agreement)}: No two correct processes decide differently.
 	\end{description}
 
-	In a byzantine fault environment
+	In an environment with byzantine such specification is not enough. Byzantine processes can have an unpredictable and arbitrary behavior, so we need to restrict all properties to correct processes and the validity property must require that every value decided by a correct process must have been proposed by some process.
+	We also need to adopt the notion of \textit{weak} and \textit{strong} validity, respectively, for execution scenarios where all processes are correct and execution scenarios where there are byzantine processes. 
+	
+	In byzantine consensus values can not be invented arbitrarily and must have been proposed by a correct process. In  \textit{strong} validity, if there is no agreement in the decided value, an arbitrary $\bot$ is decided, that symbolizes “not decided”.
 
+	To implement byzantine consensus in practice, the PBFT\cite{castro1999practical} algorithm uses public-key cryptography, and digital signatures. The system needs quorums (majorities) of $3n+1$ nodes to tolerate $n$ faults. 
 
 	\subsection{Blockchain Technology}
 	\section{System Model and Architecture}

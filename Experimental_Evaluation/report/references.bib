@@ -61,14 +61,52 @@
   organization={IEEE}
 }
 
-%FLP Impossibility
-@article{fischer1985impossibility,
-  title={Impossibility of distributed consensus with one faulty process},
-  author={Fischer, Michael J and Lynch, Nancy A and Paterson, Michael S},
-  journal={Journal of the ACM (JACM)},
+%Consensus
+@article{lamport2001paxos,
+  title={Paxos made simple},
+  author={Lamport, Leslie and others},
+  journal={ACM Sigact News},
   volume={32},
-  number={2},
-  pages={374--382},
-  year={1985},
-  publisher={ACM New York, NY, USA}
+  number={4},
+  pages={18--25},
+  year={2001}
 }
+
+
+@inproceedings{raft,
+author = {Ongaro, Diego and Ousterhout, John},
+title = {In Search of an Understandable Consensus Algorithm},
+year = {2014},
+isbn = {9781931971102},
+publisher = {USENIX Association},
+address = {USA},
+abstract = {Raft is a consensus algorithm for managing a replicated log. It produces a result equivalent to (multi-)Paxos, and it is as efficient as Paxos, but its structure is different from Paxos; this makes Raft more understandable than Paxos and also provides a better foundation for building practical systems. In order to enhance understandability, Raft separates the key elements of consensus, such as leader election, log replication, and safety, and it enforces a stronger degree of coherency to reduce the number of states that must be considered. Results from a user study demonstrate that Raft is easier for students to learn than Paxos. Raft also includes a new mechanism for changing the cluster membership, which uses overlapping majorities to guarantee safety.},
+booktitle = {Proceedings of the 2014 USENIX Conference on USENIX Annual Technical Conference},
+pages = {305–320},
+numpages = {16},
+location = {Philadelphia, PA},
+series = {USENIX ATC'14}
+}
+
+@article{moniz2008ritas,
+  title={RITAS: Services for randomized intrusion tolerance},
+  author={Moniz, Henrique and Neves, Nuno Ferreria and Correia, Miguel and Verissimo, Paulo},
+  journal={IEEE transactions on dependable and secure computing},
+  volume={8},
+  number={1},
+  pages={122--136},
+  year={2008},
+  publisher={IEEE}
+}
+
+@inproceedings{moniz2006experimental,
+  title={Experimental comparison of local and shared coin randomized consensus protocols},
+  author={Moniz, Henrique and Neves, Nuno Ferreira and Correia, Miguel and Ver{\'\i}ssimo, Paulo},
+  booktitle={2006 25th IEEE Symposium on Reliable Distributed Systems (SRDS'06)},
+  pages={235--244},
+  year={2006},
+  organization={IEEE}
+}
+
+
+
