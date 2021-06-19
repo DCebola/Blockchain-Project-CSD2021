@@ -251,23 +251,6 @@ public class RestClient {
             BigInteger encryptedZero = HomoAdd.encrypt(new BigInteger("0"), pk);
             //BigInteger encrypted10 = HomoAdd.encrypt(new BigInteger("0"),pk);
             BigInteger pkNSquare = pk.getNsquare();
-            //pk = new PaillierKey(currentSession.getPk().getP(), currentSession.getPk().getQ(),currentSession.getPk().getLambda(),currentSession.getPk().getN(),currentSession.getPk().getNsquare(),currentSession.getPk().getG(),currentSession.getPk().getMu());
-            //encrypted10 = HomoAdd.encrypt(new BigInteger("0"),pk);
-            //System.out.println(encrypted10);
-            //BigInteger encryptedResult = HomoAdd.dif(encryptedZero,encrypted10,pkNSquare);
-            //BigInteger decryptResult = HomoAdd.decrypt(encryptedResult,pk);
-
-            /*System.out.println("Encrypted Zero");
-            System.out.println(encryptedZero);
-            System.out.println("Encrypted 10");
-            System.out.println(encrypted10);
-            System.out.println("PkSquare");
-            System.out.println(pkNSquare);
-            System.out.println("EncryptedResult");
-            System.out.println(encryptedResult);
-            System.out.println("DecryptedResult");
-            System.out.println(decryptResult);*/
-
 
             HttpEntity<RegisterKeyMsgBody> request = new HttpEntity<>(
                     new RegisterKeyMsgBody(currentSession.getSigAlg(), currentSession.getPublicKey().getAlgorithm(), currentSession.getHashAlgorithm(), encryptedZero, pkNSquare));
