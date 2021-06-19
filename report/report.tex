@@ -211,21 +211,14 @@
 	% one-size-fits-all approach a daunting prospect. For instance, compsoc 
 	% journal papers have the author affiliations above the "Manuscript
 	% received ..."  text while in non-compsoc journals this is reversed. Sigh.
-
-	\IEEEtitleabstractindextext{
-
 		\author{Diogo Cebola, 52718 and \and
 		Gonçalo Areia, 52714}% <-this % stops a space
 
-		\begin{abstract}
+	%\IEEEtitleabstractindextext{
 		
-		\end{abstract}
-	
-	
-		\begin{IEEEkeywords}
-			Dependable Distributed Systems, Blockchain, Byzantine Fault Tolerance
-		\end{IEEEkeywords}
-	}
+		
+
+	%}
 	
 	
 	\maketitle
@@ -248,24 +241,26 @@
 	%
 	% For peerreview papers, this IEEEtran command inserts a page break and
 	% creates the second title. It will be ignored for other modes.
+
 	%\IEEEpeerreviewmaketitle
-	
-	\IEEEpeerreviewmaketitle
-	\IEEEraisesectionheading{\section{Introduction}\label{sec:introduction}}
+	\begin{abstract}
+		
+	\end{abstract}
+
+
+	\begin{IEEEkeywords}
+			
+	\end{IEEEkeywords}
+
+	%\vspace{\line}
+	%\IEEEraisesectionheading{\label{sec:introduction}}
+	\section{Introduction}
 
 	%(defining the problem, goals/objectives and initial presentation of the solution as a way to address the problem). Finish this with a summary of the organization of the remaining
 
 	\IEEEPARstart{T}{}his work was proposed by professor Henrique Domingos as the course project of “Dependable Distributed Systems“ 2020-21.
 
-	From cloud and world-wide e-commerce platforms to banking replacements, distributed systems are widely used nowadays for various tasks.
-	Such tasks can range from simple consultations (e.g. querying products available in an online store) to critical operations (e.g. money transfers). Frequently these operations need to be ordered and the processes involved are required to reach an agreement. To solve this problem distributed systems often rely on state machine replication and a consensus algorithm.
-
-	With the increasing number of distributed systems being used for critical tasks, it is imperative that they are dependable and ensure high degree of reliability, availability, safety, confidentiality, fault tolerance, integrity and maintainability. When designing dependable systems it is necessary to consider the execution environment and the correct adversary model.
-	
-	Inspired by the rise of blockchain technologies and the way such technologies deal with consensus, in the realm of financial operations, we will present the implementation of a dependable decentralized ledger for a blockchained global wallet service. From this point onwards we will refer to the system using BGWS.
-	BGWS will operate in an asynchronous environment, with no timing assumptions, and consider that all faults are byzantine. 
-
-	We will study how the number of replicas impact the overall performance of the system, how the size of blocks affect the latency of successful mining operations and how the system tolerates faults.
+	Since the appearance 
 		
 	The remaining of the document is organized as follows.
 	In Section 2, we introduce important concepts related to our work, more specifically Byzantine Fault Tolerance and the Blockchain technology.
@@ -273,31 +268,14 @@
 	Internal mechanisms, design assumptions and the service planes are covered in section 4.
 	In Section 5, we explain the technology stack used and development issues.
 	Section 6 will present the experimental setting and discussion of the obtained results.
-	In Section 7 we evaluate the current state of the BGWS system, its correctness, limitations and trade-offs.
-	Finally, in Section 7 we conclude the document and mention future work.
+	In Section 7 we evaluate the current state of the BGWS system, its correctness, limitations and tradeofs.
+	Finally, in Section 7 we conclude the document and mention future work.\cite{nakamoto2019bitcoin}
 	
 
 
 
 	\section{Background}
-	\subsection{State Machine Replication}
-	We can define a state machine as a set of states, a set of transitions, and a current state. When a user issues an operation to the machine, that operation triggers a transition from its current state to a new one, producing an output. 
-
-	In State Machine Replication, multiple replicas of a system are created, each one being a deterministic state machine. If they are given an input of the same operations in the same order, all the replicas will transition to the same state and produce the same output. The ordering of the operations will have to be decided through an agreement protocol. 
-
-	\subsection{Consensus}
-	There are various forms of consensus, from binary consensus, multi-valued consensus, to probabilistic consensus that relies on randomization algorithms. Let us consider the following specification of consensus: 
-
-	\begin{description}
-		\item \textbf{C1 (Termination)}: Every correct process eventually decides a value.
-		\item \textbf{C2 (Validity)}: If a process decides v, then v was proposed by some process.
-		\item \textbf{C3 (Integrity)}: No process decides twice.
-		\item \textbf{C4 (Agreement)}: No two correct processes decide differently.
-	\end{description}
-
-	In a byzantine fault environment
-
-
+	\subsection{Byzantine Fault Tolerance}
 	\subsection{Blockchain Technology}
 	\section{System Model and Architecture}
 
