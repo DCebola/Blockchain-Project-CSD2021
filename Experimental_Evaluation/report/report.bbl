@@ -50,14 +50,6 @@ M.~Castro, B.~Liskov \emph{et~al.}, ``Practical byzantine fault tolerance,'' in
 S.~Nakamoto, ``Bitcoin: A peer-to-peer electronic cash system,'' Manubot, Tech.
   Rep., 2019.
 
-\bibitem{CasperTheFriendlyFinalityGadget}
-V.~Buterin and V.~Griffith, ``Casper the friendly finality gadget,''
-  \emph{arXiv preprint arXiv:1710.09437}, 2017.
-
-\bibitem{CasperMadeSimple}
-O.~Moindrot and C.~Bournhonesque, ``Proof of stake made simple with casper,''
-  \emph{ICME, Stanford University}, 2017.
-
 \bibitem{androulaki2018hyperledger}
 E.~Androulaki, A.~Barger, V.~Bortnikov, C.~Cachin, K.~Christidis, A.~De~Caro,
   D.~Enyeart, C.~Ferris, G.~Laventman, Y.~Manevich \emph{et~al.}, ``Hyperledger
@@ -69,6 +61,21 @@ J.~Sousa, A.~Bessani, and M.~Vukolic, ``A byzantine fault-tolerant ordering
   service for the hyperledger fabric blockchain platform,'' in \emph{2018 48th
   annual IEEE/IFIP international conference on dependable systems and networks
   (DSN)}.\hskip 1em plus 0.5em minus 0.4em\relax IEEE, 2018, pp. 51--58.
+
+\bibitem{croman2016scaling}
+K.~Croman, C.~Decker, I.~Eyal, A.~E. Gencer, A.~Juels, A.~Kosba, A.~Miller,
+  P.~Saxena, E.~Shi, E.~G. Sirer \emph{et~al.}, ``On scaling decentralized
+  blockchains,'' in \emph{International conference on financial cryptography
+  and data security}.\hskip 1em plus 0.5em minus 0.4em\relax Springer, 2016,
+  pp. 106--125.
+
+\bibitem{CasperTheFriendlyFinalityGadget}
+V.~Buterin and V.~Griffith, ``Casper the friendly finality gadget,''
+  \emph{arXiv preprint arXiv:1710.09437}, 2017.
+
+\bibitem{CasperMadeSimple}
+O.~Moindrot and C.~Bournhonesque, ``Proof of stake made simple with casper,''
+  \emph{ICME, Stanford University}, 2017.
 
 \bibitem{bessani2014stateBFTSMART}
 \BIBentryALTinterwordspacing

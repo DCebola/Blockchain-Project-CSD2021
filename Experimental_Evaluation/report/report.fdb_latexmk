@@ -1,15 +1,15 @@
 # Fdb version 3
-["bibtex report"] 1624140141 "report.aux" "report.bbl" "report" 1624140415
+["bibtex report"] 1624202283 "report.aux" "report.bbl" "report" 1624202321
   "./IEEEtran.bst" 1622830549 57748 7c8250ecf02814ce6ddc0cdbb63df1dd ""
-  "references.bib" 1624137838 4167 ec152ebe2eaab55138375cae5806cc18 ""
-  "report.aux" 1624140415 3572 2bae7d033ccf28d8f7fb6dff00432a58 "pdflatex"
+  "references.bib" 1624202077 4604 a86996c5f4fb3c2d405c752dd50ef750 ""
+  "report.aux" 1624202321 3813 20999e2b6c6df067cf5fc83fd623d179 "pdflatex"
   (generated)
   "report.blg"
   "report.bbl"
-["pdflatex"] 1624140414 "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.tex" "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.pdf" "report" 1624140415
+["pdflatex"] 1624202320 "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.tex" "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.pdf" "report" 1624202321
   "/etc/texmf/web2c/texmf.cnf" 1612642145 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.aux" 1624140415 3572 2bae7d033ccf28d8f7fb6dff00432a58 ""
-  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.tex" 1624140414 17977 a930355c693aea0e96e5b17a158f814d ""
+  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.aux" 1624202321 3813 20999e2b6c6df067cf5fc83fd623d179 ""
+  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.tex" 1624202320 20445 1883c0c7c920ee3f3047c901cb36a7b4 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/helvetic/phvb7t.tfm" 1136768653 2240 eb56c13537f4d8a0bd3fafc25572b1bd ""
@@ -101,14 +101,14 @@
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1612642184 128028 f533b797fba58d231669ea19e894e23e ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1612642189 4791331 eee4713c8bc0357f7003bf4500be04a4 ""
   "IEEEtran.cls" 1440636524 288304 b67b6fc6c2abb39f9b461923f5199343 ""
-  "report.aux" 1624140415 3572 2bae7d033ccf28d8f7fb6dff00432a58 "pdflatex"
-  "report.bbl" 1624140141 3603 d871193512b21f7300b94b1bc768efa7 "bibtex report"
-  "report.out" 1624140415 1176 32726c8e47e1b74ec5955c5c2b2edede "pdflatex"
-  "report.tex" 1624140414 17977 a930355c693aea0e96e5b17a158f814d ""
+  "report.aux" 1624202321 3813 20999e2b6c6df067cf5fc83fd623d179 "pdflatex"
+  "report.bbl" 1624202283 3953 f713c770bc77127fa3ef96cd55836e4e "bibtex report"
+  "report.out" 1624202321 1176 32726c8e47e1b74ec5955c5c2b2edede "pdflatex"
+  "report.tex" 1624202320 20445 1883c0c7c920ee3f3047c901cb36a7b4 ""
   (generated)
-  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.pdf"
+  "report.log"
   "report.out"
   "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.log"
   "report.pdf"
   "report.aux"
-  "report.log"
+  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.pdf"

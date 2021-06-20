@@ -268,7 +268,7 @@
 	We will study how the number of replicas impact the overall performance of the system, how the size of blocks affect the latency of successful mining operations and how the system tolerates faults.
 		
 	The remaining of the document is organized as follows.
-	In Section 2, we introduce important concepts related to our work, more specifically Byzantine Fault Tolerance and the Blockchain technology.
+	In Section 2, we introduce important concepts related to our work, more specifically, State Machine Replication, Consensus under the byzantine fault model and Blockchain technologies.
 	In Section 3, we present BGWS system model and architecture.
 	Internal mechanisms, design assumptions and the service planes are covered in section 4.
 	In Section 5, we explain the technology stack used and development issues.
@@ -276,8 +276,6 @@
 	In Section 7 we evaluate the current state of the BGWS system, its correctness, limitations and trade-offs.
 	Finally, in Section 7 we conclude the document and mention future work.
 	
-
-
 
 	\section{Background}
 	\subsection{State Machine Replication}
@@ -303,6 +301,21 @@
 	To implement byzantine consensus in practice, the PBFT\cite{castro1999practical} algorithm uses public-key cryptography, and digital signatures. The system needs quorums (majorities) of $3n+1$ nodes to tolerate $n$ faults. 
 
 	\subsection{Blockchain Technology}
+	First we will define the concepts of \textit{transaction}, \textit{smart-contract} and \textit{block}.
+	
+	A transaction represents a contract between peers, such contract can be as simple as a transfer of money from peer $A$ to peer $B$ or can be as complex as a programmable “smart-contract” with a custom set of rules, inputs and outputs.
+	
+	A block is a record that contains $n$ transactions, transactions within the block must be exclusive to the block. 
+
+	A blockchain can be defined as an expandable list of blocks that are logically ordered with the use of hash functions. Each block contains the hash of the previous block in the list, forming a logical chain.
+
+	Consensus in blockchains is solved with a \textit{proof of finality}. Each peer must propose a block with this proof. A decision protocol is applied over all proposed blocks, and the block with the best proof is added to the chain. Normally, a block can only be considered definitive, in the chain, after a certain amount of new blocks have been added. This is due to the irreversibility of the chain being derived from the cost of reverting all the previous blocks. The cost is directly associated with the type of proof used.
+
+	Bitcoin\cite{nakamoto2019bitcoin} uses a \textit{proof of work}, where the cost of the proof is the computational difficulty to complete a cryptographic puzzle that consists in generating a block hash with a target number of leading 0s. To execute a \textit{Sybil attack} on the such network, not only the attacker would have to possess the computational power superior to $51\%$ of the peers but, to revert the order of the chain, it would have to re-compute all previous \textit{proofs of work}. In practice, this is almost impossible to execute, and it results in being more profitable to just contribute as a well-behaved peer.
+
+	Bitcoin, with this technique to solve consensus, was the first decentralized virtual currency to solve the \textit{double spending problem}. Since its appearance new blockchains have been proposed, some with a different modular and permissioned architecture, like the Hyperledger Fabric \cite{androulaki2018hyperledger}\cite{sousa2018byzantineHyperledger}, others with more scalable and efficient proofs of finality\cite{croman2016scaling}, like Ethereum with its Casper protocol\cite{CasperTheFriendlyFinalityGadget}\cite{CasperMadeSimple} and a \textit{proof of stake}.
+
+	
 	
 	\section{System Model and Architecture}
 
