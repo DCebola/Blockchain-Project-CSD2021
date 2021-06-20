@@ -71,6 +71,7 @@ public class BenchmarkClient {
     private static final String VERIFY_OP = "VERIFY_OP";
     private static final String OBTAIN_LAST_BLOCK = "OBTAIN_LAST_BLOCK";
     private static final String MINE_TRANSACTIONS = "MINE_TRANSACTIONS";
+    private static final String MINE_TRANSACTIONS_PROOF_OF_WORK = "MINE_TRANSACTIONS_PROOF_OF_WORK";
     private static final String SEND_MINED_BLOCK = "SEND_MINED_BLOCK";
     private static final String TRANSFER_MONEY_WITH_PRIVACY = "TRANSFER_MONEY_WITH_PRIVACY";
     private static final String OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS = "OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS";
@@ -97,7 +98,8 @@ public class BenchmarkClient {
     private static final String PASS = "Pass";
     private static final String CLIENT_1 = "client1";
     private static final String CLIENT_1_PASS = "client1Pass";
-
+    private static String benchmarkRun;
+    private static final String MINING_AND_PROOF = "MINING_AND_PROOF";
 
     /*
     REQUEST_NONCE
@@ -137,10 +139,11 @@ public class BenchmarkClient {
         String filename = "";
         BufferedWriter writer = null;
         char[] clientPassword = null;
+        benchmarkRun = args[1];
         if (args.length > 2) {
             client = args[2];
             clientPassword = args[3].toCharArray();
-            filename = "src/main/resources/".concat(args[1]).concat("_").concat(client).concat("_results_").concat("8.csv");
+            filename = "src/main/resources/benchmark_results/".concat(benchmarkRun).concat("_").concat(client).concat("_results_").concat(args[4]).concat(".csv");
             writer = new BufferedWriter(new FileWriter(filename, true));
         }
 
@@ -167,7 +170,7 @@ public class BenchmarkClient {
         requestFactory.setHttpClient(httpClient);
         Scanner in = new Scanner(System.in);
 
-        BufferedReader buf = new BufferedReader(new FileReader("src/main/resources/".concat(args[1])));
+        BufferedReader buf = new BufferedReader(new FileReader("src/main/resources/benchmark_runs/".concat(benchmarkRun)));
 
         String line = buf.readLine();
         while (line != null) {
@@ -562,9 +565,13 @@ public class BenchmarkClient {
             if (response.getBody() != null) {
                 BlockHeader blockHeader = response.getBody();
                 blockHeader.setAuthor(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
+                long startProofOfWork = System.currentTimeMillis();
                 BlockHeader finalBlock = generateProofOfWork(blockHeader);
-                long duration = System.currentTimeMillis() - start;
+                long durationProofOfWork = System.currentTimeMillis() - startProofOfWork;
+                if(benchmarkRun.equals(MINING_AND_PROOF))
+                    writer.append(MINE_TRANSACTIONS_PROOF_OF_WORK.concat("\t").concat(Long.toString(durationProofOfWork).concat("\n")));
                 sendMinedBlock(requestFactory, finalBlock, writer);
+                long duration = System.currentTimeMillis() - start;
                 writer.append(MINE_TRANSACTIONS.concat("\t").concat(Long.toString(duration).concat("\n")));
             }
         } catch (Exception e) {
