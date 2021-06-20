@@ -140,7 +140,7 @@ public class BenchmarkClient {
         if (args.length > 2) {
             client = args[2];
             clientPassword = args[3].toCharArray();
-            filename = "src/main/resources/".concat(client).concat("_").concat("_results.csv");
+            filename = "src/main/resources/".concat(args[1]).concat("_").concat(client).concat("_results_").concat("8.csv");
             writer = new BufferedWriter(new FileWriter(filename, true));
         }
 
@@ -459,7 +459,7 @@ public class BenchmarkClient {
             System.out.println(currentSession.getNonce());
             System.out.printf("[ %s ]\n", response.getBody());
             currentSession.saveTransaction(response.getBody());
-            if(!opType.equals(OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS)) {
+            if(!opType.equals(OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS) && !opType.equals(SEND_MINED_BLOCK) ) {
                 long duration = System.currentTimeMillis() - start;
                 writer.append(opType.concat("\t").concat(Long.toString(duration)).concat("\n"));
             }
@@ -564,8 +564,8 @@ public class BenchmarkClient {
                 blockHeader.setAuthor(base32.encodeAsString(currentSession.getPublicKey().getEncoded()));
                 BlockHeader finalBlock = generateProofOfWork(blockHeader);
                 long duration = System.currentTimeMillis() - start;
-                writer.append(MINE_TRANSACTIONS.concat("\t").concat(Long.toString(duration).concat("\n")));
                 sendMinedBlock(requestFactory, finalBlock, writer);
+                writer.append(MINE_TRANSACTIONS.concat("\t").concat(Long.toString(duration).concat("\n")));
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
