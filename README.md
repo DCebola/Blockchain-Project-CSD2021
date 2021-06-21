@@ -85,6 +85,9 @@ The sandbox container for the sandbox with id n is named **sandbox-n**, uses the
 
 The redis container for the redis instance of the replica n is name **redis-n**, uses the ip **172.18.30.n**.
 
+**[Simulation with Faults]**
+
+Run the following script after deployment in the scripts directory: **sh start_faults.sh**
 
 
 ## Command line client
@@ -95,7 +98,19 @@ To run the command line client use **java -cp target/client-0.0.1-SNAPSHOT.jar -
 
 (Note! Benchmark client is outdated and is not compatible with recent version of the system, due to changes necessary for the transactions with privacy.)
 
-To run the benchmark client use **java -cp target/client-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.BenchmarkClient org.springframework.boot.loader.PropertiesLauncher <proxy port_to_connect> <file with ops in resources folder> <key-alias> <key-pass>**
+To run the benchmark client use **java -cp target/client-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.BenchmarkClient org.springframework.boot.loader.PropertiesLauncher <proxy port_to_connect> <file with ops in resources folder> <key-alias> <key-pass> <extra_naming_arg>**
+  
+Each client will save its own results in a file located in the resources/benchamark_results in the client. The filename will have the following terminology:
+  <file_with_ops_in_resouces_folder>_<key-alias>_results_<extra_naming_arg>.csv
+  
+<file with ops in resources folder> -> the file needs to be in the resources/benchmark_runs folder in the client. This argument must not include the full path.
+  
+In order to test the benchmark client execute first the following command: **java -cp target/client-0.0.1-SNAPSHOT.jar -Dloader.main=com.clients.BenchmarkClient org.springframework.boot.loader.PropertiesLauncher <proxy port_to_connect> registerClients**
+  
+
+ 
+  
+
 
 
 Authors:
