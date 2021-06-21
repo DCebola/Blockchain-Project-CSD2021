@@ -10,6 +10,7 @@ MINE = 'MINE_RESULTS'
 TRANSFER_MONEY_WITH_PRIVACY = 'TRANSFER_MONEY_WITH_PRIVACY_RESULTS'
 MINING_PROOF_OF_WORK = 'MINING_PROOF_OF_WORK_RESULTS'
 INSTALL_SMARTCONTRACT = 'INSTALL_SMARTCONTRACT'
+FAULTS = 'FAULTS'
 
 
 def extract_mining_values(dir_results):
@@ -190,27 +191,42 @@ def ops_latency_throughput_per_num_replicas():
     plt.savefig('REST_ops.png')
 
 
+def extract_fault_simulation_simulation_values():
+    faults = []
+    no_faults = []
+    i = 0
+    for directory in os.listdir(FAULTS):
+        subdir = os.path.join(FAULTS, directory)
+        all_times = np.zeros((999, 1))
+        for root, dir, files in os.walk(subdir):
+            for file in files:
+                file_dir = os.path.join(subdir, file)
+                times = np.array(np.genfromtxt(file_dir, delimiter='\t', dtype='str')[:, 1]).astype(float)
+                times = np.array(times.reshape(-1, 1))
+                all_times = np.append(all_times, times, axis=1)
+        if i == 0:
+            no_faults = np.mean(np.array(all_times[:, 1:]), axis=1)
+        else:
+            faults = np.mean(np.array(all_times[:, 1:]), axis=1)
+        i = i + 1
 
-def fault_simulation_latency():
+    return no_faults, faults
+
+
+def plot_faults_and_no_faults():
     fig, axs = plt.subplots(1, 1, figsize=(5, 5))
-    for i i
-    transfer_money_with_privacy_latency, transfer_money_with_privacy_throughput = extract_values(
-        TRANSFER_MONEY_WITH_PRIVACY)
-
-    axs[0].set_xlabel("Number of tolerable faults")
-    axs[0].set_ylabel("Latency (ms)")
-    axs[0].plot(obtain_coins_latency[:, 0], obtain_coins_latency[:, 1], marker=".")
-    axs[0].plot(transfer_money_latency[:, 0], transfer_money_latency[:, 1], marker="^")
-    axs[0].plot(client_ledger_latency[:, 0], client_ledger_latency[:, 1], marker="s")
-    axs[0].plot(global_ledger_latency[:, 0], global_ledger_latency[:, 1], marker="+")
-    axs[0].plot(mine_latency[:, 0], mine_latency[:, 1], marker="x")
-    axs[0].plot(transfer_money_with_privacy_latency[:, 0], transfer_money_with_privacy_latency[:, 1], marker="d")
-    axs[0].set_xticks([1, 2, 3, 4])
-    axs[0].legend(
-        ["OBTAIN_COINS", "TRANSFER_MONEY", "CLIENT_LEDGER", "GLOBAL_LEDGER", "TRANSFER_MONEY_WITH_PRIVACY", "MINE"])
+    no_faults, faults = extract_fault_simulation_simulation_values()
+    print(faults)
+    axs.set_xlabel("Number of operations")
+    axs.set_ylabel("Latency (ms)")
+    axs.plot(no_faults, linestyle='-', color='r')
+    axs.plot(faults, linestyle="--", color='b')
+    axs.legend(['No faults', 'With Faults'])
     plt.tight_layout()
-    plt.savefig('REST_ops.png')
+    plt.savefig('Fault_Simulations.png')
+    plt.show()
 
-ops_latency_throughput_per_num_replicas()
-fault_simulation_latency()
-mining_latency_throughput_plt()
+
+# ops_latency_throughput_per_num_replicas()
+plot_faults_and_no_faults()
+# mining_latency_throughput_plt()
