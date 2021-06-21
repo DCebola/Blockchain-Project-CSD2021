@@ -217,7 +217,7 @@ def plot_faults_and_no_faults():
     fig, axs = plt.subplots(1, 1, figsize=(5, 5))
     no_faults, faults = extract_fault_simulation_simulation_values()
     print(faults)
-    axs.set_xlabel("Number of operations")
+    axs.set_xlabel("Operation number")
     axs.set_ylabel("Latency (ms)")
     axs.plot(no_faults, linestyle='-', color='r')
     axs.plot(faults, linestyle="--", color='b')
