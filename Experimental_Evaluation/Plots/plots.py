@@ -152,5 +152,65 @@ def ops_latency_throughput_per_num_replicas():
     plt.tight_layout()
     plt.savefig('REST_ops.png')
 
+
+def ops_latency_throughput_per_num_replicas():
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    obtain_coins_latency, obtain_coins_throughput = extract_values(OBTAIN_COINS)
+    transfer_money_latency, transfer_money_throughput = extract_values(TRANSFER_MONEY)
+    client_ledger_latency, client_ledger_throughput = extract_values(CLIENT_LEDGER)
+    global_ledger_latency, global_ledger_throughput = extract_values(GLOBAL_LEDGER)
+    mine_latency, mine_throughput = extract_values(MINE)
+    transfer_money_with_privacy_latency, transfer_money_with_privacy_throughput = extract_values(
+        TRANSFER_MONEY_WITH_PRIVACY)
+
+    axs[0].set_xlabel("Number of tolerable faults")
+    axs[0].set_ylabel("Latency (ms)")
+    axs[0].plot(obtain_coins_latency[:, 0], obtain_coins_latency[:, 1], marker=".")
+    axs[0].plot(transfer_money_latency[:, 0], transfer_money_latency[:, 1], marker="^")
+    axs[0].plot(client_ledger_latency[:, 0], client_ledger_latency[:, 1], marker="s")
+    axs[0].plot(global_ledger_latency[:, 0], global_ledger_latency[:, 1], marker="+")
+    axs[0].plot(mine_latency[:, 0], mine_latency[:, 1], marker="x")
+    axs[0].plot(transfer_money_with_privacy_latency[:, 0], transfer_money_with_privacy_latency[:, 1], marker="d")
+    axs[0].set_xticks([1, 2, 3, 4])
+    axs[0].legend(
+        ["OBTAIN_COINS", "TRANSFER_MONEY", "CLIENT_LEDGER", "GLOBAL_LEDGER", "TRANSFER_MONEY_WITH_PRIVACY", "MINE"])
+
+    axs[1].set_xlabel("Number of tolerable faults")
+    axs[1].set_ylabel("Throughput (op/s)")
+    axs[1].plot(obtain_coins_throughput[:, 0], obtain_coins_throughput[:, 1], marker=".")
+    axs[1].plot(transfer_money_throughput[:, 0], transfer_money_throughput[:, 1], marker="^")
+    axs[1].plot(client_ledger_throughput[:, 0], client_ledger_throughput[:, 1], marker="s")
+    axs[1].plot(global_ledger_throughput[:, 0], global_ledger_throughput[:, 1], marker="+")
+    axs[1].plot(mine_throughput[:, 0], mine_throughput[:, 1], marker="x")
+    axs[1].plot(transfer_money_with_privacy_throughput[:, 0], transfer_money_with_privacy_throughput[:, 1], marker="d")
+    axs[1].set_xticks([1, 2, 3, 4])
+    axs[1].legend(
+        ["OBTAIN_COINS", "TRANSFER_MONEY", "CLIENT_LEDGER", "GLOBAL_LEDGER", "TRANSFER_MONEY_WITH_PRIVACY", "MINE"])
+    plt.tight_layout()
+    plt.savefig('REST_ops.png')
+
+
+
+def fault_simulation_latency():
+    fig, axs = plt.subplots(1, 1, figsize=(5, 5))
+    for i i
+    transfer_money_with_privacy_latency, transfer_money_with_privacy_throughput = extract_values(
+        TRANSFER_MONEY_WITH_PRIVACY)
+
+    axs[0].set_xlabel("Number of tolerable faults")
+    axs[0].set_ylabel("Latency (ms)")
+    axs[0].plot(obtain_coins_latency[:, 0], obtain_coins_latency[:, 1], marker=".")
+    axs[0].plot(transfer_money_latency[:, 0], transfer_money_latency[:, 1], marker="^")
+    axs[0].plot(client_ledger_latency[:, 0], client_ledger_latency[:, 1], marker="s")
+    axs[0].plot(global_ledger_latency[:, 0], global_ledger_latency[:, 1], marker="+")
+    axs[0].plot(mine_latency[:, 0], mine_latency[:, 1], marker="x")
+    axs[0].plot(transfer_money_with_privacy_latency[:, 0], transfer_money_with_privacy_latency[:, 1], marker="d")
+    axs[0].set_xticks([1, 2, 3, 4])
+    axs[0].legend(
+        ["OBTAIN_COINS", "TRANSFER_MONEY", "CLIENT_LEDGER", "GLOBAL_LEDGER", "TRANSFER_MONEY_WITH_PRIVACY", "MINE"])
+    plt.tight_layout()
+    plt.savefig('REST_ops.png')
+
 ops_latency_throughput_per_num_replicas()
+fault_simulation_latency()
 mining_latency_throughput_plt()
