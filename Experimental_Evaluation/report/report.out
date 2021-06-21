@@ -4,16 +4,51 @@
 \BOOKMARK [2][-]{subsection.2.2}{Consensus}{section.2}% 4
 \BOOKMARK [2][-]{subsection.2.3}{Blockchain Technology}{section.2}% 5
 \BOOKMARK [1][-]{section.3}{System Model and Architecture}{}% 6
-\BOOKMARK [1][-]{section.4}{Mechanisms and Service Planes}{}% 7
-\BOOKMARK [1][-]{section.5}{Implementation}{}% 8
-\BOOKMARK [2][-]{subsection.5.1}{Technology Stack}{section.5}% 9
-\BOOKMARK [2][-]{subsection.5.2}{Issues}{section.5}% 10
-\BOOKMARK [1][-]{section.6}{Experimental Evaluation}{}% 11
-\BOOKMARK [2][-]{subsection.6.1}{Experimental Setup \046 Methodology}{section.6}% 12
-\BOOKMARK [3][-]{subsubsection.6.1.1}{Validation}{subsection.6.1}% 13
-\BOOKMARK [3][-]{subsubsection.6.1.2}{Evaluation}{subsection.6.1}% 14
-\BOOKMARK [2][-]{subsection.6.2}{Experimental Results}{section.6}% 15
-\BOOKMARK [2][-]{subsection.6.3}{Discussion}{section.6}% 16
-\BOOKMARK [1][-]{section.7}{Coverage of Requirements}{}% 17
-\BOOKMARK [1][-]{section.8}{Conclusion \046 Future Work}{}% 18
-\BOOKMARK [1][-]{section*.1}{References}{}% 19
+\BOOKMARK [2][-]{subsection.3.1}{API}{section.3}% 7
+\BOOKMARK [3][-]{subsubsection.3.1.1}{Register: /register/\173who\175}{subsection.3.1}% 8
+\BOOKMARK [3][-]{subsubsection.3.1.2}{Get Nonce: /nonce/\173who\175}{subsection.3.1}% 9
+\BOOKMARK [3][-]{subsubsection.3.1.3}{Obtain amount: /\173who\175/obtainCoins}{subsection.3.1}% 10
+\BOOKMARK [3][-]{subsubsection.3.1.4}{Transfer amount: /transferMoney}{subsection.3.1}% 11
+\BOOKMARK [3][-]{subsubsection.3.1.5}{Transfer money with privacy: /privacyTransfer}{subsection.3.1}% 12
+\BOOKMARK [3][-]{subsubsection.3.1.6}{Obtain private transactions not submitted: /\173who\175/obtainNotSubmittedTransactions }{subsection.3.1}% 13
+\BOOKMARK [3][-]{subsubsection.3.1.7}{Pick not Mined Transactions: /pendingTransactions/\173numPending\175 }{subsection.3.1}% 14
+\BOOKMARK [3][-]{subsubsection.3.1.8}{Send Mined Block: /mine }{subsection.3.1}% 15
+\BOOKMARK [3][-]{subsubsection.3.1.9}{Ledger of Global Transactions: /ledger }{subsection.3.1}% 16
+\BOOKMARK [3][-]{subsubsection.3.1.10}{Ledger of Client transactions: \173who\175/ledger }{subsection.3.1}% 17
+\BOOKMARK [3][-]{subsubsection.3.1.11}{Verify: verify/\173id\175 }{subsection.3.1}% 18
+\BOOKMARK [3][-]{subsubsection.3.1.12}{Obtain last mined block: /lastBlock }{subsection.3.1}% 19
+\BOOKMARK [3][-]{subsubsection.3.1.13}{Install a Smart Contract: /\173who\175/installSmartContract }{subsection.3.1}% 20
+\BOOKMARK [3][-]{subsubsection.3.1.14}{Transfer Money With Smart Contract: /smartTransfer/\173id\175 }{subsection.3.1}% 21
+\BOOKMARK [2][-]{subsection.3.2}{Proxy}{section.3}% 22
+\BOOKMARK [2][-]{subsection.3.3}{Replica}{section.3}% 23
+\BOOKMARK [2][-]{subsection.3.4}{Sandbox}{section.3}% 24
+\BOOKMARK [2][-]{subsection.3.5}{Storage Node}{section.3}% 25
+\BOOKMARK [1][-]{section.4}{Mechanisms and Service Planes}{}% 26
+\BOOKMARK [2][-]{subsection.4.1}{Service Planes}{section.4}% 27
+\BOOKMARK [3][-]{subsubsection.4.1.1}{Consensus Plane}{subsection.4.1}% 28
+\BOOKMARK [3][-]{subsubsection.4.1.2}{Crypto Services Plane}{subsection.4.1}% 29
+\BOOKMARK [3][-]{subsubsection.4.1.3}{Communication Plane}{subsection.4.1}% 30
+\BOOKMARK [3][-]{subsubsection.4.1.4}{Block Ordering Plane}{subsection.4.1}% 31
+\BOOKMARK [3][-]{subsubsection.4.1.5}{Sandboxing Plane}{subsection.4.1}% 32
+\BOOKMARK [3][-]{subsubsection.4.1.6}{Storage Plane}{subsection.4.1}% 33
+\BOOKMARK [2][-]{subsection.4.2}{Message flow}{section.4}% 34
+\BOOKMARK [3][-]{subsubsection.4.2.1}{General message flow}{subsection.4.2}% 35
+\BOOKMARK [3][-]{subsubsection.4.2.2}{Smart contract installation message flow}{subsection.4.2}% 36
+\BOOKMARK [1][-]{section.5}{Implementation}{}% 37
+\BOOKMARK [2][-]{subsection.5.1}{Technology Stack}{section.5}% 38
+\BOOKMARK [3][-]{subsubsection.5.1.1}{Blocks}{subsection.5.1}% 39
+\BOOKMARK [3][-]{subsubsection.5.1.2}{Transactions}{subsection.5.1}% 40
+\BOOKMARK [3][-]{subsubsection.5.1.3}{Smart Contracts}{subsection.5.1}% 41
+\BOOKMARK [2][-]{subsection.5.2}{Issues}{section.5}% 42
+\BOOKMARK [3][-]{subsubsection.5.2.1}{Deployment}{subsection.5.2}% 43
+\BOOKMARK [3][-]{subsubsection.5.2.2}{Container IPs}{subsection.5.2}% 44
+\BOOKMARK [3][-]{subsubsection.5.2.3}{Generation of IDs}{subsection.5.2}% 45
+\BOOKMARK [1][-]{section.6}{Experimental Evaluation}{}% 46
+\BOOKMARK [2][-]{subsection.6.1}{Experimental Setup \046 Methodology}{section.6}% 47
+\BOOKMARK [3][-]{subsubsection.6.1.1}{Validation}{subsection.6.1}% 48
+\BOOKMARK [3][-]{subsubsection.6.1.2}{Evaluation}{subsection.6.1}% 49
+\BOOKMARK [2][-]{subsection.6.2}{Experimental Results}{section.6}% 50
+\BOOKMARK [2][-]{subsection.6.3}{Discussion}{section.6}% 51
+\BOOKMARK [1][-]{section.7}{Coverage of Requirements}{}% 52
+\BOOKMARK [1][-]{section.8}{Conclusion \046 Future Work}{}% 53
+\BOOKMARK [1][-]{section*.1}{References}{}% 54

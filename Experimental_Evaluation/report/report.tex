@@ -218,12 +218,19 @@
 		Gonçalo Areia, 52714}% <-this % stops a space
 
 		\begin{abstract}
+		We present the implementation of a dependable decentralized ledger for a Blockchained Global Wallet Service. Some of the principal features of the system is the capability of using smart contracts and enabling transactions that keep total privacy of the amount transferred, using partial homomorphic encryption.
 		
+		We cover the system model, exposed API, its architecture and design choice for the various planes. We also present implementation details about the technology stack and the principal data structures.
+		
+		Furthermore, we studied the performance of the system under different system configurations and also analyzed the dependency of successful mining operations to the block size.
+		
+		We conclude that latencies are higher for operations that involve \textit{writes} and that the most costly operation in the system is the mining operation. 
+
 		\end{abstract}
 	
 	
 		\begin{IEEEkeywords}
-			Dependable Distributed Systems, Blockchain, Byzantine Fault Tolerance
+			Dependable Distributed Systems, Blockchain, Byzantine Fault Tolerance, Partial Homomorphic Encryption
 		\end{IEEEkeywords}
 	}
 	
@@ -265,7 +272,7 @@
 	Inspired by the rise of blockchain technologies and the way such technologies deal with consensus, in the realm of financial operations, we will present the implementation of a dependable decentralized ledger for a blockchained global wallet service. From this point onwards we will refer to the system using BGWS.
 	BGWS will operate in an asynchronous environment, with no timing assumptions, over authenticated channels and consider byzantine faults. 
 
-	We will study how the number of replicas impact the overall performance of the system, how the size of blocks affect the latency of successful mining operations and how the system tolerates faults.
+	We will study how the number of replicas impact the overall performance of the system, how the size of blocks affects the latency of successful mining operations and how the system tolerates faults.
 		
 	The remaining of the document is organized as follows.
 	In Section 2, we introduce important concepts related to our work, more specifically, State Machine Replication, Consensus under the byzantine fault model and Blockchain technologies.
@@ -301,9 +308,9 @@
 	To implement byzantine consensus in practice, the PBFT\cite{castro1999practical} algorithm uses public-key cryptography, and digital signatures. The system needs quorums (majorities) of $3n+1$ nodes to tolerate $n$ faults. 
 
 	\subsection{Blockchain Technology}
-	First we will define the concepts of \textit{transaction}, \textit{smart-contract} and \textit{block}.
+	First we will define the concepts of \textit{transaction}, \textit{smart contract} and \textit{block}.
 	
-	A transaction represents a contract between peers, such contract can be as simple as a transfer of money from peer $A$ to peer $B$ or can be as complex as a programmable “smart-contract” with a custom set of rules, inputs and outputs.
+	A transaction represents a contract between peers, such contract can be as simple as a transfer of money from peer $A$ to peer $B$ or can be as complex as a programmable “smart contract” with a custom set of rules, inputs and outputs.
 	
 	A block is a record that contains $n$ transactions, transactions within the block must be exclusive to the block. 
 
@@ -316,70 +323,301 @@
 	Bitcoin, with this technique to solve consensus, was the first decentralized virtual currency to solve the \textit{double spending problem}. Since its appearance new blockchains have been proposed, some with a different modular and permissioned architecture, like the Hyperledger Fabric \cite{androulaki2018hyperledger}\cite{sousa2018byzantineHyperledger}, others with more scalable and efficient proofs of finality\cite{croman2016scaling}, like Ethereum with its Casper protocol\cite{CasperTheFriendlyFinalityGadget}\cite{CasperMadeSimple} and a \textit{proof of stake}.
 
 	
-	
 	\section{System Model and Architecture}
+	% Present the system model and then the architecture of your solution ? Try to clarify the reader to understand the main APIs and interfaces in your solution and the role of the components in the architecture in a structured way 
+	
+	In this section we will present an high-level system model with its exposed API and main components. We will also define the role and functions of the components in the system.
+	
 	\begin{figure}[!ht]
 		\includegraphics[width=\linewidth]{figures/System_Model.png}
 		\caption{BGWS system model.}
 	\end{figure}
 	
-
-	% Present the system model and then the architecture of your solution ? Try to clarify the reader to understand the main APIs and interfaces in your solution and the role of the components in the architecture in a structured way 
-
-	\section{Mechanisms and Service Planes}
-
-	% Can explain in more detail the internals of the more relevant components and their highlights, in the way you decide to design and implement and why. System design assumptions, principles, paradigms, concepts and abstractions and fundamental techniques.
-
-	\section{Implementation}
-	\subsection{Technology Stack}
-	\subsection{Issues}
+	\subsection{API}
+	
+	\subsubsection{Register: \textbf{/register/\{who\}}}
+	
+	Allows a user to be registered in the system. The path parameter \textit{who} is the user's public key, which will be used for future verification of authenticity of messages. The body of the request needs to contain information about the signature and hash algorithms that will be used, as well as information needed for dealing with private operations that will use homomorphic encryption. In case of success, the user will receive a nonce needed for protection against replay attacks in future operations.
+	
+	\subsubsection{Get Nonce: \textbf{/nonce/\{who\}}}
+	
+	Allows an already registered user to obtain the shared nonce to request new operations. The path parameter \textit{who} is the user's public key. In case of success, the nonce will be returned to the user.
+	
+	\subsubsection{Obtain amount: \textbf{/\{who\}/obtainCoins}}
+	
+	This operation allows a user to add a specified amount to their balance. The path parameter \textit{who} is the user's public key. The request's body contains the amount required signed with the user's private key. In case of success, a new transaction is registered in the system, with the user as the receiver of the amount and \textit{SYSTEM} as the origin. The transaction will be returned to the user with proofs that it was verified and approved by a quorum of replicas. The transaction will be in a pending state, ready to be added in future blocks.
+	
+	
+	\subsubsection{Transfer amount: \textbf{/transferMoney}}
+	
+	This operation allows a user to transfer money to another user. The body contains a transaction which is signed with the user's private key. If the operation is successful, the user will receive the transaction with proof that it was verified and approved by a quorum of replicas. The transaction will be in a pending state, ready to be added in future blocks.
+	
+	\subsubsection{Transfer money with privacy: \textbf{/privacyTransfer}}
+	Used to register a transaction in the system, where the amount is encrypted with an homomorphic cipher. This allows replicas to perform operations such as obtaining the user's balance with guarantees of privacy regarding the value (only the user can decrypt it). Two different types of transactions can be send. 
+	
+	In the first case, a transaction is send with the sender being the user who requested the operation. The body of the request contains a transaction with information about who encrypted the amount, and a secret value, which is the amount encrypted with the receiver's public key.
+	
+	In the second case, the previous transaction needs to have already been registered in the system, otherwise it will not be accepted. In this transaction, the receiver is the user who initiates the request. The amount in this transaction will be encrypted using homomorphic encryption. The value of the amount can be obtained from the secret value of the previous type of transactions (by decrypting with the private key). The transaction also contains the previous transaction's \textit{id} and the remaining fields are equal. 
+	
+	In either case, the sent information needs to be signed with the user's private key. If it is successful, the transaction will be returned to the user with proofs that it was received, verified and approved by a quorum of replicas. The transaction will be in a pending state, ready to be added in future blocks.
 
 	
+	\subsubsection{Obtain private transactions not submitted: \textbf{/\{who\}/obtainNotSubmittedTransactions} }
+	
+	Allows a user to retrieve the necessary info to submit a private transaction where they are the recipient. The path parameter \textit{who} is the user's public key. In case of success, the user receives a list of information about such transactions.
+
+	\subsubsection{Pick not Mined Transactions: \textbf{/pendingTransactions/\{numPending\}} }
+	
+	This operation allows a user to obtain transactions not yet mined (transactions that are in a pending state). The number of transactions is specified in the path parameter \textit{numPending}. In case of success, the user will receive a pre-generated block header, of the block containing the requested transactions, which the user can mine.
+	
+	\subsubsection{Send Mined Block: \textbf{/mine} }
+	
+	This operation allows a user to send a mined block to be added to the system's blockchain. The request's body contains the mined block and a transaction with a reward for itself. The body's content is signed with the user's private key. In case of success, the new block is added to the system and the transaction reward will be in a pending state, ready to be added in future blocks. The reward transaction is returned to the user with proofs that the operation was accepted and validated by a quorum of replicas.
+	
+	
+	\subsubsection{Ledger of Global Transactions: \textbf{/ledger} }
+	
+	This operation returns the transactions that are contained in the blockchain. A date interval can be send in the request's body, if the user wants to see transactions created on a certain time period. 
+	
+
+	\subsubsection{Ledger of Client transactions: \textbf{\{who\}/ledger} }
+	
+	This operation returns transactions in the blockchain involving the user. A date interval is sent in the request's body if the user wants to see transactions created on certain time period. The path parameter \textit{who} is the user's public key. The request's body is signed with the user's private key.
+	
+	\subsubsection{Verify: \textbf{verify/\{id\}} }
+	
+	This operation returns the blockchain's transaction with the specified id. 
+	
+	\subsubsection{Obtain last mined block: \textbf{/lastBlock} }
+	
+	This operation returns the last block that was added to the blockchain.
+	
+	\subsubsection{Install a Smart Contract: \textbf{/\{who\}/installSmartContract} }
+	
+	This operation allows the user to install a smart contract in the blockchain. The path parameter \textit{who} is the user's public key. The request's body is signed with the user's private key and contains the byte code of the contract to be installed. If it is successful, the transaction associated with the contract will be returned to the user with proofs that it was received, verified and approved by a quorum of replicas. The transaction will be in a pending state, ready to be added in future blocks.
+	
+	\subsubsection{Transfer Money With Smart Contract: \textbf{/smartTransfer/\{id\}} }
+	
+	This operation allows the user to utilize a installed smart contract to transfer money. The path parameter \textit{id} is the id of the smart contract to be used. The request's body is signed with the user's private key and contains the amount to be spent and the destinations. If it is successful, generated transactions will be returned to the user with proofs that they were verified and approved by a quorum of replicas. The transactions will be in a pending state, ready to be added in future blocks.
+	
+	\subsection{Proxy}
+	A proxy is responsible for receiving the REST requests of clients, process the request and re-send the operation to the replicas, or sandboxes, internally. It is also responsible for receiving the replicas and sandboxes replies, and send a response to the client's requests.
+	
+	\subsection{Replica}
+	A replica is responsible to validate requests and execute \textit{read} and \textit{write} operations in the persistent storage. 
+	\subsection{Sandbox}
+	The sandbox is responsible for loading byte code of new smart contracts, execute it and validate it. 
+	
+	
+	\subsection{Storage Node}
+	The storage node contains the persistent data of the system, mainly the ledger and information about the wallets (public key and algorithms associated with the key). Each storage node communicates with a single replica.
+	
+
+
+	\section{Mechanisms and Service Planes}
+	In this section we will explain the planes that define the BGWS system and some of its main mechanisms.
+	
+	\subsection{Service Planes}
+	\subsubsection{Consensus Plane}
+	The consensus plane unique objective is to solve the agreement between the decision of replicas, about the result of operations, and sandboxes, about the validity of smart contracts. A byzantine fault tolerant consensus algorithm is applied.
+	
+	\subsubsection{Crypto Services Plane}
+	This plane is responsible for all cryptography operations, primitives and for establishing the necessary security protocols. BGWS relies on asymmetric encryption for signatures, partial homomorphic ciphers for privacy transactions and TLS (server-side between proxy/client communication and mutual in proxy/replica, replica/replica, proxy/sandbox and sandbox/sandbox communications).
+	
+	\subsubsection{Communication Plane}
+	The communication plane ensures the use of authenticated perfect links. 
+	
+	Clients communicate with the system's proxies through the exposed REST API. \textit{Write} operations need to be signed by the clients, contrary to \textit{read} operations. The message flow of \textit{write} and \textit{read} operations will be explained in the following subsection.
+	
+	Proxies communicate with replicas and sandboxes, sending new requests and receiving their replies.
+	
+	Replicas are the only components that can communicate with persistent storage nodes. There are no communication links between replicas and sandboxes.
+	
+	\subsubsection{Block Ordering Plane}
+	
+	The block ordering plane has the function of validating mined blocks, and therefore, its transactions. If valid, then they can be added to the blockchain.
+	
+    The mining process consists in a \textit{proof of work}, like that used by Bitcoin. This block is then signed by the user and send to the replicas, via the proxy.
+    
+    When replicas receive blocks they will verify if the public key is registered in the system. Then, they will check the block's signature. After that, they will verify the validity of proof of work (if the hash satisfies the challenge). Then there will be a check of the integrity of the block's content (if the cumulative hash of the block's content matches the hash of the transactions that it is supposed to contain). Only after passing these validations will the block be proposed as a new block to be added to the chain.
+    
+    If the \textit{previous hash} field of the block corresponds to the hash of the previous block, the block is added to the blockchain. On the other hand, if it matches with the hash of the block before last one, then the there will be a tiebreaker protocol. If the new block has more transactions or, in case they contain the same transactions, if the \textit{proof of work} is better then the new block is added and the old one removed.
+    
+    Whenever a new block is added to the blockchain a transaction reward is also inserted into the pending transactions. If a block is replaced, then its corresponding reward transaction is also removed from the pending transactions. 
+	
+	
+	\subsubsection{Sandboxing Plane}
+	
+	The sandboxing plane has the function of validating new smart contracts. These contracts are executed in a controlled environment, isolated from the main replicas and persistent storage, inside the sandboxes.
+	
+	To validate a contract, first a temporary snapshot of the system's current state is installed in the sandboxes, then the contract byte code is loaded, and executed while being subject to tests, to determine if it respects the correct policies and does not produce erroneous outputs.
+	
+	If the contract is valid, then it is redirected to the other replicas to be installed. A smart contract is considered installed after it is contained inside a block in the chain.
+	
+	\subsubsection{Storage Plane}
+	Persistent storage of the ledger is replicated in each storage node of the system. Sandboxes and proxies do not have direct access to this storage.
+	
+	\subsection{Message flow} 
+	In BGWS, the message flow differs if it corresponds to a \textit{write} or a \textit{read} operation in the persistent storage. We will first cover the protocol for most operations, afterwards we will explain the differences involved in the operation to install a smart contract.
+	
+	\subsubsection{General message flow} 
+    The first phase of the protocol is equal to both \textit{read} and \textit{write}, the only difference is that \textit{read} operations do not guarantee order contrary to \textit{write} operations. 	
+    
+    After a request from a client has been processed by a proxy, it is redirected to the replicas . The request is then processed by the replicas, and the decision is gathered by the proxy. Byzantine consensus is executed and, in the case of \textit{read} operations, the reply is redirected to the client.
+    
+    For \textit{write} operations, if there was no error found in the request, a second phase of the protocol is executed to commit the value and store it in persistent storage. The \textit{COMMIT} message is sent to the replicas with the value to store. 
+    
+    Finally the replies are gathered by the proxy and the answer to the request is sent to the client. If there was an error, a protocol to handle the error can be implemented (such as just retrying the request), we did not implement that in the system and assume that the client can just retry the operation.
+    
+    \subsubsection{Smart contract installation message flow} 
+    In the installation of a smart contract, firstly the proxy sends a request to the replicas for a \textit{read} of the system's state. Replicas generate a snapshot of the system, which the proxy send to the sandboxes, to be saved in temporary memory. Only after this first step, does the proxy send the new smart contract byte code to the sandboxes. 
+    
+    After the validation process of the smart contract, the proxy gathers the decisions of the sandboxes. In case of a valid and safe smart code, the byte code is redirected to the replicas to be installed in the blockchain. 
+    
+    Finally, in case no other error happened, the protocol proceeds as the last step of the normal message flow.
+	
+	\section{Implementation}
+	
+	\subsection{Technology Stack}
+	
+	The client and the proxy, replica and sandbox components were implemented in Java, as Maven projects. For deployment, we created individual docker images for each component, that were deployed as containers in a custom docker network \textit{bftsmart-net}. Clients were simple java console.
+	
+	The client and proxy used the Spring Boot framework, due to the simplicity it provided in the establishment of secure communications and specifying different TLS configurations like version, types of authenticity and ciphersuites. 
+	
+	The proxy, replicas and sandboxes for byzantine consensus, tolerant to non-malicious byzantine faults, used the open source BFT-SMaRt library \cite{bessani2014stateBFTSMART}.
+	
+	We used Bouncy Castle as the security provider for all non-homomorphic ciphers. For the partial homomorphic primitives, we used the library given by the course professor.
+	
+	For persistent storage we opted for a NoSQL database, as queries did not need relational dependencies. We used the latest version of Redis key-value stores due to its simple java integration, high performance, easy docker deployment and possibility to configure TLS. 
+	
+	\subsubsection{Blocks}
+	
+	The block is compose by a block header and a list of transactions.
+	The block header contains the \textit{the previous block hash}, a \textit{timestamp} of the time it was created, the \textit{proof}, which is the random number used in the hash to satisfy the challenge, an \textit{integrity hash} that corresponds to the cumulative hash of all transactions inside the block, a list of the transactions \textit{IDs}, and the \textit{author} of the block.
+	
+	The \textit{proof} and \textit{author} fields can be modified by the client who mines the block, prior to the generation of the \textit{proof of work}. The mining process occurs only over the \textit{block header}. If the block is approved to enter the block-chain, then the list of transactions is appended to the \textit{block header} forming the final complete \textit{block}.
+	
+	\subsubsection{Transactions}
+	Transactions were designed to be public or private. For this reason, they support multiple fields. 
+	Common fields to both types are the \textit{origin}, \textit{destination}, \textit{amount} and \textit{date}, all other fields are \textit{null} in public transactions.
+	
+	Private transactions also contain a field with the \textit{encrypted amount}, an indication of \textit{who encrypted} it and the \textit{ID} pointing to the original transaction (\textit{null} if it is the original).
+	
+	As previously said, the pointers to \textit{IDs} and references to \textit{who encrypted} the message are needed in the implementation of private transactions, because they are inserted, in the system, by both the \textit{origin} and \textit{destination}, and need to keep a causal relationship.
+	
+	Transactions also pass through different verification steps. A transaction becomes a \textit{Signed Transaction} when its signature is approved by the system. At this point it is assigned with an \textit{ID}, and the signature of the request it was proposed in, is associated to it. 
+	When a transaction is committed, it becomes a \textit{Valid Transaction}. It contains the hash of the replicas agreed decision, for integrity purposes, and an array with the\textit{IDs} of the replicas who participated in its validation. These extra fields can be used for future auditing.
+	
+	\subsubsection{Smart Contracts}
+	Smart Contracts, are only represented with an interface in the system, but the instances need to follow a specification with fields similar to normal transactions.
+	
+	The difference to transactions, is that smart contracts are freely programmable and can be referenced by other users to transfer an amount to a set of destinations.
+	To do so they have: a \textit{init()} method where the \textit{origin}, \textit{amount} to transfer and set of \textit{destinations} are specified; a \textit{run} method that executes in rounds and produces a set of events; a \textit{readTransaction()} and \textit{readBalance()} methods to read transactions and consult balances (values specified as inputs of the methods); a \textit{getReadTarget()} to specify the \textit{ID} of the next read target in the blockchain, can be a transaction \textit{ID} or a \textit{public key} for balances; a \textit{getOutput()} method to retrieve the final output (set of transactions).
+	
+    The events produced are the following: \textit{BEGIN}, \textit{READ\_TRANSACTION}, \textit{READ\_BALANCE}, \textit{STOP}. 
+    
+    The \textit{BEGIN} event happens after a smart contract has been initiated with the necessary and correct info. The \textit{READ\_TRANSACTION} and \textit{READ\_BALANCE} events trigger when the smart contract request a \textit{read} operation of a transaction or balance of a user. The \textit{STOP} event is triggered when the execution terminates and the output is ready to be retrieved.
+	
+	
+	\subsection{Issues}
+	\subsubsection{Deployment}
+	For ease of deployment of different combinations of proxies, replicas, sandboxes and clients we opted to separate the implementation of each component into a different project. This not only guaranteed separation of concepts, but it also helped with the creation of singular docker images for each component. 
+	
+	Furthermore, with this separation, the simulation of smart contracts was more realistic as, in the sandbox project, no smart contract class was defined, only an interface. With this, we could verify that the smart contract byte code was actually being dynamically loaded during runtime.
+	
+	\subsubsection{Container \textit{IPs}}
+	The custom docker network \textit{bftsmart-net} was a subnet with IP ranges inside 172.18.0.0/16.
+	
+    The proxy container for the proxy with \textit{ID} $n$ was named \textit{proxy-$n$} and used the IP 172.18.10.$n$, exposing the port 8443 on 127.0.0.1:900$n$.
+    The replica container for the replica with \textit{ID} $n$ was named \textit{replica-$n$} and used the IP 172.18.20.$n$.
+    The sandbox container for the sandbox with \textit{ID} $n$ was named \textit{sandbox-$n$} and used the IP 172.18.20.$(2*n)$.
+    The storage node containers were redis container. Each storage node of a particular replica with \textit{ID} $n$ was named \textit{redis-$n$}, and used the IP 172.18.30.$n$. 
+	
+	\subsubsection{Generation of \textit{IDs}}
+
+    In the BGWS system, signed transactions are given a unique \textit{ID}. This \textit{ID} consists in 20 random bytes, generated with a secure random primitive, concatenated to a prefix that depends on the type of transaction. The prefix for normal, block reward, private and smart contracts are, respectively, \textit{0xT}, \textit{0xTB}, \textit{0xTP} and \textit{0xTS}. The prefix and random bytes are separated with a \textit{-}.
+
+
 	\section{Experimental Evaluation}
 	\subsection{Experimental Setup \& Methodology}
 	\subsubsection{Validation}
-	\subsubsection{Evaluation}
+	For validation of new features added to the BGWS system we used a manual client. This was mostly useful for debugging purposes, not for concurrency stress tests.
+	
+    \subsubsection{Evaluation}
+	For evaluation, we created a benchmark client that automated different workloads. This client simply executed the REST requests and saved the time until it received a response from the proxy. The results were saved to different .csv files. We generated plots with a python script.
+	
+	We run 3 different experiments in a system with the following specifications: AMD Ryzen 7 1700 eight-core processor × 16 CPU and 16GB of RAM DDR4 3200MHz (2 x 8GB).
+    On all experiments we used the following constant configurations: TLS version 1.3 with \textit{TLS\_AES\_256\_GCM\_SHA384}; the hash algorithm was \textit{SHA-256} and the mining challenge length was 2bytes (16 leading 0s);  5 benchmark clients with RSA keys of size 3072 bits.
+
+	In the first experiment we studied the overhead associated with tolerating $f$ faults. We simulated 4 different configurations of the system for $f$ equal to 1, 2, 3 and 4 in a running environment with exclusively correct replicas. In these scenarios each client run, concurrently: 50 obtain coins operation; 5 mining operations for blocks containing 10 transactions; 20 requests for the client ledger; 20 requests for the global ledger (both with a time interval that included all transactions since the beginning); 50 transfer money operations; 50 transfer money operations with privacy. 
+	
+	In the second experiment we studied how the size of blocks influenced the latency of mining operations. We simulated 5 different configurations with block sizes of 10, 20, 30, 40 and 50 transactions with a system tolerating 1 bizantine fault, in a running environment with exclusively correct replicas. The clients run the scenarios sequentially with the following concurrent operations: 50, 100, 150, 200 and 250 obtain coins operations followed by 5 mining operations (accordingly to the compatible block size).
+	
+	Finally in the last experiment we studied the impact of having one faulty replica in the system. For this experiment we simulated a system configuration tolerant to 1 bizantine fault. In one run we continuously stopped one replica container, for 1s, and restarted it again, for 0.5s. In another run no faults were simulated. Each client executed 500 obtain coins operations for each run.
+	
+	
 	\subsection{Experimental Results}
 	
-	In this section we present the results as an average of the three runs executed, and describe the patterns observed.
+	In this section we present the results as an average of the results for 5 clients running concurrently, and describe the patterns observed.
+		
+	\begin{figure}[!ht]
+		\centering
+		\subfloat[REST operations]{
+			\includegraphics[width=\linewidth]{figures/REST_ops.png}
+			\label{REST_ops}
+		}
+		\vfil
+		\centering
+		\subfloat[Mining operation]{
+			\includegraphics[width=\linewidth]{figures/mining_block.png}
+			\label{mining_block}
+		}
+		\caption{Latency and throughput.}
+	\end{figure}
 	
-	%\begin{figure}[!ht]
-	%	\centering
-	%	\subfloat[Default workload test]{
-%			\includegraphics[width=\linewidth]{figures/test_02.png}
-%			\label{default_workload_test}
-%		}
-%		\vfil
-%		\subfloat[Uniform workload test.]{
-%			\includegraphics[width=\linewidth]{figures/test_11.png}
-%			\label{uniform_workload_test}
-%		}
-%		\vfil
-%		\centering
-%		\subfloat[Triangular workload test.]{
-%			\includegraphics[width=\linewidth]{figures/test_13.png}
-%			\label{triangular_workload_test}
-%		}
-%		\vfil
-%		\subfloat[Reduction efficiency test.]{
-%			\includegraphics[width=\linewidth]{figures/test_08.png}
-%			\label{reduction_efficiency_test}
-%		}
-%		\caption{Execution time, speedup and efficiency.}
-%	\end{figure}
+	\begin{figure}[!ht]
+		\includegraphics[width=\linewidth]{figures/Fault_Simulations.png}
+		\label{Fault simulation}
+		\caption{Simulation of run with 1 faulty replica.}
+	\end{figure}
 	
+	In the results of the first experiment \ref{REST_ops} we can observe that the latency increases as the number of bizantine faults, that the system can tolerate, augments. Inversely, the throughput diminishes.
+
+	We can also see that the most costly operation is the mining operation. REST operations that involve \textit{reads} have lower latencies than the ones that involve \textit{writes}.
+
+	From the results of the second experiment \ref{mining_block} we can observe that the duration of the mining operation increases with the block size. Inversely, the throughput diminishes. Furthermore, the latency of successful mine operations is significantly lower than the average of all.
+
+	Finally, the results of the third experiment \ref{Fault simulation} show that the latencies of operations are unaffected in the presence of bizantine faults, within the tolerable interval.
+	
+
 	\subsection{Discussion}
-	In this section we will discuss the variation in the results obtained for the different experiments.
+	In this section we will discuss the patterns observed in the results of the different experiments.
+
+	For the first experiment, we can explain the increase of latencies (and consequently decrease of throughput) with the overhead of communication between more replicas during the consensus algorithm. Also, the mining operation is the most costly one, due to the computational cost of the challenge.
+	Furthermore, the difference in latencies (and throughput) between operations that involve  \textit{reads} and \textit{writes} is explained by the extra communication step in \textit{write} operation.
+
+	In the second experiment, we explain the increase in the duration to compute a \textit{proof of work} with the increase of bytes to hash (more transactions \textit(IDs) in the header, with around 25bytes each). In case of success, we do not observe the trend so easily. There is a certain amount of randomization in the generation of the hashes and, frequently, the fastest to compute the \textit{proof of work} concludes the operation, before the others even send the mined block to be verified by the system. We can conclude that the generation of this proof is the major bottleneck of the operation.
+
+	Finally, in the third experiment no trend can be identified. This concludes that the system is working as expected and, with bizantine faults happening in the tolerable interval, its performance is not affected.
 	
 	\section{Coverage of Requirements}
 	% Coverage of the requirements (Summarize here the coverage (emphasining the completness, correctness, drawbacks, limitations or tradeofs) form the expected requirements.
-
+	
+	We covered almost all features required for the final delivery, there is still some work necessary 
+	
 	\section{Conclusion \& Future Work}
+
+	In this paper we presented the implementation of BGWS, a dependable decentralized ledger for a blockchained global wallet service. We explained its architecture and API, presented and justified the design choices and covered with more detail implementation aspect related with the major components and data structures of the system. 
+
+	We also proposed to study how the number of replicas impact the overall performance of the system, how the size of blocks affects the latency of successful mining operations and how the system tolerates faults.
+
+	Furthermore, we conclude that latencies are higher for operations that involve \textit{writes} and that the most costly operation in the system is the mining operation. Its cost is directly associated with the computational cost of the hash challenge. 
+
+	For future work, we would like to finish the missing feature, like the transactions with smart contracts and evaluate their performance. 
 
 	\ifCLASSOPTIONcaptionsoff
 	\newpage
 	\fi
-	\nocite{*}
 	\bibliographystyle{IEEEtran}
 	\bibliography{references}
 	
