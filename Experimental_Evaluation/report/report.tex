@@ -553,7 +553,7 @@
 	
 	In the second experiment we studied how the size of blocks influenced the latency of mining operations. We simulated 5 different configurations with block sizes of 10, 20, 30, 40 and 50 transactions with a system tolerating 1 bizantine fault, in a running environment with exclusively correct replicas. The clients run the scenarios sequentially with the following concurrent operations: 50, 100, 150, 200 and 250 obtain coins operations followed by 5 mining operations (accordingly to the compatible block size).
 	
-	Finally in the last experiment we studied the impact of having one faulty replica in the system. For this experiment we simulated a system configuration tolerant to 1 bizantine fault. In one run we continuously stopped one replica container, for 1s, and restarted it again, for 0.5s. In another run no faults were simulated. Each client executed 500 obtain coins operations for each run.
+	Finally in the last experiment we studied the impact of having one faulty replica in the system. For this experiment we simulated a system configuration tolerant to 1 bizantine fault. In one run we continuously stopped one replica container, for 2s, and restarted it again, for another 2s. In another run no faults were simulated. Each client executed 500 obtain coins operations for each run.
 	
 	
 	\subsection{Experimental Results}

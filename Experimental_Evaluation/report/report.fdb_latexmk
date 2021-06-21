@@ -1,15 +1,15 @@
 # Fdb version 3
-["bibtex report"] 1624292952 "report.aux" "report.bbl" "report" 1624295616
+["bibtex report"] 1624292952 "report.aux" "report.bbl" "report" 1624295754
   "./IEEEtran.bst" 1624295449 57748 7c8250ecf02814ce6ddc0cdbb63df1dd ""
   "references.bib" 1624295449 4604 a86996c5f4fb3c2d405c752dd50ef750 ""
-  "report.aux" 1624295616 9969 971bbe9090837061848a76ec7d9fdbaa "pdflatex"
+  "report.aux" 1624295754 9969 971bbe9090837061848a76ec7d9fdbaa "pdflatex"
   (generated)
   "report.bbl"
   "report.blg"
-["pdflatex"] 1624295615 "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.tex" "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.pdf" "report" 1624295616
+["pdflatex"] 1624295754 "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.tex" "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.pdf" "report" 1624295754
   "/etc/texmf/web2c/texmf.cnf" 1612642145 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.aux" 1624295616 9969 971bbe9090837061848a76ec7d9fdbaa ""
-  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.tex" 1624295615 48933 40a7e46110e01523c17876bfb2ac8c06 ""
+  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.aux" 1624295754 9969 971bbe9090837061848a76ec7d9fdbaa ""
+  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.tex" 1624295753 48939 63f7b9a3b25d8e7c919e0b34d43c597f ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/helvetic/phvb7t.tfm" 1136768653 2240 eb56c13537f4d8a0bd3fafc25572b1bd ""
@@ -116,14 +116,14 @@
   "figures/REST_ops.png" 1624295449 74981 ada5750b9a8a65a14c57e53de89e28cf ""
   "figures/System_Model.png" 1624295449 33001 df82b569e68e355ff9a1e631891b8fe4 ""
   "figures/mining_block.png" 1624295449 59145 af5a829f65c06c8d3f1d8d4a2e19fe00 ""
-  "report.aux" 1624295616 9969 971bbe9090837061848a76ec7d9fdbaa "pdflatex"
+  "report.aux" 1624295754 9969 971bbe9090837061848a76ec7d9fdbaa "pdflatex"
   "report.bbl" 1624295449 3953 f713c770bc77127fa3ef96cd55836e4e "bibtex report"
-  "report.out" 1624295616 4136 70f0b9410fcc5efd3eaaea7984714a1f "pdflatex"
-  "report.tex" 1624295615 48933 40a7e46110e01523c17876bfb2ac8c06 ""
+  "report.out" 1624295754 4136 70f0b9410fcc5efd3eaaea7984714a1f "pdflatex"
+  "report.tex" 1624295753 48939 63f7b9a3b25d8e7c919e0b34d43c597f ""
   (generated)
   "report.aux"
-  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.pdf"
-  "report.pdf"
   "report.log"
-  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.log"
+  "report.pdf"
   "report.out"
+  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.log"
+  "/home/diogo/Documents/University/4ºAno/CSD/Projects/csd-wa1/Experimental_Evaluation/report/report.pdf"
