@@ -9,6 +9,7 @@ GLOBAL_LEDGER = 'GLOBAL_LEDGER_RESULTS'
 MINE = 'MINE_RESULTS'
 TRANSFER_MONEY_WITH_PRIVACY = 'TRANSFER_MONEY_WITH_PRIVACY_RESULTS'
 MINING_PROOF_OF_WORK = 'MINING_PROOF_OF_WORK_RESULTS'
+INSTALL_SMARTCONTRACT = 'INSTALL_SMARTCONTRACT'
 
 
 def extract_mining_values(dir_results):
@@ -36,9 +37,9 @@ def extract_mining_values(dir_results):
                 num_ops_proof = num_ops_proof + len(mining_proof_op)
                 num_ops_full = num_ops_full + len(mining_full_op)
         avg_proof_ops = float(total_time_proof_op / num_ops_proof)
-        throughput_proof_ops = float(num_ops_proof / total_time_proof_op)
+        throughput_proof_ops = float(num_ops_proof / (total_time_proof_op * 0.001))
         avg_full_ops = float(total_time_full_op / num_ops_full)
-        throughput_full_ops = float(num_ops_full / total_time_full_op)
+        throughput_full_ops = float(num_ops_full / (total_time_full_op * 0.001))
 
         results_x_y_latency_proof.append([x_variable, avg_proof_ops])
         results_x_y_throughput_proof.append(([x_variable, throughput_proof_ops]))
@@ -65,15 +66,17 @@ def mining_latency_throughput_plt():
     plt.ylabel("Latency (ms)")
     plt.plot(latency_proof[:, 0], latency_proof[:, 1])
     plt.plot(latency_full[:, 0], latency_full[:, 1])
-    plt.legend(["Proof", "Full op"])
+    plt.legend(["Proof of Work", "Full operation (only on success)"])
+    plt.xticks([10,20,30,40,50])
     plt.savefig('mining_latency_size_block.png')
     plt.show()
 
     plt.xlabel("Size of blocks")
-    plt.ylabel("Throughput (s)")
+    plt.ylabel("Throughput (op/s)")
     plt.plot(throughput_proof[:, 0], throughput_proof[:, 1])
     plt.plot(throughput_full[:, 0], throughput_full[:, 1])
-    plt.legend(["Proof", "Full op"])
+    plt.xticks([10,20,30,40,50])
+    plt.legend(["Proof of Work", "Full operation (only on success)"])
     plt.savefig('mining_throughput_size_block.png')
     plt.show()
 
@@ -94,7 +97,7 @@ def extract_values(dir_results):
                 total_time = total_time + np.sum(times)
                 num_ops = num_ops + len(times)
         avg = float(total_time / num_ops)
-        throughput = float(num_ops / total_time)
+        throughput = float(num_ops / (total_time * 0.001))
         results_x_y_latency.append([x_variable, avg])
         results_x_y_throughput.append(([x_variable, throughput]))
         # print([x_variable, avg, total_time, throughput])
@@ -112,30 +115,32 @@ def ops_latency_throughput_per_num_replicas():
     transfer_money_latency, transfer_money_throughput = extract_values(TRANSFER_MONEY)
     client_ledger_latency, client_ledger_throughput = extract_values(CLIENT_LEDGER)
     global_ledger_latency, global_ledger_throughput = extract_values(GLOBAL_LEDGER)
-    mine_latency, mine_throughput = extract_values(MINE)
+    #mine_latency, mine_throughput = extract_values(MINE)
     transfer_money_with_privacy_latency, transfer_money_with_privacy_throughput = extract_values(
         TRANSFER_MONEY_WITH_PRIVACY)
-    plt.xlabel("Number of Replicas")
+    plt.xlabel("Number of tolerable faults")
     plt.ylabel("Latency (ms)")
     plt.plot(obtain_coins_latency[:, 0], obtain_coins_latency[:, 1])
     plt.plot(transfer_money_latency[:, 0], transfer_money_latency[:, 1])
     plt.plot(client_ledger_latency[:, 0], client_ledger_latency[:, 1])
     plt.plot(global_ledger_latency[:, 0], global_ledger_latency[:, 1])
-    plt.plot(mine_latency[:, 0], mine_latency[:, 1])
+    #plt.plot(mine_latency[:, 0], mine_latency[:, 1])
     plt.plot(transfer_money_with_privacy_latency[:, 0], transfer_money_with_privacy_latency[:, 1])
-    plt.legend(["OBTAIN_COINS", "TRANSFER_MONEY", "CLIENT_LEDGER", "GLOBAL_LEDGER", "MINE"])
+    plt.xticks([1,2,3,4])
+    plt.legend(["OBTAIN_COINS", "TRANSFER_MONEY", "CLIENT_LEDGER", "GLOBAL_LEDGER", "TRANSFER_MONEY_WITH_PRIVACY", "MINE"])
     plt.savefig('ops_latency_num_replicas.png')
     plt.show()
 
-    plt.xlabel("Number of Replicas")
-    plt.ylabel("Throughput (ms)")
+    plt.xlabel("Number of tolerable faults")
+    plt.ylabel("Throughput (op/s)")
     plt.plot(obtain_coins_throughput[:, 0], obtain_coins_throughput[:, 1])
     plt.plot(transfer_money_throughput[:, 0], transfer_money_throughput[:, 1])
     plt.plot(client_ledger_throughput[:, 0], client_ledger_throughput[:, 1])
     plt.plot(global_ledger_throughput[:, 0], global_ledger_throughput[:, 1])
-    plt.plot(mine_throughput[:, 0], mine_throughput[:, 1])
+    #plt.plot(mine_throughput[:, 0], mine_throughput[:, 1])
     plt.plot(transfer_money_with_privacy_throughput[:, 0], transfer_money_with_privacy_throughput[:, 1])
-    plt.legend(["OBTAIN_COINS", "TRANSFER_MONEY", "CLIENT_LEDGER", "GLOBAL_LEDGER", "MINE"])
+    plt.xticks([1,2,3,4])
+    plt.legend(["OBTAIN_COINS", "TRANSFER_MONEY", "CLIENT_LEDGER", "GLOBAL_LEDGER", "TRANSFER_MONEY_WITH_PRIVACY", "MINE"])
     plt.savefig('ops_throughput_num_replicas.png')
     plt.show()
 

@@ -178,7 +178,7 @@ public class BenchmarkClient {
             //args: <port> <operationsFile> <client> <clientPassword>
             switch (opInfo[0]) {
                 case REGISTER:
-                    register(requestFactory,opInfo[1],opInfo[2].toCharArray());
+                    register(requestFactory, opInfo[1], opInfo[2].toCharArray());
                     break;
                 case REQUEST_NONCE:
                     requestNonce(requestFactory, client, clientPassword);
@@ -211,10 +211,10 @@ public class BenchmarkClient {
                     transferMoneyWithPrivacy(requestFactory, new BigInteger(opInfo[1]), writer);
                     break;
                 case OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS:
-                    obtainUserNotSubmittedTransactions(requestFactory,writer);
+                    obtainUserNotSubmittedTransactions(requestFactory, writer);
                     break;
                 case INSTALL_SMART_CONTRACT:
-                    installSmartContract(requestFactory,writer);
+                    installSmartContract(requestFactory, writer);
                     break;
                 case QUIT:
                     in.close();
@@ -240,24 +240,30 @@ public class BenchmarkClient {
 
     private static void installSmartContract(HttpComponentsClientHttpRequestFactory requestFactory, BufferedWriter writer) throws IOException, NoSuchAlgorithmException, SignatureException, InvalidKeyException {
         long start = System.currentTimeMillis();
-        String currentDate = LocalDateTime.now().format(dateTimeFormatter);
+        try {
+            String currentDate = LocalDateTime.now().format(dateTimeFormatter);
 
-        File f = new File(smartContractPath);
-        byte[] byteCode = new byte[(int) f.length()];
-        DataInputStream dis = new DataInputStream(new FileInputStream(smartContractPath));
-        dis.readFully(byteCode);
+            File f = new File(smartContractPath);
+            byte[] byteCode = new byte[(int) f.length()];
+            DataInputStream dis = new DataInputStream(new FileInputStream(smartContractPath));
+            dis.readFully(byteCode);
 
-        String encodedByteCode = base32.encodeAsString(byteCode);
-        String msgToBeHashed = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(encodedByteCode).concat(currentDate).concat(currentSession.getNonce());
-        System.out.println(msgToBeHashed);
-        byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
-        SignedBody<String> signedBody = new SignedBody<>(encodedByteCode, sigBytes, currentDate);
-        HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
-        ResponseEntity<ValidTransaction> response
-                = new RestTemplate(requestFactory).exchange(
-                String.format(INSTALL_SMART_CONTRACT_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())),
-                HttpMethod.POST, request, ValidTransaction.class);
-        processResponseWithTransaction(response, start, writer, INSTALL_SMART_CONTRACT);
+            String encodedByteCode = base32.encodeAsString(byteCode);
+            String msgToBeHashed = LedgerRequestType.INSTALL_SMART_CONTRACT.name().concat(encodedByteCode).concat(currentDate).concat(currentSession.getNonce());
+            System.out.println(msgToBeHashed);
+            byte[] sigBytes = generateSignature(generateHash(msgToBeHashed.getBytes()));
+            SignedBody<String> signedBody = new SignedBody<>(encodedByteCode, sigBytes, currentDate);
+            HttpEntity<SignedBody<String>> request = new HttpEntity<>(signedBody);
+            ResponseEntity<ValidTransaction> response
+                    = new RestTemplate(requestFactory).exchange(
+                    String.format(INSTALL_SMART_CONTRACT_URL, port, base32.encodeAsString(currentSession.getPublicKey().getEncoded())),
+                    HttpMethod.POST, request, ValidTransaction.class);
+            processResponseWithTransaction(response, start, writer, INSTALL_SMART_CONTRACT);
+        } catch (Exception e) {
+            long duration = System.currentTimeMillis() - start;
+            writer.append(INSTALL_SMART_CONTRACT.concat("\t").concat(Long.toString(duration)).concat("\n"));
+        }
+
     }
 
     private static void obtainUserNotSubmittedTransactions(HttpComponentsClientHttpRequestFactory requestFactory, BufferedWriter writer) throws Exception {
@@ -451,6 +457,7 @@ public class BenchmarkClient {
             processResponseWithTransaction(response, start, writer, OBTAIN_COINS);
         } catch (Exception e) {
             System.out.println(e.getMessage());
+
         }
     }
 
@@ -462,7 +469,7 @@ public class BenchmarkClient {
             System.out.println(currentSession.getNonce());
             System.out.printf("[ %s ]\n", response.getBody());
             currentSession.saveTransaction(response.getBody());
-            if(!opType.equals(OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS) && !opType.equals(SEND_MINED_BLOCK) ) {
+            if (!opType.equals(OBTAIN_USER_NOT_SUBMITTED_TRANSACTIONS) && !opType.equals(SEND_MINED_BLOCK)) {
                 long duration = System.currentTimeMillis() - start;
                 writer.append(opType.concat("\t").concat(Long.toString(duration)).concat("\n"));
             }
@@ -568,7 +575,7 @@ public class BenchmarkClient {
                 long startProofOfWork = System.currentTimeMillis();
                 BlockHeader finalBlock = generateProofOfWork(blockHeader);
                 long durationProofOfWork = System.currentTimeMillis() - startProofOfWork;
-                if(benchmarkRun.equals(MINING_AND_PROOF))
+                if (benchmarkRun.equals(MINING_AND_PROOF))
                     writer.append(MINE_TRANSACTIONS_PROOF_OF_WORK.concat("\t").concat(Long.toString(durationProofOfWork).concat("\n")));
                 sendMinedBlock(requestFactory, finalBlock, writer);
                 long duration = System.currentTimeMillis() - start;
