@@ -197,11 +197,11 @@ def extract_fault_simulation_simulation_values():
     i = 0
     for directory in os.listdir(FAULTS):
         subdir = os.path.join(FAULTS, directory)
-        all_times = np.zeros((999, 1))
+        all_times = np.zeros((499, 1))
         for root, dir, files in os.walk(subdir):
             for file in files:
                 file_dir = os.path.join(subdir, file)
-                times = np.array(np.genfromtxt(file_dir, delimiter='\t', dtype='str')[:, 1]).astype(float)
+                times = np.array(np.genfromtxt(file_dir, delimiter='\t', dtype='str')[1:, 1]).astype(float)
                 times = np.array(times.reshape(-1, 1))
                 all_times = np.append(all_times, times, axis=1)
         if i == 0:
