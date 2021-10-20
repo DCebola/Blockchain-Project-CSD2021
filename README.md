@@ -1,6 +1,6 @@
-# CSD - Work Assignment
+# Distributed Decentralised Wallet Service (Java blockchain with Smart Contracts and Homomorphic Encription of transactions)
 
-A distributed decentralised wallet service. BFT SMaRT v1.2 was used to provide 
+A distributed decentralised wallet service done as the class project for the CSD 2021 course. BFT SMaRT v1.2 was used to provide 
 byzantine fault tolerance. The system provides **proxies**, **replicas** and a REST API.
 It uses **REDIS** for persistant storage. A simple java command line client is provided to interact with the REST API.
 
