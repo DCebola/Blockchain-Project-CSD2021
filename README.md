@@ -1,4 +1,4 @@
-# CSD - Work Assignment 1
+# CSD - Work Assignment
 
 A distributed decentralised wallet service. BFT SMaRT v1.2 was used to provide 
 byzantine fault tolerance. The system provides **proxies**, **replicas** and a REST API.
