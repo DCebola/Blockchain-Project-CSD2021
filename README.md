@@ -1,4 +1,4 @@
-# Distributed Decentralised Wallet Service (Java blockchain with Smart Contracts and Homomorphic Encription of transactions)
+# Distributed Decentralised Wallet Service (Java blockchain with Smart Contracts and Homomorphic Encryption of transactions)
 
 A distributed decentralised wallet service done as the class project for the CSD 2021 course. BFT SMaRT v1.2 was used to provide 
 byzantine fault tolerance. The system provides **proxies**, **replicas** and a REST API.
